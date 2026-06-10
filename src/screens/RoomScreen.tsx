@@ -1,0 +1,237 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View, Text, TouchableOpacity, ScrollView,
+  TextInput, StyleSheet, SafeAreaView,
+} from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation';
+import { DIRECTIONS } from '../lib/theme';
+import { t, tAlt } from '../lib/copy';
+import { VaporBackground, GlassCard, Hairline } from '../components/ui';
+import { Identity } from '../components/identity/Identity';
+import { ColorAdjLabel } from '../components/identity/Identity';
+import { useAppStore } from '../hooks/useAppStore';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'Room'>;
+
+const MESSAGES = [
+  { seed: 'a7x', zh: '結婚十年，最近說話像在公司開會。', en: 'Ten years married. Talking feels like a meeting.', age: 3 },
+  { seed: 'k2m', zh: '想找人說但又不想被認識。', en: 'Want someone to talk to, but not be known.', age: 7 },
+  { seed: 'q9b', zh: '他在身邊，我還是覺得很孤單。', en: 'He is next to me. I still feel alone.', age: 12 },
+  { seed: 'r4n', zh: '不是想離開。只是想被聽到。', en: 'Not leaving. Just want to be heard.', age: 18 },
+];
+
+export default function RoomScreen({ navigation, route }: Props) {
+  const { roomKey } = route.params;
+  const { seed, direction, lang, identityKind } = useAppStore();
+  const p = DIRECTIONS[direction];
+  const [inviting, setInviting] = useState<typeof MESSAGES[0] | null>(null);
+  const [inviteSent, setInviteSent] = useState(false);
+
+  // When invite sent, simulate acceptance → go to Chat
+  useEffect(() => {
+    if (inviteSent) {
+      const id = setTimeout(() => navigation.push('Chat', { otherSeed: inviting!.seed }), 2400);
+      return () => clearTimeout(id);
+    }
+  }, [inviteSent]);
+
+  return (
+    <VaporBackground p={p} style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        {/* TOP BAR */}
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={[styles.iconBtn, { backgroundColor: p.surface, borderColor: p.line }]}
+          >
+            <Text style={{ color: p.muted, fontSize: 18 }}>‹</Text>
+          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => navigation.push('Safety')}
+              style={[styles.labelBtn, { backgroundColor: p.surface, borderColor: p.line }]}
+            >
+              <Text style={[styles.labelBtnText, { color: p.muted }]}>
+                {lang === 'en' ? 'safety' : '安全'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ROOM HEADER */}
+        <View style={styles.header}>
+          <Text style={[styles.roomNum, { color: p.muted }]}>
+            {lang === 'en' ? 'Room' : '房間'} · 015
+          </Text>
+          <Text style={[styles.roomName, { color: p.ink }]}>{t(roomKey as any, lang)}</Text>
+          <Text style={[styles.roomNameAlt, { color: p.muted }]}>{tAlt(roomKey as any, lang)}</Text>
+
+          {/* Live count */}
+          <View style={styles.liveRow}>
+            <View style={styles.avatarStack}>
+              {['s1', 's2', 's3', 's4'].map((s, i) => (
+                <View key={s} style={[styles.avatarWrap, { marginLeft: i === 0 ? 0 : -10, borderColor: p.surfaceSolid, backgroundColor: p.surfaceSolid }]}>
+                  <Identity kind="sigil" seed={s} size={18} palette={p} />
+                </View>
+              ))}
+              <View style={[styles.avatarWrap, styles.avatarCount, { marginLeft: -10, borderColor: p.surfaceSolid, backgroundColor: p.accent }]}>
+                <Text style={{ color: p.dark ? '#15172e' : '#fff', fontSize: 9, fontFamily: 'Inter-Regular' }}>+8</Text>
+              </View>
+            </View>
+            <Text style={[styles.liveText, { color: p.muted }]}>12 {t('roomPeople', lang)}</Text>
+            <Text style={[styles.liveDot, { color: p.muted }]}>·</Text>
+            <Text style={[styles.liveText, { color: p.muted }]}>{t('roomEphemeral', lang)}</Text>
+          </View>
+        </View>
+
+        {/* MESSAGE FEED */}
+        <ScrollView style={styles.feed} contentContainerStyle={{ gap: 12, padding: 24 }}>
+          {MESSAGES.map((m, i) => (
+            <TouchableOpacity key={i} onPress={() => setInviting(m)} activeOpacity={0.8}>
+              <View style={{ flexDirection: 'row', gap: 12, opacity: Math.max(0.35, 1 - m.age * 0.04) }}>
+                <Identity kind={identityKind === 'character' ? 'sigil' : identityKind}
+                  seed={m.seed} size={32} palette={p} lang={lang} trust={0.15} />
+                <View style={{ flex: 1 }}>
+                  <View style={[styles.bubble, { backgroundColor: p.surface, borderColor: p.line }]}>
+                    <Text style={[styles.bubbleText, { color: p.ink }]}>
+                      {lang === 'en' ? m.en : m.zh}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 6 }}>
+                    <ColorAdjLabel seed={m.seed} lang={lang} palette={p} />
+                    <Text style={{ color: p.muted, fontSize: 10, fontFamily: 'Inter-Regular' }}>· {m.age}m {lang === 'en' ? 'ago' : '前'}</Text>
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))}
+          <View style={styles.divider}>
+            <Hairline p={p} style={{ flex: 1 }} />
+            <Text style={[styles.dividerText, { color: p.muted }]}>{lang === 'en' ? 'earlier' : '更早'}</Text>
+            <Hairline p={p} style={{ flex: 1 }} />
+          </View>
+          <Text style={[styles.dissolved, { color: p.muted }]}>
+            {lang === 'en' ? 'older fragments dissolve into the room.' : '更早的片段已融入房間之中。'}
+          </Text>
+        </ScrollView>
+
+        {/* COMPOSER */}
+        <View style={[styles.composer, { backgroundColor: p.dark ? 'rgba(13,18,36,0.9)' : 'rgba(255,255,255,0.7)' }]}>
+          <Text style={[styles.composerHint, { color: p.muted }]}>
+            {lang === 'en' ? 'tap any message to invite that person to talk' : '輕點任一則訊息，邀請那個人私聊'}
+          </Text>
+          <GlassCard p={p} padding={6} radius={28} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TextInput
+              placeholder={lang === 'en' ? 'whisper into the room…' : '對房間說一句⋯⋯'}
+              placeholderTextColor={p.muted}
+              style={[styles.input, { color: p.ink }]}
+            />
+            <TouchableOpacity
+              style={[styles.sendBtn, { backgroundColor: p.ink }]}
+              onPress={() => navigation.push('Match', { fromSeed: seed, moodText: '' })}
+            >
+              <Text style={{ color: p.dark ? '#1a1530' : '#fff', fontSize: 16 }}>↑</Text>
+            </TouchableOpacity>
+          </GlassCard>
+        </View>
+
+        {/* INVITE SHEET */}
+        {inviting && (
+          <View style={[styles.sheetOverlay, { backgroundColor: p.dark ? 'rgba(10,12,28,0.7)' : 'rgba(160,150,170,0.4)' }]}>
+            <TouchableOpacity style={{ flex: 1 }} onPress={() => !inviteSent && setInviting(null)} />
+            <View style={[styles.sheet, { backgroundColor: p.bgSolid, borderColor: p.line }]}>
+              <View style={[styles.sheetHandle, { backgroundColor: p.line }]} />
+              {!inviteSent ? (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Identity kind={identityKind === 'character' ? 'sigil' : identityKind}
+                      seed={inviting.seed} size={44} palette={p} lang={lang} trust={0.15} />
+                    <View>
+                      <ColorAdjLabel seed={inviting.seed} lang={lang} palette={p} />
+                      <Text style={[styles.anonLabel, { color: p.muted }]}>
+                        {lang === 'en' ? 'anonymous' : '匿名'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.quoteBox, { backgroundColor: p.surface, borderColor: p.line }]}>
+                    <Text style={[styles.quoteText, { color: p.inkSoft }]}>
+                      「{lang === 'en' ? inviting.en : inviting.zh}」
+                    </Text>
+                  </View>
+                  <Text style={[styles.inviteHint, { color: p.muted }]}>
+                    {lang === 'en'
+                      ? 'They will see your sigil and tonight\'s line — nothing else. 30-minute window if they accept.'
+                      : '對方只會看到你的識別與今晚寫的那句話。同意後開啟 30 分鐘窗口。'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setInviteSent(true)}
+                    style={[styles.inviteBtn, { backgroundColor: p.ink }]}
+                  >
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.dark ? '#1a1530' : '#fff', fontWeight: '500' }}>
+                      {lang === 'en' ? 'Send the invitation' : '送出邀請'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setInviting(null)} style={styles.cancelBtn}>
+                    <Text style={[styles.cancelText, { color: p.muted }]}>
+                      {lang === 'en' ? 'not now' : '不了'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+                  <Text style={[styles.waitingText, { color: p.ink }]}>
+                    {lang === 'en' ? 'Invitation sent · waiting…' : '邀請已送出 · 等待對方⋯⋯'}
+                  </Text>
+                  <Text style={[styles.waitingHint, { color: p.muted }]}>
+                    {lang === 'en' ? "we'll open the window if they say yes" : '對方同意時窗口會自動開啟'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+      </SafeAreaView>
+    </VaporBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  topBar:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18, paddingTop: 8 },
+  iconBtn:      { width: 36, height: 36, borderRadius: 18, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+  labelBtn:     { height: 36, paddingHorizontal: 14, borderRadius: 18, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+  labelBtnText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 12 },
+  header:       { paddingHorizontal: 24, paddingBottom: 12 },
+  roomNum:      { fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', fontWeight: '500' },
+  roomName:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 28, lineHeight: 38, marginTop: 6 },
+  roomNameAlt:  { fontFamily: 'EBGaramond-Italic', fontSize: 14, opacity: 0.7, marginTop: 2 },
+  liveRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
+  avatarStack:  { flexDirection: 'row' },
+  avatarWrap:   { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  avatarCount:  {},
+  liveText:     { fontFamily: 'Inter-Regular', fontSize: 11 },
+  liveDot:      { fontFamily: 'Inter-Regular', fontSize: 11, opacity: 0.4 },
+  feed:         { flex: 1 },
+  bubble:       { borderRadius: 22, borderWidth: 0.5, padding: 14 },
+  bubbleText:   { fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 24 },
+  divider:      { flexDirection: 'row', alignItems: 'center', gap: 10, opacity: 0.5, marginVertical: 6 },
+  dividerText:  { fontFamily: 'EBGaramond-Italic', fontSize: 11 },
+  dissolved:    { fontFamily: 'NotoSerifTC-Regular', fontSize: 14, textAlign: 'center', opacity: 0.55, lineHeight: 22 },
+  composer:     { padding: 12, paddingBottom: 18, gap: 8 },
+  composerHint: { fontFamily: 'NotoSerifTC-Regular', fontSize: 12, textAlign: 'center' },
+  input:        { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 15, paddingHorizontal: 14, paddingVertical: 12 },
+  sendBtn:      { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  // Invite sheet
+  sheetOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' },
+  sheet:        { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 34, borderTopWidth: 0.5, gap: 14 },
+  sheetHandle:  { width: 36, height: 4, borderRadius: 4, alignSelf: 'center', marginBottom: 4 },
+  quoteBox:     { borderRadius: 14, borderWidth: 0.5, padding: 14 },
+  quoteText:    { fontFamily: 'NotoSerifTC-Regular', fontSize: 14, lineHeight: 22 },
+  inviteHint:   { fontFamily: 'NotoSerifTC-Regular', fontSize: 12, lineHeight: 20 },
+  inviteBtn:    { height: 54, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  cancelBtn:    { alignItems: 'center', paddingVertical: 12 },
+  cancelText:   { fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
+  anonLabel:    { fontFamily: 'EBGaramond-Italic', fontSize: 11, marginTop: 2 },
+  waitingText:  { fontFamily: 'NotoSerifTC-Regular', fontSize: 16, marginBottom: 8 },
+  waitingHint:  { fontFamily: 'EBGaramond-Italic', fontSize: 12 },
+});
