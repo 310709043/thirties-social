@@ -11,7 +11,6 @@ import { t } from '../lib/copy';
 import { WickGlyph, PhotoVeil, AnimatedNumber } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
 import { spendWicks } from '../lib/db';
-import { playBlow } from '../lib/sound';
 import { hapticMedium } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LoftChat'>;
@@ -37,6 +36,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
   const { lang, wicks } = useAppStore();
   const [remaining, setRemaining] = useState(58 * 60 + 14);
   const [message, setMessage] = useState('');
+  const [localMessages, setLocalMessages] = useState<{from: string; zh: string; en: string}[]>([]);
   const [veilLevel, setVeilLevel] = useState(1);
   const [showVeil, setShowVeil] = useState(false);
   const [showGift, setShowGift] = useState(false);
@@ -52,7 +52,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
 
   const sendPulse = async (_key: string) => {
     const result = await spendWicks(1, 'pulse');
-    if (result.ok) { playBlow(); hapticMedium(); }
+    if (result.ok) { hapticMedium(); }
   };
 
   return (
@@ -96,7 +96,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
               {lang === 'en' ? 'opened at 23:47 · ends at 00:17' : '23:47 開啟 · 00:17 結束'}
             </Text>
 
-            {MESSAGES.map((m, i) => {
+            {[...MESSAGES, ...localMessages].map((m, i) => {
               const isMe = m.from === 'me';
               return (
                 <View key={i} style={[styles.bubbleRow, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}>
@@ -154,7 +154,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
           </View>
 
           {/* Gift row */}
-          <TouchableOpacity onPress={async () => { const r = await spendWicks(5, 'gift'); if (r.ok) { playBlow(); hapticMedium(); setGiftSent(true); } }} style={styles.giftRow}>
+          <TouchableOpacity onPress={async () => { const r = await spendWicks(5, 'gift'); if (r.ok) { hapticMedium(); setGiftSent(true); } }} style={styles.giftRow}>
             <WickGlyph size={12} color={L.candle} />
             <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: 'rgba(245,226,196,0.8)', flex: 1 }}>
               {t('loftGift', lang)}
@@ -176,7 +176,12 @@ export default function LoftChatScreen({ navigation, route }: Props) {
               />
               <TouchableOpacity
                 style={[styles.sendBtn, { backgroundColor: '#e8a557' }]}
-                onPress={() => setMessage('')}>
+                onPress={() => {
+                  if (message.trim()) {
+                    setLocalMessages(prev => [...prev, { from: 'me', zh: message.trim(), en: message.trim() }]);
+                    setMessage('');
+                  }
+                }}>
                 <Text style={{ color: '#1f1014', fontSize: 16 }}>↑</Text>
               </TouchableOpacity>
             </View>
@@ -199,7 +204,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
                 {t('veilOnlyHere', lang)}
               </Text>
               {veilLevel < 4 && (
-                <TouchableOpacity onPress={async () => { if (wicks >= 2) { const r = await spendWicks(2, 'veil_lift'); if (r.ok) { playBlow(); setVeilLevel(v => v + 1); } } }}
+                <TouchableOpacity onPress={async () => { if (wicks >= 2) { const r = await spendWicks(2, 'veil_lift'); if (r.ok) { setVeilLevel(v => v + 1); } } }}
                   disabled={wicks < 2}
                   style={[styles.liftBtn, { backgroundColor: wicks >= 2 ? L.ink : L.line }]}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: wicks >= 2 ? '#f5e2c4' : L.muted }}>

@@ -5,7 +5,7 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
-import { VaporBackground, GlassCard, Cap, WickGlyph, PhotoVeil } from '../components/ui';
+import { VaporBackground, GlassCard, Cap, WickGlyph, PhotoVeil, FadeInUp } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
@@ -38,20 +38,23 @@ export default function ProfileScreen({ navigation }: Props) {
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Top bar */}
-          <View style={styles.topBar}>
-            <TouchableOpacity onPress={() => navigation.goBack()}
-              style={[styles.backBtn, { backgroundColor: p.surface, borderColor: p.line }]}>
-              <Text style={{ color: p.muted, fontSize: 18 }}>‹</Text>
-            </TouchableOpacity>
-            <Cap p={p}>{lang === 'en' ? 'My page' : '我的頁面'}</Cap>
-            <TouchableOpacity onPress={() => navigation.push('Settings')}
-              style={[styles.backBtn, { backgroundColor: p.surface, borderColor: p.line }]}>
-              <Text style={{ color: p.muted, fontSize: 14 }}>⚙</Text>
-            </TouchableOpacity>
-          </View>
+          <FadeInUp delay={0} distance={6}>
+            <View style={styles.topBar}>
+              <TouchableOpacity onPress={() => navigation.goBack()}
+                style={[styles.backBtn, { backgroundColor: p.surface, borderColor: p.line }]}>
+                <Text style={{ color: p.muted, fontSize: 18 }}>‹</Text>
+              </TouchableOpacity>
+              <Cap p={p}>{lang === 'en' ? 'My page' : '我的頁面'}</Cap>
+              <TouchableOpacity onPress={() => navigation.push('Settings')}
+                style={[styles.backBtn, { backgroundColor: p.surface, borderColor: p.line }]}>
+                <Text style={{ color: p.muted, fontSize: 14 }}>⚙</Text>
+              </TouchableOpacity>
+            </View>
+          </FadeInUp>
 
           {/* Identity + wicks card */}
-          <GlassCard p={p} padding={18} radius={24}>
+          <FadeInUp delay={80} distance={10}>
+            <GlassCard p={p} padding={18} radius={24}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
               <Identity kind={identityKind} seed={seed} size={64} palette={p} lang={lang} trust={0.4} />
               <View style={{ flex: 1 }}>
@@ -82,9 +85,11 @@ export default function ProfileScreen({ navigation }: Props) {
               </TouchableOpacity>
             </View>
           </GlassCard>
+          </FadeInUp>
 
           {/* Night name composer (Loft) */}
-          <View style={[styles.nightNameBox, { backgroundColor: 'rgba(45,22,28,0.9)', borderColor: 'rgba(232,165,87,0.3)' }]}>
+          <FadeInUp delay={160} distance={10}>
+            <View style={[styles.nightNameBox, { backgroundColor: 'rgba(45,22,28,0.9)', borderColor: 'rgba(232,165,87,0.3)' }]}>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: '#f5e2c4' }}>
                 {lang === 'en' ? 'Night name · Loft only' : '夜名 · 僅夜閣使用'}
@@ -117,9 +122,11 @@ export default function ProfileScreen({ navigation }: Props) {
               </View>
             </ScrollView>
           </View>
+          </FadeInUp>
 
           {/* Loft visibility toggle */}
-          <View style={[styles.loftToggle, { backgroundColor: 'rgba(45,22,28,0.7)', borderColor: 'rgba(232,165,87,0.3)' }]}>
+          <FadeInUp delay={240} distance={10}>
+            <View style={[styles.loftToggle, { backgroundColor: 'rgba(45,22,28,0.7)', borderColor: 'rgba(232,165,87,0.3)' }]}>
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: '#f5e2c4' }}>
                 {lang === 'en' ? 'Show my page in the Loft' : '在夜閣顯示我的頁面'}
@@ -133,9 +140,11 @@ export default function ProfileScreen({ navigation }: Props) {
               <View style={{ position: 'absolute', left: loftVisible ? 18 : 2, top: 2, width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' }} />
             </TouchableOpacity>
           </View>
+          </FadeInUp>
 
           {/* Diary */}
-          <View style={styles.profileSection}>
+          <FadeInUp delay={320} distance={10}>
+            <View style={styles.profileSection}>
             <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Diary · 日記' : '日記 · Diary'}</Cap>
             <GlassCard p={p} padding={0} radius={18}>
               {DIARY.map((d, i) => (
@@ -148,9 +157,11 @@ export default function ProfileScreen({ navigation }: Props) {
               ))}
             </GlassCard>
           </View>
+          </FadeInUp>
 
           {/* Photos */}
-          <View style={styles.profileSection}>
+          <FadeInUp delay={400} distance={10}>
+            <View style={styles.profileSection}>
             <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Photos · 相簿' : '相簿 · Photos'}</Cap>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {[0, 1, 2].map(i => (
@@ -158,9 +169,11 @@ export default function ProfileScreen({ navigation }: Props) {
               ))}
             </View>
           </View>
+          </FadeInUp>
 
           {/* Quote */}
-          <View style={styles.profileSection}>
+          <FadeInUp delay={480} distance={10}>
+            <View style={styles.profileSection}>
             <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'A line · 語錄' : '語錄 · A line'}</Cap>
             <View style={{ paddingLeft: 14, borderLeftWidth: 2, borderLeftColor: p.accent + '60' }}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, lineHeight: 26 }}>
@@ -168,9 +181,11 @@ export default function ProfileScreen({ navigation }: Props) {
               </Text>
             </View>
           </View>
+          </FadeInUp>
 
           {/* Status + interests */}
-          <View style={styles.profileSection}>
+          <FadeInUp delay={560} distance={10}>
+            <View style={styles.profileSection}>
             <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Status · Interests' : '感情狀態 · 興趣'}</Cap>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               <View style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.accent }}>
@@ -185,12 +200,15 @@ export default function ProfileScreen({ navigation }: Props) {
               ))}
             </View>
           </View>
+          </FadeInUp>
 
-          <Text style={[styles.footer, { color: p.muted }]}>
+          <FadeInUp delay={640} distance={8}>
+            <Text style={[styles.footer, { color: p.muted }]}>
             {lang === 'en'
               ? 'Your page is invisible in the Park. Only the Loft can see it — and only what you allow.'
               : '公園裡沒有人看得到你的頁面。只有夜閣看得到——而且只有你允許的部分。'}
           </Text>
+          </FadeInUp>
         </ScrollView>
       </SafeAreaView>
     </VaporBackground>

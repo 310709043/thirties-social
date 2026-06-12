@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
+  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Animated, Easing,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { VaporBackground, GlassCard, SoftButton, BreathDot } from '../components/ui';
+import { VaporBackground, GlassCard, SoftButton, Logo, FadeInUp } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { setOnboardingDone, useAppStore } from '../hooks/useAppStore';
@@ -25,13 +25,44 @@ export default function OnboardingScreen({ navigation }: Props) {
   const [step, setStep] = useState(0);
   const isPreview = step === STEPS.length;
 
+  const contentOpacity = useRef(new Animated.Value(1)).current;
+  const contentTranslate = useRef(new Animated.Value(0)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: step / STEPS.length,
+      duration: 400,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  }, [step]);
+
+  const animateStep = (next: number) => {
+    Animated.parallel([
+      Animated.timing(contentOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
+      Animated.timing(contentTranslate, { toValue: -20, duration: 150, useNativeDriver: true }),
+    ]).start(() => {
+      setStep(next);
+      contentTranslate.setValue(20);
+      Animated.parallel([
+        Animated.timing(contentOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+        Animated.spring(contentTranslate, { toValue: 0, tension: 80, friction: 12, useNativeDriver: true }),
+      ]).start();
+    });
+  };
+
   const handleContinue = () => {
     if (!isPreview) {
-      setStep(step + 1);
+      animateStep(step + 1);
     } else {
       setOnboardingDone();
       navigation.replace('Setup');
     }
+  };
+
+  const handleBack = () => {
+    animateStep(step - 1);
   };
 
   return (
@@ -39,28 +70,37 @@ export default function OnboardingScreen({ navigation }: Props) {
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.container}>
           {/* Brand */}
-          <View style={styles.brand}>
-            <BreathDot p={p} />
-            <Text style={[styles.brandName, { color: p.ink }]}>{t('appName', lang)}</Text>
-            <Text style={[styles.brandEn, { color: p.muted }]}>· {tAlt('appName', lang)}</Text>
-          </View>
+          <FadeInUp delay={0} distance={10}>
+            <View style={styles.brand}>
+              <Logo size={64} showGlow={true} />
+              <View style={{ gap: 2 }}>
+                <Text style={[styles.brandName, { color: p.ink }]}>{t('appName', lang)}</Text>
+                <Text style={[styles.brandEn, { color: p.muted }]}>{tAlt('appName', lang)}</Text>
+              </View>
+            </View>
+          </FadeInUp>
 
           {/* Progress bar */}
-          <View style={styles.progress}>
-            {[0, 1, 2, 3].map(i => (
-              <View key={i} style={[
-                styles.progressBar,
-                {
-                  flex: i === step ? 2 : 1,
-                  backgroundColor: i <= step ? p.ink : p.line,
-                  opacity: i <= step ? 0.85 : 1,
-                }
-              ]} />
-            ))}
-          </View>
+          <FadeInUp delay={100} distance={6}>
+            <View style={styles.progress}>
+              {[0, 1, 2, 3].map(i => (
+                <View key={i} style={[
+                  styles.progressBar,
+                  {
+                    flex: i === step ? 2 : 1,
+                    backgroundColor: i <= step ? p.ink : p.line,
+                    opacity: i <= step ? 0.85 : 1,
+                  }
+                ]} />
+              ))}
+            </View>
+          </FadeInUp>
 
-          {/* Content */}
-          <View style={styles.content}>
+          {/* Content with transition */}
+          <Animated.View style={[styles.content, {
+            opacity: contentOpacity,
+            transform: [{ translateY: contentTranslate }],
+          }]}>
             {!isPreview ? (
               <>
                 <View style={styles.mark}>
@@ -76,23 +116,25 @@ export default function OnboardingScreen({ navigation }: Props) {
             ) : (
               <IdentityPreview p={p} lang={lang} identityKind={identityKind} seed={seed} />
             )}
-          </View>
+          </Animated.View>
 
           {/* Footer */}
-          <View style={styles.footer}>
-            <SoftButton p={p} variant="primary" size="lg" full onPress={handleContinue}>
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
-                {isPreview ? t('obContinue', lang) : (lang === 'en' ? 'Continue →' : '繼續 →')}
-              </Text>
-            </SoftButton>
-            {!isPreview && step > 0 && (
-              <TouchableOpacity onPress={() => setStep(step - 1)} style={styles.back}>
-                <Text style={{ color: p.muted, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 }}>
-                  {lang === 'en' ? 'Back' : '上一步'}
+          <FadeInUp delay={200} distance={10}>
+            <View style={styles.footer}>
+              <SoftButton p={p} variant="primary" size="lg" full onPress={handleContinue}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
+                  {isPreview ? t('obContinue', lang) : (lang === 'en' ? 'Continue →' : '繼續 →')}
                 </Text>
-              </TouchableOpacity>
-            )}
-          </View>
+              </SoftButton>
+              {!isPreview && step > 0 && (
+                <TouchableOpacity onPress={handleBack} style={styles.back}>
+                  <Text style={{ color: p.muted, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 }}>
+                    {lang === 'en' ? 'Back' : '上一步'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </FadeInUp>
         </View>
       </SafeAreaView>
     </VaporBackground>
@@ -118,7 +160,6 @@ function IdentityPreview({ p, lang, identityKind, seed }: any) {
   );
 }
 
-// Simple intro marks using View-based shapes
 function IntroMark1({ color, accent }: { color: string; accent: string }) {
   return (
     <View style={{ width: 80, height: 80, alignItems: 'center', justifyContent: 'center' }}>
@@ -152,9 +193,9 @@ function IntroMark3({ color, accent }: { color: string; accent: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 28, paddingBottom: 38 },
-  brand:     { flexDirection: 'row', alignItems: 'center', gap: 10, opacity: 0.7, marginTop: 8 },
-  brandName: { fontFamily: 'NotoSerifTC-Regular', fontSize: 14, letterSpacing: 1 },
-  brandEn:   { fontFamily: 'EBGaramond-Italic', fontSize: 12 },
+  brand:     { alignItems: 'center', gap: 12, marginTop: 8 },
+  brandName: { fontFamily: 'NotoSerifTC-Regular', fontSize: 18, letterSpacing: 2, textAlign: 'center' },
+  brandEn:   { fontFamily: 'EBGaramond-Italic', fontSize: 13, textAlign: 'center' },
   progress:  { flexDirection: 'row', gap: 6, marginTop: 28, height: 2 },
   progressBar: { height: 2, borderRadius: 2 },
   content:   { flex: 1, justifyContent: 'center', gap: 16, marginTop: 24 },

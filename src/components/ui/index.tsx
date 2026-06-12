@@ -1,8 +1,8 @@
 // Shared UI building blocks
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, TextInput,
+  View, Text, TouchableOpacity, TextInput, Animated, Easing,
   StyleSheet, ViewStyle, TextStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -39,7 +39,7 @@ export function VaporBackground({ p, children, style }: { p: Palette; children: 
 }
 
 // ── GlassCard ─────────────────────────────────────────────────
-export function GlassCard({
+export const GlassCard = React.memo(function GlassCard({
   p, children, style, padding = 20, radius = 28, onPress,
 }: {
   p: Palette; children: ReactNode; style?: ViewStyle;
@@ -62,13 +62,13 @@ export function GlassCard({
   );
   if (onPress) return <TouchableOpacity onPress={onPress} activeOpacity={0.85}>{inner}</TouchableOpacity>;
   return inner;
-}
+});
 
 // ── SoftButton ────────────────────────────────────────────────
 type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'accent' | 'danger';
 type BtnSize = 'sm' | 'md' | 'lg';
 
-export function SoftButton({
+export const SoftButton = React.memo(function SoftButton({
   p, children, onPress, variant = 'primary', size = 'md', full = false, style,
 }: {
   p: Palette; children: ReactNode; onPress?: () => void;
@@ -112,7 +112,7 @@ export function SoftButton({
         : children}
     </TouchableOpacity>
   );
-}
+});
 
 // ── Hairline ──────────────────────────────────────────────────
 export function Hairline({ p, style }: { p: Palette; style?: ViewStyle }) {
@@ -131,21 +131,34 @@ export function Cap({ children, p, style }: { children: ReactNode; p: Palette; s
 }
 
 // ── BreathDot ─────────────────────────────────────────────────
-export function BreathDot({ p, size = 8 }: { p: Palette; size?: number }) {
+export function BreathDot({ p, size = 8, animate = true }: { p: Palette; size?: number; animate?: boolean }) {
+  const breath = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!animate) return;
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(breath, { toValue: 1.3, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
   return (
-    <View style={{
+    <Animated.View style={{
       width: size, height: size, borderRadius: size,
       backgroundColor: p.accent,
       shadowColor: p.accent,
       shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.7,
-      shadowRadius: size * 1.5,
+      shadowOpacity: breath.interpolate({ inputRange: [1, 1.3], outputRange: [0.5, 0.9] }),
+      shadowRadius: breath.interpolate({ inputRange: [1, 1.3], outputRange: [size * 1.2, size * 2] }),
+      transform: [{ scale: breath }],
     }} />
   );
 }
 
 // ── CountdownBar ──────────────────────────────────────────────
-export function CountdownBar({ p, progress }: { p: Palette; progress: number }) {
+export const CountdownBar = React.memo(function CountdownBar({ p, progress }: { p: Palette; progress: number }) {
   return (
     <View style={{ height: 2, backgroundColor: p.line, borderRadius: 2 }}>
       <View style={{
@@ -156,10 +169,10 @@ export function CountdownBar({ p, progress }: { p: Palette; progress: number }) 
       }} />
     </View>
   );
-}
+});
 
 // ── CountdownRing ─────────────────────────────────────────────
-export function CountdownRing({
+export const CountdownRing = React.memo(function CountdownRing({
   p, progress, size = 36, stroke = 2,
 }: {
   p: Palette; progress: number; size?: number; stroke?: number;
@@ -181,7 +194,7 @@ export function CountdownRing({
       />
     </Svg>
   );
-}
+});
 
 // ── Toggle ────────────────────────────────────────────────────
 export function Toggle({
@@ -189,6 +202,12 @@ export function Toggle({
 }: {
   p: Palette; on: boolean; onToggle?: () => void;
 }) {
+  const knobX = useRef(new Animated.Value(on ? 18 : 2)).current;
+
+  useEffect(() => {
+    Animated.spring(knobX, { toValue: on ? 18 : 2, tension: 120, friction: 10, useNativeDriver: true }).start();
+  }, [on]);
+
   return (
     <TouchableOpacity onPress={onToggle} activeOpacity={0.85} style={{
       width: 40, height: 24, borderRadius: 24,
@@ -196,9 +215,9 @@ export function Toggle({
       justifyContent: 'center',
       position: 'relative',
     }}>
-      <View style={{
+      <Animated.View style={{
         position: 'absolute',
-        left: on ? 18 : 2, top: 2,
+        left: knobX, top: 2,
         width: 20, height: 20, borderRadius: 10,
         backgroundColor: '#fff',
         shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
@@ -284,3 +303,6 @@ export { Skeleton, MessageSkeleton } from './Skeleton';
 export { FadeInUp } from './FadeIn';
 export { LoftTransition } from './LoftTransition';
 export { ToastProvider, useToast } from './Toast';
+export { Logo } from './Logo';
+export { TypingIndicator } from './TypingIndicator';
+export { Tooltip } from './Tooltip';

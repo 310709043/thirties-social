@@ -8,7 +8,6 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t } from '../lib/copy';
 import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, FadeInUp } from '../components/ui';
-import { playBlow } from '../lib/sound';
 import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
@@ -233,7 +232,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 </View>
                 {!veilSent ? (
                   <TouchableOpacity
-                    onPress={async () => { if (wicks >= 2) { const result = await spendWicks(2, 'photo_veil', conversationId); if (result.ok) { playBlow(); hapticMedium(); setVeilSent(true); } } }}
+                    onPress={async () => { if (wicks >= 2) { const result = await spendWicks(2, 'photo_veil', conversationId); if (result.ok) { hapticMedium(); setVeilSent(true); } } }}
                     disabled={wicks < 2}
                     style={[styles.sendVeilBtn, { backgroundColor: wicks >= 2 ? p.ink : p.line }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

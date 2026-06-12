@@ -11,7 +11,6 @@ import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber } from '../compon
 import { useAppStore } from '../hooks/useAppStore';
 import { enterLoft, fetchTonightLoftSessions, DbLoftSession } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
-import { playBlow } from '../lib/sound';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Loft'>;
@@ -43,7 +42,6 @@ export default function LoftScreen({ navigation }: Props) {
     const nightName = getColorAdj(seed, lang).label;
     const result = await enterLoft(nightName);
     if (result.ok) {
-      playBlow();          // candle-lighting whoosh
       hapticMedium();
       setEntering(true);   // plays immersive transition, onDone -> setInside(true)
     } else if (result.error === 'already_entered_tonight') {

@@ -4,7 +4,7 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { initStore, useAppStore } from './src/hooks/useAppStore';
 import Navigation from './src/navigation';
-import { WickGlyph } from './src/components/ui';
+import { WickGlyph, Logo } from './src/components/ui';
 import { LOFT_PALETTE } from './src/lib/theme';
 import { ToastProvider } from './src/components/ui/Toast';
 
@@ -62,7 +62,7 @@ function AppGate() {
     return (
       <View style={[bs.container, { backgroundColor: '#1a0d11' }]}>
         <View style={bs.inner}>
-          <WickGlyph size={32} color="#e8a557" />
+          <Logo size={80} showGlow={true} />
           <Text style={[bs.title, { color: '#f5e2c4' }]}>
             {store.lang === 'en' ? 'Account suspended' : '帳號已暫停'}
           </Text>
