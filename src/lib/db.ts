@@ -290,6 +290,49 @@ export function subscribeToRoomMessages(
   });
 }
 
+// ── Room Presence ─────────────────────────────────────────
+// Who is in the room right now. Each member keeps a heartbeat
+// doc alive; readers filter out anyone stale for >90s.
+const PRESENCE_STALE_MS = 90 * 1000;
+const PRESENCE_HEARTBEAT_MS = 45 * 1000;
+
+export interface DbPresence {
+  userId: string;
+  seed: string;
+  lastSeen: any;
+}
+
+export function joinRoomPresence(roomId: string, seed: string): () => void {
+  const uid = getCurrentUid();
+  if (!uid) return () => {};
+  const ref = doc(db, 'rooms', roomId, 'presence', uid);
+  const beat = () => setDoc(ref, { userId: uid, seed, lastSeen: serverTimestamp() }).catch(() => {});
+  beat();
+  const id = setInterval(beat, PRESENCE_HEARTBEAT_MS);
+  return () => {
+    clearInterval(id);
+    deleteDoc(ref).catch(() => {});
+  };
+}
+
+export function subscribeToRoomPresence(
+  roomId: string,
+  onChange: (present: DbPresence[]) => void,
+): () => void {
+  const q = query(collection(db, 'rooms', roomId, 'presence'));
+  return onSnapshot(q, snap => {
+    const cutoff = Date.now() - PRESENCE_STALE_MS;
+    const present = snap.docs
+      .map(d => d.data() as DbPresence)
+      .filter(p => {
+        const ts = p.lastSeen?.toMillis?.();
+        // Pending serverTimestamp (own fresh write) counts as present
+        return ts === undefined || ts >= cutoff;
+      });
+    onChange(present);
+  });
+}
+
 // ── Conversation Messages ─────────────────────────────────
 export interface DbConvMessage {
   id: string;

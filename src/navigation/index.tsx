@@ -2,6 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import WelcomeScreen from '../screens/WelcomeScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SetupScreen from '../screens/SetupScreen';
 import MoodScreen from '../screens/MoodScreen';
@@ -17,6 +18,7 @@ import LoftChatScreen from '../screens/LoftChatScreen';
 import UpgradeScreen from '../screens/UpgradeScreen';
 
 export type RootStackParamList = {
+  Welcome: undefined;
   Onboarding: undefined;
   Setup: undefined;
   Mood: undefined;
@@ -45,6 +47,7 @@ export default function Navigation({ initialRoute = 'Onboarding' }: NavigationPr
         initialRouteName={initialRoute as any}
         screenOptions={{ headerShown: false, animation: 'fade' }}
       >
+        <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Setup" component={SetupScreen} />
         <Stack.Screen name="Mood" component={MoodScreen} />

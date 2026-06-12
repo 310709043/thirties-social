@@ -11,7 +11,6 @@ import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber } from '../compon
 import { useAppStore } from '../hooks/useAppStore';
 import { enterLoft, fetchTonightLoftSessions, DbLoftSession } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
-import { playBlow } from '../lib/sound';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Loft'>;
@@ -43,7 +42,6 @@ export default function LoftScreen({ navigation }: Props) {
     const nightName = getColorAdj(seed, lang).label;
     const result = await enterLoft(nightName);
     if (result.ok) {
-      playBlow();          // candle-lighting whoosh
       hapticMedium();
       setEntering(true);   // plays immersive transition, onDone -> setInside(true)
     } else if (result.error === 'already_entered_tonight') {
@@ -71,7 +69,7 @@ export default function LoftScreen({ navigation }: Props) {
       }} />
 
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
           {/* Back */}
           <TouchableOpacity onPress={() => navigation.goBack()} style={{ alignSelf: 'flex-start', paddingVertical: 4 }}>
             <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: L.muted, letterSpacing: 1 }}>
@@ -95,7 +93,7 @@ export default function LoftScreen({ navigation }: Props) {
           </View>
 
           {/* Tagline */}
-          <View style={{ marginTop: 36, paddingHorizontal: 12, flex: 1 }}>
+          <View style={{ marginTop: 36, paddingHorizontal: 12, marginBottom: 32 }}>
             <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 22, lineHeight: 38, color: L.ink, fontWeight: '300', letterSpacing: 1, textAlign: 'center' }}>
               {t('loftTagline', lang)}
             </Text>
@@ -146,7 +144,7 @@ export default function LoftScreen({ navigation }: Props) {
               {t('loftBack', lang)}
             </Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </SafeAreaView>
 
       {/* Broke sheet */}
@@ -291,7 +289,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
 }
 
 const styles = StyleSheet.create({
-  container:    { flex: 1, padding: 28, paddingBottom: 32 },
+  container:    { flexGrow: 1, padding: 28, paddingBottom: 32 },
   consentBox:   { padding: 14, borderRadius: 12, borderWidth: 0.5, marginBottom: 18 },
   enterBtn:     { height: 60, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, overflow: 'hidden' },
   brokeOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(11,6,8,0.8)', alignItems: 'center', justifyContent: 'center', padding: 32 },

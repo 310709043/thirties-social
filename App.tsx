@@ -82,8 +82,12 @@ function AppGate() {
     );
   }
 
-  const initialRoute = !store.onboardingDone ? 'Onboarding' : !store.setupDone ? 'Setup' : 'Mood';
-  return <Navigation initialRoute={initialRoute} />;
+  const initialRoute = !store.welcomeDone ? 'Welcome'
+    : !store.onboardingDone ? 'Onboarding'
+    : !store.setupDone ? 'Setup'
+    : 'Mood';
+  // Key forces a navigator remount when the gate changes (e.g. after resetAll)
+  return <Navigation key={initialRoute} initialRoute={initialRoute} />;
 }
 
 const bs = StyleSheet.create({

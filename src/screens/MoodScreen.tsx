@@ -8,14 +8,13 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import {
-  VaporBackground, GlassCard, SoftButton, BreathDot, Cap, WickGlyph, AnimatedNumber,
+  VaporBackground, GlassCard, SoftButton, BreathDot, Cap, WickGlyph, AnimatedNumber, TutorialOverlay,
 } from '../components/ui';
-import { playChime } from '../lib/sound';
 import { hapticSuccess } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, checkAndClaimDailyReward } from '../hooks/useAppStore';
-import { subscribeToActiveRooms, DbRoom } from '../lib/db';
+import { useAppStore, checkAndClaimDailyReward, setTutorialDone } from '../hooks/useAppStore';
+import { subscribeToActiveRooms, updateUser, DbRoom } from '../lib/db';
 import { LinearGradient } from 'expo-linear-gradient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
@@ -26,18 +25,18 @@ const SUGGESTED_ROOMS = [
 ] as const;
 
 export default function MoodScreen({ navigation }: Props) {
-  const { seed, direction, lang, identityKind, wicks } = useAppStore();
+  const { seed, direction, lang, identityKind, wicks, tutorialDone } = useAppStore();
   const p = DIRECTIONS[direction];
   const [text, setText] = useState('');
   const [timeStr, setTimeStr] = useState('');
   const [rooms, setRooms] = useState<DbRoom[]>([]);
+  const [showTutorial, setShowTutorial] = useState(!tutorialDone);
 
   useEffect(() => { return subscribeToActiveRooms(setRooms); }, []);
 
   useEffect(() => {
     checkAndClaimDailyReward().then(r => {
       if (r.rewarded && r.amount) {
-        playChime();
         hapticSuccess();
         Alert.alert('', `🕯 每日燭芯 +${r.amount}`, [{ text: '收下', style: 'default' }]);
       }
@@ -62,6 +61,8 @@ export default function MoodScreen({ navigation }: Props) {
   }, []);
 
   const handleEnter = () => {
+    // Keep tonight's line on the user doc — rooms and the Loft can surface it
+    if (text.trim()) updateUser({ tonightLine: text.trim() } as any);
     navigation.push('Room', { roomKey: 'room_partner' });
   };
 
@@ -187,6 +188,12 @@ export default function MoodScreen({ navigation }: Props) {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      {/* First-run walkthrough */}
+      {showTutorial && (
+        <TutorialOverlay p={p} lang={lang}
+          onDone={() => { setShowTutorial(false); setTutorialDone(); }} />
+      )}
     </VaporBackground>
   );
 }

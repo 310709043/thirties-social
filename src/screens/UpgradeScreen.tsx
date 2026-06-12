@@ -10,7 +10,6 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, Cap, WickGlyph, AnimatedNumber } from '../components/ui';
 import { useAppStore, setVigil } from '../hooks/useAppStore';
 import { addWicks } from '../lib/db';
-import { playChime } from '../lib/sound';
 import { hapticSuccess } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Upgrade'>;
@@ -29,7 +28,6 @@ export default function UpgradeScreen({ navigation }: Props) {
   const handleBuyPack = async (amount: number) => {
     const result = await addWicks(amount, 'purchase', undefined, `購買 ${amount} 燭芯`);
     if (result.ok) {
-      playChime();
       hapticSuccess();
     }
   };
@@ -37,7 +35,6 @@ export default function UpgradeScreen({ navigation }: Props) {
   // TODO: gate behind real IAP purchase flow
   const handleVigil = () => {
     setVigil(true);
-    playChime();
     hapticSuccess();
     navigation.goBack();
   };

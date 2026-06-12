@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
@@ -9,15 +10,63 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, Cap, Toggle } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, setLang } from '../hooks/useAppStore';
+import { useAppStore, setLang, resetAll } from '../hooks/useAppStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
   const { direction, lang, identityKind, seed } = useAppStore();
   const p = DIRECTIONS[direction];
+  const zh = lang !== 'en';
   const [autoFilter, setAutoFilter] = useState(true);
   const [slowMode, setSlowMode] = useState(false);
+
+  // Restore persisted preferences
+  useEffect(() => {
+    Promise.all([
+      AsyncStorage.getItem('pref_auto_filter'),
+      AsyncStorage.getItem('pref_slow_mode'),
+    ]).then(([af, sm]) => {
+      if (af !== null) setAutoFilter(af !== '0');
+      if (sm !== null) setSlowMode(sm === '1');
+    });
+  }, []);
+
+  const toggleAutoFilter = () => {
+    const next = !autoFilter;
+    setAutoFilter(next);
+    AsyncStorage.setItem('pref_auto_filter', next ? '1' : '0');
+  };
+  const toggleSlowMode = () => {
+    const next = !slowMode;
+    setSlowMode(next);
+    AsyncStorage.setItem('pref_slow_mode', next ? '1' : '0');
+  };
+
+  const showAbout = () => {
+    Alert.alert(
+      zh ? '關於 第卅者' : 'About',
+      zh
+        ? '第卅者 v1.0\n\n一個匿名情緒社交空間。不需要帳號，不留下紀錄，對話會消散。\n\n你的身分綁定這台裝置，解除安裝即等同離開。'
+        : '第卅者 v1.0\n\nAn anonymous space for what weighs on you. No accounts, no records, conversations dissolve.\n\nYour identity is bound to this device; uninstalling means leaving.',
+    );
+  };
+
+  const confirmLeave = () => {
+    Alert.alert(
+      zh ? '離開這裡' : 'Leave',
+      zh
+        ? '會清除這台裝置上的所有資料（燭芯、日記、夜名、設定），且無法復原。確定嗎？'
+        : 'This wipes everything on this device — wicks, diary, night name, settings. It cannot be undone. Sure?',
+      [
+        { text: zh ? '留下來' : 'Stay', style: 'cancel' },
+        {
+          text: zh ? '離開' : 'Leave', style: 'destructive',
+          onPress: async () => { await resetAll(); },
+        },
+      ],
+    );
+  };
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
@@ -86,14 +135,14 @@ export default function SettingsScreen({ navigation }: Props) {
                 title={lang === 'en' ? 'Auto-filter abusive language' : '自動過濾辱罵言詞'}
                 alt={lang === 'en' ? '自動過濾辱罵言詞' : 'Auto-filter abusive language'}
                 sub={lang === 'en' ? 'On-device. We never see your conversation.' : '在裝置上完成。我們不會看到你的對話。'}
-                control={<Toggle p={p} on={autoFilter} onToggle={() => setAutoFilter(!autoFilter)} />}
+                control={<Toggle p={p} on={autoFilter} onToggle={toggleAutoFilter} />}
               />
               <RowDivider p={p} />
               <SettingRow p={p}
                 title={lang === 'en' ? 'Slow mode after 22:00' : '夜間 22 點後緩衝模式'}
                 alt={lang === 'en' ? '夜間 22 點後緩衝模式' : 'Slow mode after 22:00'}
                 sub={lang === 'en' ? 'A pause before each message you send.' : '你按送出之前，給一個暫停。'}
-                control={<Toggle p={p} on={slowMode} onToggle={() => setSlowMode(!slowMode)} />}
+                control={<Toggle p={p} on={slowMode} onToggle={toggleSlowMode} />}
               />
               <RowDivider p={p} />
               <SettingRow p={p}
@@ -125,6 +174,7 @@ export default function SettingsScreen({ navigation }: Props) {
               <SettingRow p={p}
                 title={t('setAbout', lang)}
                 alt={tAlt('setAbout', lang)}
+                onPress={showAbout}
                 control={<Text style={{ color: p.muted, fontSize: 18 }}>›</Text>}
               />
               <RowDivider p={p} />
@@ -132,6 +182,7 @@ export default function SettingsScreen({ navigation }: Props) {
                 title={t('setLeave', lang)}
                 alt={tAlt('setLeave', lang)}
                 sub={lang === 'en' ? 'No traces remain. We hold no records.' : '不留下任何資料。我們本來就沒有保存。'}
+                onPress={confirmLeave}
                 danger
               />
             </GlassCard>
@@ -161,9 +212,11 @@ function SectionHeader({ lang, zh, en, p }: any) {
   );
 }
 
-function SettingRow({ p, title, alt, sub, control, danger }: any) {
+function SettingRow({ p, title, alt, sub, control, danger, onPress }: any) {
+  const Wrapper: any = onPress ? TouchableOpacity : View;
   return (
-    <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+    <Wrapper onPress={onPress} activeOpacity={0.7}
+      style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
           <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: danger ? p.danger : p.ink, fontWeight: '500' }}>
@@ -182,7 +235,7 @@ function SettingRow({ p, title, alt, sub, control, danger }: any) {
         )}
       </View>
       {control}
-    </View>
+    </Wrapper>
   );
 }
 

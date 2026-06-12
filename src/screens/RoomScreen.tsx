@@ -11,7 +11,7 @@ import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkele
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
-import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoomMessage } from '../lib/db';
+import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, joinRoomPresence, subscribeToRoomPresence, DbRoomMessage, DbPresence } from '../lib/db';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
 
@@ -33,6 +33,7 @@ export default function RoomScreen({ navigation, route }: Props) {
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [present, setPresent] = useState<DbPresence[]>([]);
 
   const reshuffleIdentity = () => {
     setIdentitySeed(Math.random().toString(36).slice(2));
@@ -63,6 +64,14 @@ export default function RoomScreen({ navigation, route }: Props) {
     if (!roomId) return;
     return subscribeToRoomMessages(roomId, setMessages);
   }, [roomId]);
+
+  // Live presence: announce ourselves + watch who else is here
+  useEffect(() => {
+    if (!roomId) return;
+    const leave = joinRoomPresence(roomId, identitySeed);
+    const unsub = subscribeToRoomPresence(roomId, setPresent);
+    return () => { leave(); unsub(); };
+  }, [roomId, identitySeed]);
 
   // When invite sent, create a real conversation → go to Chat
   useEffect(() => {
@@ -118,24 +127,26 @@ export default function RoomScreen({ navigation, route }: Props) {
         {/* ROOM HEADER */}
         <View style={styles.header}>
           <Text style={[styles.roomNum, { color: p.muted }]}>
-            {lang === 'en' ? 'Room' : '房間'} · 015
+            {lang === 'en' ? 'Room' : '房間'} · {roomId ? roomId.slice(-4).toUpperCase() : '···'}
           </Text>
           <Text style={[styles.roomName, { color: p.ink }]}>{t(roomKey as any, lang)}</Text>
           <Text style={[styles.roomNameAlt, { color: p.muted }]}>{tAlt(roomKey as any, lang)}</Text>
 
-          {/* Live count */}
+          {/* Live count — real presence */}
           <View style={styles.liveRow}>
             <View style={styles.avatarStack}>
-              {['s1', 's2', 's3', 's4'].map((s, i) => (
-                <View key={s} style={[styles.avatarWrap, { marginLeft: i === 0 ? 0 : -10, borderColor: p.surfaceSolid, backgroundColor: p.surfaceSolid }]}>
-                  <Identity kind="sigil" seed={s} size={18} palette={p} />
+              {present.slice(0, 4).map((pr, i) => (
+                <View key={pr.userId} style={[styles.avatarWrap, { marginLeft: i === 0 ? 0 : -10, borderColor: p.surfaceSolid, backgroundColor: p.surfaceSolid }]}>
+                  <Identity kind="sigil" seed={pr.seed} size={18} palette={p} />
                 </View>
               ))}
-              <View style={[styles.avatarWrap, styles.avatarCount, { marginLeft: -10, borderColor: p.surfaceSolid, backgroundColor: p.accent }]}>
-                <Text style={{ color: p.dark ? '#15172e' : '#fff', fontSize: 9, fontFamily: 'Inter-Regular' }}>+8</Text>
-              </View>
+              {present.length > 4 && (
+                <View style={[styles.avatarWrap, styles.avatarCount, { marginLeft: -10, borderColor: p.surfaceSolid, backgroundColor: p.accent }]}>
+                  <Text style={{ color: p.dark ? '#15172e' : '#fff', fontSize: 9, fontFamily: 'Inter-Regular' }}>+{present.length - 4}</Text>
+                </View>
+              )}
             </View>
-            <Text style={[styles.liveText, { color: p.muted }]}>12 {t('roomPeople', lang)}</Text>
+            <Text style={[styles.liveText, { color: p.muted }]}>{Math.max(present.length, 1)} {t('roomPeople', lang)}</Text>
             <Text style={[styles.liveDot, { color: p.muted }]}>·</Text>
             <Text style={[styles.liveText, { color: p.muted }]}>{t('roomEphemeral', lang)}</Text>
           </View>

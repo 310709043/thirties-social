@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  ScrollView, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform,
+  ScrollView, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t } from '../lib/copy';
 import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, FadeInUp } from '../components/ui';
-import { playBlow } from '../lib/sound';
 import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
@@ -39,6 +39,19 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [inputText, setInputText] = useState('');
   const [showVeilSheet, setShowVeilSheet] = useState(false);
   const [veilSent, setVeilSent] = useState(false);
+  const [veilUri, setVeilUri] = useState<string | null>(null);
+
+  const pickVeilPhoto = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('', lang === 'en' ? 'Photo library permission is needed' : '需要相簿權限才能選擇照片');
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7,
+    });
+    if (!res.canceled && res.assets?.[0]) setVeilUri(res.assets[0].uri);
+  };
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -226,24 +239,38 @@ export default function ChatScreen({ navigation, route }: Props) {
                     : '照片會藏在紗罩下。對方每揭一層需要 2 燭芯，並且需要先同意。'}
                 </Text>
                 <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                  <PhotoVeil p={p} liftLevel={0} size={160} lang={lang} />
+                  <TouchableOpacity onPress={pickVeilPhoto} activeOpacity={0.85}>
+                    <PhotoVeil p={p} liftLevel={0} size={160} lang={lang} uri={veilUri ?? undefined} />
+                  </TouchableOpacity>
                   <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 8 }}>
-                    {lang === 'en' ? 'preview — 4 layers of veil' : '預覽 — 四層紗罩'}
+                    {veilUri
+                      ? (lang === 'en' ? 'your photo, veiled — tap to change' : '你的照片已帶紗 — 點擊可更換')
+                      : (lang === 'en' ? 'tap to choose from your photos' : '點擊從相簿選一張')}
                   </Text>
                 </View>
                 {!veilSent ? (
                   <TouchableOpacity
-                    onPress={async () => { if (wicks >= 2) { const result = await spendWicks(2, 'photo_veil', conversationId); if (result.ok) { playBlow(); hapticMedium(); setVeilSent(true); } } }}
+                    onPress={async () => {
+                      if (!veilUri) { pickVeilPhoto(); return; }
+                      if (wicks >= 2) {
+                        const result = await spendWicks(2, 'photo_veil', conversationId);
+                        if (result.ok) { hapticMedium(); setVeilSent(true); }
+                      }
+                    }}
                     disabled={wicks < 2}
                     style={[styles.sendVeilBtn, { backgroundColor: wicks >= 2 ? p.ink : p.line }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: wicks >= 2 ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
-                        {lang === 'en' ? 'Send veiled photo' : '送出帶紗照片'}
+                        {veilUri
+                          ? (lang === 'en' ? 'Send veiled photo' : '送出帶紗照片')
+                          : (lang === 'en' ? 'Choose a photo' : '先選一張照片')}
                       </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <WickGlyph size={11} color={wicks >= 2 ? (p.dark ? '#1a1530' : '#fff') : p.muted} />
-                        <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: wicks >= 2 ? (p.dark ? '#1a1530' : 'rgba(255,255,255,0.7)') : p.muted }}>2</Text>
-                      </View>
+                      {veilUri && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <WickGlyph size={11} color={wicks >= 2 ? (p.dark ? '#1a1530' : '#fff') : p.muted} />
+                          <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: wicks >= 2 ? (p.dark ? '#1a1530' : 'rgba(255,255,255,0.7)') : p.muted }}>2</Text>
+                        </View>
+                      )}
                     </View>
                   </TouchableOpacity>
                 ) : (
@@ -253,7 +280,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     </Text>
                   </View>
                 )}
-                <TouchableOpacity onPress={() => { setShowVeilSheet(false); setVeilSent(false); }} style={{ alignItems: 'center', paddingVertical: 10 }}>
+                <TouchableOpacity onPress={() => { setShowVeilSheet(false); setVeilSent(false); setVeilUri(null); }} style={{ alignItems: 'center', paddingVertical: 10 }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted }}>
                     {lang === 'en' ? 'close' : '關閉'}
                   </Text>

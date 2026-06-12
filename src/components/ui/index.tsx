@@ -1,13 +1,51 @@
 // Shared UI building blocks
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput,
-  StyleSheet, ViewStyle, TextStyle,
+  StyleSheet, ViewStyle, TextStyle, Animated, Easing,
+  Image as RNImage,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path as SvgPath, Ellipse, Rect } from 'react-native-svg';
 import { Palette } from '../../lib/theme';
+
+// ── DriftOrb — slowly drifting, breathing background glow ────
+function DriftOrb({
+  color, baseOpacity, style, driftX = 30, driftY = 22, duration = 9000, delay = 0,
+}: {
+  color: string; baseOpacity: number; style: ViewStyle;
+  driftX?: number; driftY?: number; duration?: number; delay?: number;
+}) {
+  const t = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(t, { toValue: 1, duration, delay, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(t, { toValue: 0, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[style, {
+        backgroundColor: color,
+        borderRadius: 999,
+        opacity: t.interpolate({ inputRange: [0, 1], outputRange: [baseOpacity, baseOpacity * 0.6] }),
+        transform: [
+          { translateX: t.interpolate({ inputRange: [0, 1], outputRange: [0, driftX] }) },
+          { translateY: t.interpolate({ inputRange: [0, 1], outputRange: [0, driftY] }) },
+          { scale: t.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) },
+        ],
+      }]}
+    />
+  );
+}
 
 // ── VaporBackground ──────────────────────────────────────────
 export function VaporBackground({ p, children, style }: { p: Palette; children: ReactNode; style?: ViewStyle }) {
@@ -18,21 +56,17 @@ export function VaporBackground({ p, children, style }: { p: Palette; children: 
       end={{ x: 0.9, y: 1 }}
       style={[{ flex: 1 }, style]}
     >
-      {/* accent orbs */}
-      <View style={{
-        position: 'absolute', top: '8%', left: '-20%',
-        width: '90%', aspectRatio: 1,
-        backgroundColor: p.accent + '44',
-        borderRadius: 999,
-        opacity: 0.55,
-      }} />
-      <View style={{
-        position: 'absolute', bottom: '5%', right: '-30%',
-        width: '110%', aspectRatio: 1,
-        backgroundColor: p.accent + '33',
-        borderRadius: 999,
-        opacity: 0.4,
-      }} />
+      {/* drifting accent orbs */}
+      <DriftOrb
+        color={p.accent + '44'} baseOpacity={0.55}
+        style={{ position: 'absolute', top: '8%', left: '-20%', width: '90%', aspectRatio: 1 }}
+        driftX={34} driftY={26} duration={11000}
+      />
+      <DriftOrb
+        color={p.accent + '33'} baseOpacity={0.4}
+        style={{ position: 'absolute', bottom: '5%', right: '-30%', width: '110%', aspectRatio: 1 }}
+        driftX={-30} driftY={-20} duration={13000} delay={1200}
+      />
       {children}
     </LinearGradient>
   );
@@ -225,9 +259,9 @@ export function WickGlyph({ size = 14, color = '#e0c08a' }: { size?: number; col
 
 // ── PhotoVeil ─────────────────────────────────────────────────
 export function PhotoVeil({
-  p, liftLevel = 0, size = 220, lang = 'zh',
+  p, liftLevel = 0, size = 220, lang = 'zh', uri,
 }: {
-  p: Palette; liftLevel?: number; size?: number; lang?: string;
+  p: Palette; liftLevel?: number; size?: number; lang?: string; uri?: string;
 }) {
   const levels = [
     { blur: 32, dim: 0.70, label_zh: '完全覆蓋', label_en: 'fully veiled' },
@@ -245,8 +279,17 @@ export function PhotoVeil({
       overflow: 'hidden', borderWidth: 0.5, borderColor: p.line,
       backgroundColor: p.dark ? '#2a2840' : '#cdb89e',
     }}>
-      {/* placeholder portrait gradient */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: p.dark ? '#1a1830' : '#e9dfd2' }} />
+      {/* real photo (blurred by veil level) or placeholder gradient */}
+      {uri ? (
+        <RNImage
+          source={{ uri }}
+          blurRadius={lv.blur}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: size, height: size }}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: p.dark ? '#1a1830' : '#e9dfd2' }} />
+      )}
       {/* veil overlay */}
       <View style={{
         position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
@@ -284,3 +327,4 @@ export { Skeleton, MessageSkeleton } from './Skeleton';
 export { FadeInUp } from './FadeIn';
 export { LoftTransition } from './LoftTransition';
 export { ToastProvider, useToast } from './Toast';
+export { TutorialOverlay } from './TutorialOverlay';

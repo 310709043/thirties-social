@@ -24,8 +24,10 @@ interface AppState {
   direction: Direction;
   lang: Lang;
   identityKind: IdentityKind;
+  welcomeDone: boolean;
   onboardingDone: boolean;
   setupDone: boolean;
+  tutorialDone: boolean;
   dbSynced: boolean;
   wicks: number;
   vigil: boolean;
@@ -38,7 +40,8 @@ interface AppState {
 
 let _state: AppState = {
   deviceId: '', userId: '', seed: 'default', direction: DEFAULT_DIRECTION,
-  lang: 'zh', identityKind: 'sigil', onboardingDone: false, setupDone: false,
+  lang: 'zh', identityKind: 'sigil', welcomeDone: false, onboardingDone: false,
+  setupDone: false, tutorialDone: false,
   dbSynced: false, wicks: 3, vigil: false, isBanned: false, banReason: null,
   banExpiresAt: null, lastRewardDate: null, rewardPending: false,
 };
@@ -49,18 +52,21 @@ function notify() { _listeners.forEach(fn => fn()); }
 export async function initStore() {
   const deviceId = await getDeviceId();
   const seed = getDailySeed(deviceId);
-  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang] = await Promise.all([
+  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedWelcome, storedTutorial] = await Promise.all([
     AsyncStorage.getItem('direction') as Promise<Direction | null>,
     AsyncStorage.getItem('onboarding_done'),
     AsyncStorage.getItem('setup_done'),
     AsyncStorage.getItem('wicks'),
     AsyncStorage.getItem('vigil'),
     AsyncStorage.getItem('lang') as Promise<Lang | null>,
+    AsyncStorage.getItem('welcome_done'),
+    AsyncStorage.getItem('tutorial_done'),
   ]);
   _state = {
     ..._state, deviceId, seed,
     direction: storedDir || DEFAULT_DIRECTION, lang: storedLang || 'zh',
-    onboardingDone: storedDone === '1', setupDone: storedSetup === '1',
+    welcomeDone: storedWelcome === '1', onboardingDone: storedDone === '1',
+    setupDone: storedSetup === '1', tutorialDone: storedTutorial === '1',
     wicks: storedWicks ? parseInt(storedWicks, 10) : 3, vigil: storedVigil === '1',
   };
   notify();
@@ -140,6 +146,18 @@ export async function setLang(l: Lang) {
   if (_state.userId) updateUser({ lang: l });
 }
 
+export async function setWelcomeDone() {
+  _state = { ..._state, welcomeDone: true };
+  await AsyncStorage.setItem('welcome_done', '1');
+  notify();
+}
+
+export async function setTutorialDone() {
+  _state = { ..._state, tutorialDone: true };
+  await AsyncStorage.setItem('tutorial_done', '1');
+  notify();
+}
+
 export async function setOnboardingDone() {
   _state = { ..._state, onboardingDone: true };
   await AsyncStorage.setItem('onboarding_done', '1');
@@ -164,6 +182,24 @@ export async function setVigil(on: boolean) {
   await AsyncStorage.setItem('vigil', on ? '1' : '0');
   notify();
   if (_state.userId) updateUser({ vigil: on });
+}
+
+// Wipe everything on this device and return to the Welcome screen.
+export async function resetAll() {
+  if (_userUnsubscribe) { _userUnsubscribe(); _userUnsubscribe = null; }
+  await AsyncStorage.clear();
+  _deviceId = null;
+  const deviceId = await getDeviceId();
+  const seed = getDailySeed(deviceId);
+  _state = {
+    deviceId, userId: '', seed, direction: DEFAULT_DIRECTION,
+    lang: _state.lang, identityKind: 'sigil', welcomeDone: false, onboardingDone: false,
+    setupDone: false, tutorialDone: false,
+    dbSynced: false, wicks: 3, vigil: false, isBanned: false, banReason: null,
+    banExpiresAt: null, lastRewardDate: null, rewardPending: false,
+  };
+  notify();
+  _syncWithFirebase(deviceId, seed);
 }
 
 export function useAppStore() {

@@ -8,6 +8,7 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { VaporBackground, GlassCard, Cap } from '../components/ui';
 import { useAppStore, setSetupDone } from '../hooks/useAppStore';
+import { updateUser } from '../lib/db';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Setup'>;
 
@@ -73,6 +74,17 @@ export default function SetupScreen({ navigation }: Props) {
 
   const handleDone = () => {
     if (ready) {
+      updateUser({
+        gender,
+        ageBracket: age,
+        relationshipStatus: marriage,
+        relationshipShape: shape,
+        seeking,
+        boundary,
+        availability: when,
+        region,
+        quote: line.trim() || null,
+      } as any);
       setSetupDone();
       navigation.replace('Mood');
     }
