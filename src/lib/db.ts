@@ -206,11 +206,13 @@ export async function fetchActiveRooms(): Promise<DbRoom[]> {
   const q = query(
     collection(db, 'rooms'),
     where('isActive', '==', true),
-    orderBy('messageCount', 'desc'),
-    limit(20),
+    limit(50),
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as DbRoom);
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }) as DbRoom)
+    .sort((a, b) => (b.messageCount ?? 0) - (a.messageCount ?? 0))
+    .slice(0, 20);
 }
 
 export async function createRoom(params: {
@@ -382,11 +384,12 @@ export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
   const q = query(
     collection(db, 'loftSessions'),
     where('nightDate', '==', tonight),
-    where('leftAt', '==', null),
-    limit(30),
+    limit(50),
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as DbLoftSession);
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }) as DbLoftSession)
+    .filter(s => !(s as any).leftAt);
 }
 
 // ── Match Queue ───────────────────────────────────────────
@@ -481,8 +484,14 @@ export async function claimDailyReward(): Promise<{
 
 // ── Subscribe to Active Rooms ─────────────────────────────
 export function subscribeToActiveRooms(onChange: (rooms: DbRoom[]) => void): () => void {
-  const q = query(collection(db, 'rooms'), where('isActive', '==', true), orderBy('messageCount', 'desc'), limit(20));
-  return onSnapshot(q, snap => { onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }) as DbRoom)); });
+  const q = query(collection(db, 'rooms'), where('isActive', '==', true), limit(50));
+  return onSnapshot(q, snap => {
+    const rooms = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }) as DbRoom)
+      .sort((a, b) => (b.messageCount ?? 0) - (a.messageCount ?? 0))
+      .slice(0, 20);
+    onChange(rooms);
+  });
 }
 
 // ── Get or create a preset room ────────────────────────────
@@ -490,9 +499,10 @@ export async function getOrCreatePresetRoom(params: {
   roomKey: string; topicZh: string; topicEn: string;
 }): Promise<DbRoom | null> {
   try {
-    const q = query(collection(db, 'rooms'), where('roomKey', '==', params.roomKey), where('isActive', '==', true), limit(1));
+    const q = query(collection(db, 'rooms'), where('roomKey', '==', params.roomKey), limit(5));
     const snap = await getDocs(q);
-    if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() } as DbRoom;
+    const active = snap.docs.find(d => d.data().isActive === true);
+    if (active) return { id: active.id, ...active.data() } as DbRoom;
     const uid = getCurrentUid();
     const data = {
       creatorId: uid ?? null, roomKey: params.roomKey,

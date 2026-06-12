@@ -3,12 +3,11 @@
 // Used for the wicks counter so spends/gains feel tangible.
 // ============================================================
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Text, TextStyle, Easing } from 'react-native';
+import { Animated, TextStyle, Easing } from 'react-native';
 
 interface AnimatedNumberProps {
   value: number;
   style?: TextStyle | TextStyle[];
-  /** color flash on change: green-ish for gain, ember for spend */
   gainColor?: string;
   spendColor?: string;
 }
@@ -16,7 +15,6 @@ interface AnimatedNumberProps {
 export function AnimatedNumber({ value, style, gainColor = '#7fb88f', spendColor = '#e07a5f' }: AnimatedNumberProps) {
   const [display, setDisplay] = useState(value);
   const prev = useRef(value);
-  const scale = useRef(new Animated.Value(1)).current;
   const flash = useRef(new Animated.Value(0)).current;
   const [flashColor, setFlashColor] = useState(gainColor);
 
@@ -25,7 +23,6 @@ export function AnimatedNumber({ value, style, gainColor = '#7fb88f', spendColor
     const gained = value > prev.current;
     setFlashColor(gained ? gainColor : spendColor);
 
-    // Count toward the new value in a few steps
     const from = prev.current;
     const diff = value - from;
     const steps = Math.min(Math.abs(diff), 8);
@@ -40,15 +37,9 @@ export function AnimatedNumber({ value, style, gainColor = '#7fb88f', spendColor
       }
     }, 40);
 
-    Animated.parallel([
-      Animated.sequence([
-        Animated.timing(scale, { toValue: gained ? 1.35 : 0.8, duration: 140, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-        Animated.spring(scale, { toValue: 1, tension: 160, friction: 8, useNativeDriver: true }),
-      ]),
-      Animated.sequence([
-        Animated.timing(flash, { toValue: 1, duration: 120, useNativeDriver: false }),
-        Animated.timing(flash, { toValue: 0, duration: 700, useNativeDriver: false }),
-      ]),
+    Animated.sequence([
+      Animated.timing(flash, { toValue: 1, duration: 120, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      Animated.timing(flash, { toValue: 0, duration: 700, useNativeDriver: false }),
     ]).start();
 
     prev.current = value;
@@ -59,6 +50,10 @@ export function AnimatedNumber({ value, style, gainColor = '#7fb88f', spendColor
   const color = flash.interpolate({
     inputRange: [0, 1],
     outputRange: [String(baseColor), flashColor],
+  });
+  const scale = flash.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 1.25, 1],
   });
 
   return (
