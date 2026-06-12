@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+// @ts-expect-error — getReactNativePersistence exists at runtime in the RN build of firebase/auth but is missing from its public type defs
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';

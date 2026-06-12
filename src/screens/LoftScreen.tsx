@@ -37,7 +37,7 @@ export default function LoftScreen({ navigation }: Props) {
   const [brokeLine] = useState(() => BROKE_LINES[Math.floor(Math.random() * BROKE_LINES.length)]);
 
   const handleEnter = async () => {
-    const nightName = getColorAdj(seed, lang);
+    const nightName = getColorAdj(seed, lang).label;
     const result = await enterLoft(nightName);
     if (result.ok) {
       setInside(true);
@@ -52,7 +52,7 @@ export default function LoftScreen({ navigation }: Props) {
 
   if (inside) {
     return <LoftInside lang={lang} wicks={wicks} onBack={() => setInside(false)}
-      onEnter={(seed) => navigation.push('LoftChat', { otherSeed: seed })} />;
+      onEnter={(seed: string) => navigation.push('LoftChat', { otherSeed: seed })} />;
   }
 
   return (
@@ -126,7 +126,7 @@ export default function LoftScreen({ navigation }: Props) {
             }]}>
             {wicks >= 5 ? (
               <LinearGradient colors={['#e8a557', '#c25a3b']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 999 }]} />
+                style={[StyleSheet.absoluteFill, { borderRadius: 999 }]} />
             ) : null}
             <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 17, fontWeight: '500', letterSpacing: 3, color: wicks >= 5 ? '#1f1014' : L.faint, zIndex: 1 }}>
               {t('loftAgree', lang)}
@@ -170,7 +170,7 @@ export default function LoftScreen({ navigation }: Props) {
             <TouchableOpacity onPress={() => { setShowBroke(false); navigation.push('Upgrade'); }}
               style={styles.buyBtn}>
               <LinearGradient colors={['#e8a557', '#c25a3b']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 999 }]} />
+                style={[StyleSheet.absoluteFill, { borderRadius: 999 }]} />
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, fontWeight: '500', letterSpacing: 2, color: '#1f1014', zIndex: 1 }}>
                 {lang === 'en' ? 'Buy wicks' : '去買燭芯'}
               </Text>
