@@ -8,8 +8,11 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { LOFT_PALETTE } from '../lib/theme';
 import { t } from '../lib/copy';
-import { WickGlyph, PhotoVeil } from '../components/ui';
-import { useAppStore, setWicks as saveWicks } from '../hooks/useAppStore';
+import { WickGlyph, PhotoVeil, AnimatedNumber } from '../components/ui';
+import { useAppStore } from '../hooks/useAppStore';
+import { spendWicks } from '../lib/db';
+import { playBlow } from '../lib/sound';
+import { hapticMedium } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LoftChat'>;
 
@@ -47,8 +50,9 @@ export default function LoftChatScreen({ navigation, route }: Props) {
   const hh = String(Math.floor(remaining / 3600)).padStart(2, '0');
   const mm = String(Math.floor((remaining % 3600) / 60)).padStart(2, '0');
 
-  const sendPulse = (key: string) => {
-    if (wicks >= 1) saveWicks(wicks - 1);
+  const sendPulse = async (_key: string) => {
+    const result = await spendWicks(1, 'pulse');
+    if (result.ok) { playBlow(); hapticMedium(); }
   };
 
   return (
@@ -72,7 +76,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <WickGlyph size={10} color={L.candle} />
-              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: L.candle }}>{wicks}</Text>
+              <AnimatedNumber value={wicks} style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: L.candle }} />
             </View>
           </View>
 
@@ -150,7 +154,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
           </View>
 
           {/* Gift row */}
-          <TouchableOpacity onPress={() => setShowGift(true)} style={styles.giftRow}>
+          <TouchableOpacity onPress={async () => { const r = await spendWicks(5, 'gift'); if (r.ok) { playBlow(); hapticMedium(); setGiftSent(true); } }} style={styles.giftRow}>
             <WickGlyph size={12} color={L.candle} />
             <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: 'rgba(245,226,196,0.8)', flex: 1 }}>
               {t('loftGift', lang)}
@@ -195,7 +199,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
                 {t('veilOnlyHere', lang)}
               </Text>
               {veilLevel < 4 && (
-                <TouchableOpacity onPress={() => { if (wicks >= 2) { saveWicks(wicks - 2); setVeilLevel(veilLevel + 1); } }}
+                <TouchableOpacity onPress={async () => { if (wicks >= 2) { const r = await spendWicks(2, 'veil_lift'); if (r.ok) { playBlow(); setVeilLevel(v => v + 1); } } }}
                   disabled={wicks < 2}
                   style={[styles.liftBtn, { backgroundColor: wicks >= 2 ? L.ink : L.line }]}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: wicks >= 2 ? '#f5e2c4' : L.muted }}>

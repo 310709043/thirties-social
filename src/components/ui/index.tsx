@@ -275,3 +275,12 @@ export function PhotoVeil({
     </View>
   );
 }
+
+// ── Animation & feedback components ─────────────────────────
+export { Flame, Candle } from './Flame';
+export { AnimatedNumber } from './AnimatedNumber';
+export { PressableScale } from './Pressable';
+export { Skeleton, MessageSkeleton } from './Skeleton';
+export { FadeInUp } from './FadeIn';
+export { LoftTransition } from './LoftTransition';
+export { ToastProvider, useToast } from './Toast';

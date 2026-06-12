@@ -8,8 +8,10 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import {
-  VaporBackground, GlassCard, SoftButton, BreathDot, Cap, WickGlyph,
+  VaporBackground, GlassCard, SoftButton, BreathDot, Cap, WickGlyph, AnimatedNumber,
 } from '../components/ui';
+import { playChime } from '../lib/sound';
+import { hapticSuccess } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, checkAndClaimDailyReward } from '../hooks/useAppStore';
@@ -35,6 +37,8 @@ export default function MoodScreen({ navigation }: Props) {
   useEffect(() => {
     checkAndClaimDailyReward().then(r => {
       if (r.rewarded && r.amount) {
+        playChime();
+        hapticSuccess();
         Alert.alert('', `🕯 每日燭芯 +${r.amount}`, [{ text: '收下', style: 'default' }]);
       }
     });
@@ -87,9 +91,7 @@ export default function MoodScreen({ navigation }: Props) {
               <TouchableOpacity onPress={() => navigation.push('Upgrade')}
                 style={[styles.wicksBtn, { backgroundColor: p.accentSoft, borderColor: p.accent + '40' }]}>
                 <WickGlyph size={11} color={p.accent} />
-                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 13, color: p.accent, fontWeight: '500' }}>
-                  {wicks}
-                </Text>
+                <AnimatedNumber value={wicks} style={{ fontFamily: 'Inter-Regular', fontSize: 13, color: p.accent, fontWeight: '500' }} />
               </TouchableOpacity>
               {/* Cycle countdown */}
               <View style={styles.countdown}>

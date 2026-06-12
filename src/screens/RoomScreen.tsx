@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  TextInput, StyleSheet, SafeAreaView,
+  TextInput, StyleSheet, SafeAreaView, RefreshControl,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { VaporBackground, GlassCard, Hairline, WickGlyph } from '../components/ui';
+import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkeleton } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
-import { getDailySeed } from '../lib/identity';
-import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoomMessage, DbRoom } from '../lib/db';
+import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoomMessage } from '../lib/db';
 import { t as getT } from '../lib/copy';
+import { hapticLight } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Room'>;
 
@@ -32,9 +32,21 @@ export default function RoomScreen({ navigation, route }: Props) {
   const [messages, setMessages] = useState<DbRoomMessage[]>([]);
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const reshuffleIdentity = () => {
     setIdentitySeed(Math.random().toString(36).slice(2));
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    const room = await getOrCreatePresetRoom({
+      roomKey,
+      topicZh: getT(roomKey as any, 'zh'),
+      topicEn: getT(roomKey as any, 'en'),
+    });
+    if (room) setRoomId(room.id);
+    setRefreshing(false);
   };
 
   useEffect(() => {
@@ -69,6 +81,7 @@ export default function RoomScreen({ navigation, route }: Props) {
     await sendRoomMessage({ roomId, content: inputText.trim(), senderSeed: identitySeed });
     setInputText('');
     setSending(false);
+    hapticLight();
   };
 
   return (
@@ -129,30 +142,54 @@ export default function RoomScreen({ navigation, route }: Props) {
         </View>
 
         {/* MESSAGE FEED */}
-        <ScrollView style={styles.feed} contentContainerStyle={{ gap: 12, padding: 24 }}>
-          {messages.map((msg, i) => (
-            <TouchableOpacity key={msg.id} onPress={() => setInviting({ seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 })} activeOpacity={0.8}>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <Identity kind={identityKind === 'character' ? 'sigil' : identityKind} seed={msg.senderSeed} size={32} palette={p} lang={lang} trust={0.15} />
-                <View style={{ flex: 1 }}>
-                  <View style={[styles.bubble, { backgroundColor: p.surface, borderColor: p.line }]}>
-                    <Text style={[styles.bubbleText, { color: p.ink }]}>{msg.content}</Text>
+        <ScrollView
+          style={styles.feed}
+          contentContainerStyle={{ gap: 12, padding: 24 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={p.muted} />
+          }
+        >
+          {roomId === null ? (
+            <>
+              <MessageSkeleton color={p.muted + '60'} />
+              <MessageSkeleton color={p.muted + '60'} />
+              <MessageSkeleton color={p.muted + '60'} />
+            </>
+          ) : messages.length === 0 ? (
+            <Text style={[styles.dissolved, { color: p.muted, marginTop: 20 }]}>
+              {lang === 'en' ? 'be the first to whisper here.' : '成為第一個在這裡說話的人。'}
+            </Text>
+          ) : (
+            messages.map((msg, i) => (
+              <FadeInUp key={msg.id} distance={10} delay={Math.min(i * 30, 180)}>
+                <TouchableOpacity onPress={() => setInviting({ seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 })} activeOpacity={0.8}>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <Identity kind={identityKind === 'character' ? 'sigil' : identityKind} seed={msg.senderSeed} size={32} palette={p} lang={lang} trust={0.15} />
+                    <View style={{ flex: 1 }}>
+                      <View style={[styles.bubble, { backgroundColor: p.surface, borderColor: p.line }]}>
+                        <Text style={[styles.bubbleText, { color: p.ink }]}>{msg.content}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 6 }}>
+                        <ColorAdjLabel seed={msg.senderSeed} lang={lang} palette={p} />
+                      </View>
+                    </View>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 6 }}>
-                    <ColorAdjLabel seed={msg.senderSeed} lang={lang} palette={p} />
-                  </View>
-                </View>
+                </TouchableOpacity>
+              </FadeInUp>
+            ))
+          )}
+          {messages.length > 0 && (
+            <>
+              <View style={styles.divider}>
+                <Hairline p={p} style={{ flex: 1 }} />
+                <Text style={[styles.dividerText, { color: p.muted }]}>{lang === 'en' ? 'earlier' : '更早'}</Text>
+                <Hairline p={p} style={{ flex: 1 }} />
               </View>
-            </TouchableOpacity>
-          ))}
-          <View style={styles.divider}>
-            <Hairline p={p} style={{ flex: 1 }} />
-            <Text style={[styles.dividerText, { color: p.muted }]}>{lang === 'en' ? 'earlier' : '更早'}</Text>
-            <Hairline p={p} style={{ flex: 1 }} />
-          </View>
-          <Text style={[styles.dissolved, { color: p.muted }]}>
-            {lang === 'en' ? 'older fragments dissolve into the room.' : '更早的片段已融入房間之中。'}
-          </Text>
+              <Text style={[styles.dissolved, { color: p.muted }]}>
+                {lang === 'en' ? 'older fragments dissolve into the room.' : '更早的片段已融入房間之中。'}
+              </Text>
+            </>
+          )}
         </ScrollView>
 
         {/* COMPOSER */}

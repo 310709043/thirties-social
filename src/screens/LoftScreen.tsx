@@ -7,10 +7,12 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { WickGlyph, Cap } from '../components/ui';
+import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
 import { enterLoft, fetchTonightLoftSessions, DbLoftSession } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
+import { playBlow } from '../lib/sound';
+import { hapticMedium, hapticWarning } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Loft'>;
 
@@ -33,6 +35,7 @@ const TONIGHT = [
 export default function LoftScreen({ navigation }: Props) {
   const { lang, wicks, seed } = useAppStore();
   const [inside, setInside] = useState(false);
+  const [entering, setEntering] = useState(false);
   const [showBroke, setShowBroke] = useState(false);
   const [brokeLine] = useState(() => BROKE_LINES[Math.floor(Math.random() * BROKE_LINES.length)]);
 
@@ -40,12 +43,13 @@ export default function LoftScreen({ navigation }: Props) {
     const nightName = getColorAdj(seed, lang).label;
     const result = await enterLoft(nightName);
     if (result.ok) {
-      setInside(true);
+      playBlow();          // candle-lighting whoosh
+      hapticMedium();
+      setEntering(true);   // plays immersive transition, onDone -> setInside(true)
     } else if (result.error === 'already_entered_tonight') {
       setInside(true); // already in, just show inside
-    } else if (result.error === 'insufficient_wicks') {
-      setShowBroke(true);
     } else {
+      hapticWarning();
       setShowBroke(true);
     }
   };
@@ -77,9 +81,7 @@ export default function LoftScreen({ navigation }: Props) {
 
           {/* Flame */}
           <View style={{ alignItems: 'center', marginTop: 18 }}>
-            <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(232,165,87,0.3)', alignItems: 'center', justifyContent: 'center' }}>
-              <View style={{ width: 28, height: 40, borderRadius: 14, backgroundColor: '#e8a557', opacity: 0.9 }} />
-            </View>
+            <Flame size={56} />
           </View>
 
           {/* Title */}
@@ -183,6 +185,10 @@ export default function LoftScreen({ navigation }: Props) {
           </View>
         </View>
       )}
+
+      {entering && (
+        <LoftTransition lang={lang} onDone={() => { setEntering(false); setInside(true); }} />
+      )}
     </LinearGradient>
   );
 }
@@ -226,7 +232,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: 'rgba(232,165,87,0.1)', borderRadius: 999 }}>
               <WickGlyph size={10} color={L.candle} />
-              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: L.candle }}>{wicks}</Text>
+              <AnimatedNumber value={wicks} style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: L.candle }} />
             </View>
           </View>
 
