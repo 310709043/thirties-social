@@ -6,6 +6,7 @@ import {
   StyleSheet, ViewStyle, TextStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Circle, Path as SvgPath, Ellipse, Rect } from 'react-native-svg';
 import { Palette } from '../../lib/theme';
 
 // ── VaporBackground ──────────────────────────────────────────
@@ -149,10 +150,128 @@ export function CountdownBar({ p, progress }: { p: Palette; progress: number }) 
     <View style={{ height: 2, backgroundColor: p.line, borderRadius: 2 }}>
       <View style={{
         position: 'absolute', left: 0, top: 0, bottom: 0,
-        width: `${progress * 100}%`,
+        width: `${progress * 100}%` as any,
         backgroundColor: p.accent,
         borderRadius: 2,
       }} />
+    </View>
+  );
+}
+
+// ── CountdownRing ─────────────────────────────────────────────
+export function CountdownRing({
+  p, progress, size = 36, stroke = 2,
+}: {
+  p: Palette; progress: number; size?: number; stroke?: number;
+}) {
+  const r = (size - stroke * 2) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - Math.max(0, Math.min(1, progress)));
+  return (
+    <Svg width={size} height={size}>
+      <Circle cx={size / 2} cy={size / 2} r={r} fill="none"
+        stroke={p.line} strokeWidth={stroke} />
+      <Circle cx={size / 2} cy={size / 2} r={r} fill="none"
+        stroke={p.accent} strokeWidth={stroke}
+        strokeDasharray={`${circ} ${circ}`}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        rotation={-90}
+        origin={`${size / 2}, ${size / 2}`}
+      />
+    </Svg>
+  );
+}
+
+// ── Toggle ────────────────────────────────────────────────────
+export function Toggle({
+  p, on, onToggle,
+}: {
+  p: Palette; on: boolean; onToggle?: () => void;
+}) {
+  return (
+    <TouchableOpacity onPress={onToggle} activeOpacity={0.85} style={{
+      width: 40, height: 24, borderRadius: 24,
+      backgroundColor: on ? p.accent : p.line,
+      justifyContent: 'center',
+      position: 'relative',
+    }}>
+      <View style={{
+        position: 'absolute',
+        left: on ? 18 : 2, top: 2,
+        width: 20, height: 20, borderRadius: 10,
+        backgroundColor: '#fff',
+        shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2, shadowRadius: 4,
+      }} />
+    </TouchableOpacity>
+  );
+}
+
+// ── WickGlyph ─────────────────────────────────────────────────
+export function WickGlyph({ size = 14, color = '#e0c08a' }: { size?: number; color?: string }) {
+  const h = Math.round(size * 1.4);
+  return (
+    <Svg width={size} height={h} viewBox="0 0 14 20">
+      <SvgPath
+        d="M7 1 C 8.5 4 10 5 10 7.5 C 10 9.5 8.8 11 7 11 C 5.2 11 4 9.5 4 7.5 C 4 5 5.5 4 7 1 Z"
+        fill={color} fillOpacity={0.95}
+      />
+      <Rect x={6} y={11} width={2} height={6} rx={0.5} fill={color} fillOpacity={0.5} />
+      <Ellipse cx={7} cy={18} rx={3} ry={0.8} fill={color} fillOpacity={0.2} />
+    </Svg>
+  );
+}
+
+// ── PhotoVeil ─────────────────────────────────────────────────
+export function PhotoVeil({
+  p, liftLevel = 0, size = 220, lang = 'zh',
+}: {
+  p: Palette; liftLevel?: number; size?: number; lang?: string;
+}) {
+  const levels = [
+    { blur: 32, dim: 0.70, label_zh: '完全覆蓋', label_en: 'fully veiled' },
+    { blur: 22, dim: 0.55, label_zh: '輪廓',     label_en: 'outline' },
+    { blur: 12, dim: 0.38, label_zh: '光與影',   label_en: 'light & shadow' },
+    { blur: 6,  dim: 0.18, label_zh: '局部',     label_en: 'fragments' },
+    { blur: 0,  dim: 0,    label_zh: '完整',     label_en: 'full' },
+  ];
+  const lv = levels[Math.max(0, Math.min(4, liftLevel))];
+  const label = lang === 'en' ? lv.label_en : lv.label_zh;
+
+  return (
+    <View style={{
+      width: size, height: size, borderRadius: 24,
+      overflow: 'hidden', borderWidth: 0.5, borderColor: p.line,
+      backgroundColor: p.dark ? '#2a2840' : '#cdb89e',
+    }}>
+      {/* placeholder portrait gradient */}
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: p.dark ? '#1a1830' : '#e9dfd2' }} />
+      {/* veil overlay */}
+      <View style={{
+        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: p.dark ? '#000' : '#fff',
+        opacity: lv.dim,
+      }} />
+      {/* layer dots */}
+      <View style={{ position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', gap: 3 }}>
+        {[0, 1, 2, 3].map(i => (
+          <View key={i} style={{
+            width: 18, height: 3, borderRadius: 2,
+            backgroundColor: i < liftLevel ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
+          }} />
+        ))}
+      </View>
+      {/* label pill */}
+      <View style={{
+        position: 'absolute', right: 10, top: 10,
+        backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 999,
+        paddingHorizontal: 8, paddingVertical: 4,
+      }}>
+        <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 10, color: '#fff' }}>
+          {label}
+        </Text>
+      </View>
     </View>
   );
 }

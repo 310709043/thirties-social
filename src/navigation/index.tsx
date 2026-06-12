@@ -3,21 +3,33 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
+import SetupScreen from '../screens/SetupScreen';
 import MoodScreen from '../screens/MoodScreen';
 import RoomScreen from '../screens/RoomScreen';
 import MatchScreen from '../screens/MatchScreen';
 import ChatScreen from '../screens/ChatScreen';
 import SafetyScreen from '../screens/SafetyScreen';
 import CloseScreen from '../screens/CloseScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import SettingsScreen from '../screens/SettingsScreen';
+import LoftScreen from '../screens/LoftScreen';
+import LoftChatScreen from '../screens/LoftChatScreen';
+import UpgradeScreen from '../screens/UpgradeScreen';
 
 export type RootStackParamList = {
   Onboarding: undefined;
+  Setup: undefined;
   Mood: undefined;
   Room: { roomKey: string };
   Match: { fromSeed: string; moodText: string };
   Chat: { otherSeed: string };
   Safety: undefined;
   Close: undefined;
+  Profile: undefined;
+  Settings: undefined;
+  Loft: undefined;
+  LoftChat: { otherSeed: string };
+  Upgrade: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -30,12 +42,18 @@ export default function Navigation() {
         screenOptions={{ headerShown: false, animation: 'fade' }}
       >
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+        <Stack.Screen name="Setup" component={SetupScreen} />
         <Stack.Screen name="Mood" component={MoodScreen} />
         <Stack.Screen name="Room" component={RoomScreen} />
         <Stack.Screen name="Match" component={MatchScreen} />
         <Stack.Screen name="Chat" component={ChatScreen} />
         <Stack.Screen name="Safety" component={SafetyScreen} />
         <Stack.Screen name="Close" component={CloseScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Settings" component={SettingsScreen} />
+        <Stack.Screen name="Loft" component={LoftScreen} />
+        <Stack.Screen name="LoftChat" component={LoftChatScreen} />
+        <Stack.Screen name="Upgrade" component={UpgradeScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

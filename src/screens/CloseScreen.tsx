@@ -45,6 +45,30 @@ export default function CloseScreen({ navigation }: Props) {
             </Text>
             <Text style={[styles.body, { color: p.inkSoft }]}>{t('closeBody', lang)}</Text>
 
+            {/* Session stats */}
+            <View style={[styles.statsRow, { borderColor: p.line }]}>
+              <View style={styles.statCell}>
+                <Text style={[styles.statNum, { color: p.ink }]}>1</Text>
+                <Text style={[styles.statLabel, { color: p.muted }]}>
+                  {lang === 'en' ? 'person spoken with' : '說話的人'}
+                </Text>
+              </View>
+              <View style={[styles.statDivider, { backgroundColor: p.line }]} />
+              <View style={styles.statCell}>
+                <Text style={[styles.statNum, { color: p.ink }]}>1</Text>
+                <Text style={[styles.statLabel, { color: p.muted }]}>
+                  {lang === 'en' ? 'conversation' : '對話'}
+                </Text>
+              </View>
+              <View style={[styles.statDivider, { backgroundColor: p.line }]} />
+              <View style={styles.statCell}>
+                <Text style={[styles.statNum, { color: p.ink }]}>0</Text>
+                <Text style={[styles.statLabel, { color: p.muted }]}>
+                  {lang === 'en' ? 'stored' : '儲存'}
+                </Text>
+              </View>
+            </View>
+
             {/* Timer to next reset */}
             <View style={[styles.timerCard, { backgroundColor: p.surface, borderColor: p.line }]}>
               <Text style={[styles.timerLabel, { color: p.muted }]}>{t('closeReturn', lang)}</Text>
@@ -81,6 +105,11 @@ const styles = StyleSheet.create({
   timerCard: { borderWidth: 0.5, borderRadius: 20, padding: 20, alignItems: 'center', gap: 8, marginTop: 24 },
   timerLabel:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
   timerValue:{ fontFamily: 'Inter-Regular', fontSize: 32, fontWeight: '300', letterSpacing: 3 },
-  noTrace:   { alignItems: 'center', marginTop: 16 },
-  noTraceText:{ fontFamily: 'EBGaramond-Italic', fontSize: 13, opacity: 0.5 },
+  noTrace:     { alignItems: 'center', marginTop: 16 },
+  noTraceText: { fontFamily: 'EBGaramond-Italic', fontSize: 13, opacity: 0.5 },
+  statsRow:    { flexDirection: 'row', borderWidth: 0.5, borderRadius: 16, overflow: 'hidden', marginTop: 16 },
+  statCell:    { flex: 1, alignItems: 'center', paddingVertical: 14, gap: 4 },
+  statNum:     { fontFamily: 'Inter-Regular', fontSize: 22, fontWeight: '300' },
+  statLabel:   { fontFamily: 'NotoSerifTC-Regular', fontSize: 11, textAlign: 'center' },
+  statDivider: { width: 0.5 },
 });

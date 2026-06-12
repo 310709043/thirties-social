@@ -59,7 +59,7 @@ export default function SafetyScreen({ navigation }: Props) {
             <Text style={[styles.hotlineTitle, { color: p.ink }]}>
               {lang === 'en' ? '24h Support Line' : '24 小時情緒支援'}
             </Text>
-            <Text style={[styles.hotlineNumber, { color: p.accent }]}>1925</Text>
+            <Text style={[styles.hotlineNumber, { color: p.accent }]}>1995</Text>
             <Text style={[styles.hotlineNote, { color: p.muted }]}>
               {lang === 'en' ? 'Taiwan Mental Health Line' : '安心專線（台灣）'}
             </Text>

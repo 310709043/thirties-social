@@ -7,10 +7,10 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t } from '../lib/copy';
-import { VaporBackground, GlassCard, CountdownBar, Cap } from '../components/ui';
+import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore } from '../hooks/useAppStore';
+import { useAppStore, setWicks as saveWicks } from '../hooks/useAppStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -25,13 +25,15 @@ const INITIAL_MESSAGES = [
 const TOTAL_SECONDS = 30 * 60;
 
 export default function ChatScreen({ navigation, route }: Props) {
-  const { seed, direction, lang, identityKind } = useAppStore();
+  const { seed, direction, lang, identityKind, wicks } = useAppStore();
   const p = DIRECTIONS[direction];
   const otherSeed = route.params?.otherSeed || 'm0od7';
 
   const [remaining, setRemaining] = useState(28 * 60 + 14);
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [inputText, setInputText] = useState('');
+  const [showVeilSheet, setShowVeilSheet] = useState(false);
+  const [veilSent, setVeilSent] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -110,6 +112,19 @@ export default function ChatScreen({ navigation, route }: Props) {
           </View>
 
           {/* MESSAGES */}
+          <View style={{ flex: 1 }}>
+          {/* Anti-screenshot watermark */}
+          <View style={styles.watermarkLayer} pointerEvents="none">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <View key={i} style={styles.watermarkRow}>
+                {Array.from({ length: 3 }).map((_, j) => (
+                  <Text key={j} style={[styles.watermarkText, { color: p.ink }]}>
+                    {seed.slice(0, 6)}
+                  </Text>
+                ))}
+              </View>
+            ))}
+          </View>
           <ScrollView
             ref={scrollRef}
             style={styles.messages}
@@ -134,9 +149,21 @@ export default function ChatScreen({ navigation, route }: Props) {
               </View>
             </View>
           </ScrollView>
+          </View>
 
           {/* COMPOSER */}
           <View style={styles.composer}>
+            {/* Photo veil bar */}
+            <TouchableOpacity onPress={() => setShowVeilSheet(true)}
+              style={[styles.veilBar, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
+              <WickGlyph size={12} color={p.accent} />
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.inkSoft, flex: 1 }}>
+                {lang === 'en' ? 'send a veiled photo — they reveal it with wicks' : '傳送帶紗照片，對方用燭芯揭開'}
+              </Text>
+              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted }}>
+                {lang === 'en' ? '2 wicks' : '2 芯'}
+              </Text>
+            </TouchableOpacity>
             <GlassCard p={p} padding={6} radius={28}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TextInput
@@ -156,6 +183,57 @@ export default function ChatScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             </GlassCard>
           </View>
+
+          {/* PHOTO VEIL SHEET */}
+          {showVeilSheet && (
+            <View style={styles.sheetOverlay}>
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowVeilSheet(false)} />
+              <View style={[styles.sheetInner, { backgroundColor: p.bgSolid, borderColor: p.line }]}>
+                <View style={[styles.handle, { backgroundColor: p.line }]} />
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 18, color: p.ink, fontWeight: '500', marginBottom: 4 }}>
+                  {lang === 'en' ? 'Send a veiled photo' : '傳送帶紗照片'}
+                </Text>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.muted, lineHeight: 20, marginBottom: 14 }}>
+                  {lang === 'en'
+                    ? 'Your photo will be hidden under a veil. The other person can lift each layer with 2 wicks. They always agree first.'
+                    : '照片會藏在紗罩下。對方每揭一層需要 2 燭芯，並且需要先同意。'}
+                </Text>
+                <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                  <PhotoVeil p={p} liftLevel={0} size={160} lang={lang} />
+                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 8 }}>
+                    {lang === 'en' ? 'preview — 4 layers of veil' : '預覽 — 四層紗罩'}
+                  </Text>
+                </View>
+                {!veilSent ? (
+                  <TouchableOpacity
+                    onPress={() => { if (wicks >= 2) { saveWicks(wicks - 2); setVeilSent(true); } }}
+                    disabled={wicks < 2}
+                    style={[styles.sendVeilBtn, { backgroundColor: wicks >= 2 ? p.ink : p.line }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: wicks >= 2 ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
+                        {lang === 'en' ? 'Send veiled photo' : '送出帶紗照片'}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <WickGlyph size={11} color={wicks >= 2 ? (p.dark ? '#1a1530' : '#fff') : p.muted} />
+                        <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: wicks >= 2 ? (p.dark ? '#1a1530' : 'rgba(255,255,255,0.7)') : p.muted }}>2</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.sentNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '40' }]}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.accent }}>
+                      {lang === 'en' ? '✓ Veiled photo sent' : '✓ 帶紗照片已送出'}
+                    </Text>
+                  </View>
+                )}
+                <TouchableOpacity onPress={() => { setShowVeilSheet(false); setVeilSent(false); }} style={{ alignItems: 'center', paddingVertical: 10 }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted }}>
+                    {lang === 'en' ? 'close' : '關閉'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </KeyboardAvoidingView>
       </SafeAreaView>
     </VaporBackground>
@@ -201,7 +279,16 @@ const styles = StyleSheet.create({
   typingRow:      { flexDirection: 'row', alignItems: 'flex-end', gap: 6, opacity: 0.7, marginTop: 4 },
   typingBubble:   { flexDirection: 'row', gap: 4, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16, borderWidth: 0.5 },
   typingDot:      { width: 5, height: 5, borderRadius: 5 },
-  composer:       { padding: 4, paddingHorizontal: 18, paddingBottom: 18 },
+  composer:       { padding: 4, paddingHorizontal: 18, paddingBottom: 18, gap: 8 },
   input:          { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 15, paddingHorizontal: 14, paddingVertical: 12 },
   sendBtn:        { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  veilBar:        { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 0.5 },
+  watermarkLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.04, zIndex: 1, justifyContent: 'space-around', overflow: 'hidden' },
+  watermarkRow:   { flexDirection: 'row', justifyContent: 'space-around' },
+  watermarkText:  { fontFamily: 'Inter-Regular', fontSize: 11, letterSpacing: 2, transform: [{ rotate: '-30deg' }] },
+  sheetOverlay:   { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheetInner:     { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 34, borderTopWidth: 0.5, gap: 6 },
+  handle:         { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 8 },
+  sendVeilBtn:    { height: 54, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  sentNote:       { height: 54, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 8, borderWidth: 0.5 },
 });

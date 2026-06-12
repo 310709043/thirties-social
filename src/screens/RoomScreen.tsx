@@ -7,10 +7,11 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { VaporBackground, GlassCard, Hairline } from '../components/ui';
+import { VaporBackground, GlassCard, Hairline, WickGlyph } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
+import { getDailySeed } from '../lib/identity';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Room'>;
 
@@ -23,10 +24,18 @@ const MESSAGES = [
 
 export default function RoomScreen({ navigation, route }: Props) {
   const { roomKey } = route.params;
-  const { seed, direction, lang, identityKind } = useAppStore();
+  const { seed, direction, lang, identityKind, deviceId } = useAppStore();
   const p = DIRECTIONS[direction];
   const [inviting, setInviting] = useState<typeof MESSAGES[0] | null>(null);
   const [inviteSent, setInviteSent] = useState(false);
+  const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [roomTopic, setRoomTopic] = useState('');
+  const [roomCreated, setRoomCreated] = useState(false);
+  const [identitySeed, setIdentitySeed] = useState(seed);
+
+  const reshuffleIdentity = () => {
+    setIdentitySeed(Math.random().toString(36).slice(2));
+  };
 
   // When invite sent, simulate acceptance → go to Chat
   useEffect(() => {
@@ -48,6 +57,14 @@ export default function RoomScreen({ navigation, route }: Props) {
             <Text style={{ color: p.muted, fontSize: 18 }}>‹</Text>
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => setShowCreateRoom(true)}
+              style={[styles.labelBtn, { backgroundColor: p.accentSoft, borderColor: p.accent + '40' }]}
+            >
+              <Text style={[styles.labelBtnText, { color: p.accent }]}>
+                {lang === 'en' ? '+ open room' : '+ 開設房間'}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => navigation.push('Safety')}
               style={[styles.labelBtn, { backgroundColor: p.surface, borderColor: p.line }]}
@@ -118,6 +135,22 @@ export default function RoomScreen({ navigation, route }: Props) {
 
         {/* COMPOSER */}
         <View style={[styles.composer, { backgroundColor: p.dark ? 'rgba(13,18,36,0.9)' : 'rgba(255,255,255,0.7)' }]}>
+          {/* Who you are in this room */}
+          <View style={[styles.identityComposerRow, { backgroundColor: p.surface, borderColor: p.line }]}>
+            <Identity kind={identityKind} seed={identitySeed} size={28} palette={p} lang={lang} trust={0.2} />
+            <View style={{ flex: 1 }}>
+              <ColorAdjLabel seed={identitySeed} lang={lang} palette={p} />
+              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 10, color: p.muted, marginTop: 1 }}>
+                {lang === 'en' ? 'who you are in this room' : '你在這個房間的身份'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={reshuffleIdentity}
+              style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: p.accentSoft }}>
+              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.accent, letterSpacing: 0.5 }}>
+                {lang === 'en' ? '↺ reshuffle' : '↺ 換一個'}
+              </Text>
+            </TouchableOpacity>
+          </View>
           <Text style={[styles.composerHint, { color: p.muted }]}>
             {lang === 'en' ? 'tap any message to invite that person to talk' : '輕點任一則訊息，邀請那個人私聊'}
           </Text>
@@ -135,6 +168,63 @@ export default function RoomScreen({ navigation, route }: Props) {
             </TouchableOpacity>
           </GlassCard>
         </View>
+
+        {/* CREATE ROOM SHEET */}
+        {showCreateRoom && (
+          <View style={[styles.sheetOverlay, { backgroundColor: p.dark ? 'rgba(10,12,28,0.7)' : 'rgba(160,150,170,0.4)' }]}>
+            <TouchableOpacity style={{ flex: 1 }} onPress={() => { if (!roomCreated) setShowCreateRoom(false); }} />
+            <View style={[styles.sheet, { backgroundColor: p.bgSolid, borderColor: p.line }]}>
+              <View style={[styles.sheetHandle, { backgroundColor: p.line }]} />
+              {!roomCreated ? (
+                <>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 18, color: p.ink, fontWeight: '500' }}>
+                    {lang === 'en' ? 'Open a room' : '開設一個房間'}
+                  </Text>
+                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: p.muted }}>
+                    {lang === 'en' ? 'others see your topic · not your identity' : '別人看到話題，看不到你是誰'}
+                  </Text>
+                  <GlassCard p={p} padding={6} radius={18} style={{ marginTop: 4 }}>
+                    <TextInput
+                      value={roomTopic}
+                      onChangeText={setRoomTopic}
+                      placeholder={lang === 'en' ? 'What is this room about? (e.g. "can\'t sleep again")' : '這個房間在說什麼？（例如：又睡不著了）'}
+                      placeholderTextColor={p.muted}
+                      multiline
+                      numberOfLines={2}
+                      style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, paddingHorizontal: 14, paddingVertical: 12, lineHeight: 24 }}
+                    />
+                  </GlassCard>
+                  <TouchableOpacity
+                    onPress={() => roomTopic.trim().length > 0 && setRoomCreated(true)}
+                    style={[styles.inviteBtn, { backgroundColor: roomTopic.trim().length > 0 ? p.ink : p.line }]}
+                  >
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: roomTopic.trim().length > 0 ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
+                      {lang === 'en' ? 'Open the room' : '開啟房間'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setShowCreateRoom(false)} style={styles.cancelBtn}>
+                    <Text style={[styles.cancelText, { color: p.muted }]}>{lang === 'en' ? 'cancel' : '取消'}</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={{ alignItems: 'center', paddingVertical: 12, gap: 10 }}>
+                  <Text style={[styles.waitingText, { color: p.ink }]}>
+                    {lang === 'en' ? 'Room is open ·' : '房間已開啟 ·'} 🕯
+                  </Text>
+                  <Text style={[styles.waitingHint, { color: p.muted }]}>
+                    {lang === 'en' ? 'Others can find your room and whisper in.' : '其他人可以找到你的房間並留言。'}
+                  </Text>
+                  <TouchableOpacity onPress={() => { setShowCreateRoom(false); setRoomCreated(false); setRoomTopic(''); }}
+                    style={[styles.inviteBtn, { backgroundColor: p.ink, width: '100%' }]}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.dark ? '#1a1530' : '#fff', fontWeight: '500' }}>
+                      {lang === 'en' ? 'done' : '完成'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* INVITE SHEET */}
         {inviting && (
@@ -217,8 +307,9 @@ const styles = StyleSheet.create({
   divider:      { flexDirection: 'row', alignItems: 'center', gap: 10, opacity: 0.5, marginVertical: 6 },
   dividerText:  { fontFamily: 'EBGaramond-Italic', fontSize: 11 },
   dissolved:    { fontFamily: 'NotoSerifTC-Regular', fontSize: 14, textAlign: 'center', opacity: 0.55, lineHeight: 22 },
-  composer:     { padding: 12, paddingBottom: 18, gap: 8 },
-  composerHint: { fontFamily: 'NotoSerifTC-Regular', fontSize: 12, textAlign: 'center' },
+  composer:              { padding: 12, paddingBottom: 18, gap: 8 },
+  composerHint:          { fontFamily: 'NotoSerifTC-Regular', fontSize: 12, textAlign: 'center' },
+  identityComposerRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14, borderWidth: 0.5 },
   input:        { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 15, paddingHorizontal: 14, paddingVertical: 12 },
   sendBtn:      { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   // Invite sheet

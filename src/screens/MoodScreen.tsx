@@ -8,11 +8,12 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import {
-  VaporBackground, GlassCard, SoftButton, BreathDot, Cap,
+  VaporBackground, GlassCard, SoftButton, BreathDot, Cap, WickGlyph,
 } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
 
@@ -27,7 +28,7 @@ const LIVE_COUNTS: Record<string, number> = {
 };
 
 export default function MoodScreen({ navigation }: Props) {
-  const { seed, direction, lang, identityKind } = useAppStore();
+  const { seed, direction, lang, identityKind, wicks } = useAppStore();
   const p = DIRECTIONS[direction];
   const [text, setText] = useState('');
   const [timeStr, setTimeStr] = useState('');
@@ -63,7 +64,8 @@ export default function MoodScreen({ navigation }: Props) {
         >
           {/* TOP ROW */}
           <View style={styles.topRow}>
-            <TouchableOpacity style={styles.identityRow} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.identityRow} activeOpacity={0.8}
+              onPress={() => navigation.push('Profile')}>
               <Identity kind={identityKind} seed={seed} size={36} palette={p} lang={lang} trust={0.2} />
               <View>
                 <Text style={[styles.youTonight, { color: p.muted }]}>
@@ -73,9 +75,19 @@ export default function MoodScreen({ navigation }: Props) {
               </View>
             </TouchableOpacity>
 
-            {/* Cycle countdown */}
-            <View style={styles.countdown}>
-              <Text style={[styles.countdownText, { color: p.muted }]}>{timeStr}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {/* Wicks button */}
+              <TouchableOpacity onPress={() => navigation.push('Upgrade')}
+                style={[styles.wicksBtn, { backgroundColor: p.accentSoft, borderColor: p.accent + '40' }]}>
+                <WickGlyph size={11} color={p.accent} />
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 13, color: p.accent, fontWeight: '500' }}>
+                  {wicks}
+                </Text>
+              </TouchableOpacity>
+              {/* Cycle countdown */}
+              <View style={styles.countdown}>
+                <Text style={[styles.countdownText, { color: p.muted }]}>{timeStr}</Text>
+              </View>
             </View>
           </View>
 
@@ -127,6 +139,29 @@ export default function MoodScreen({ navigation }: Props) {
             ))}
           </View>
 
+          {/* LOFT BANNER */}
+          <TouchableOpacity onPress={() => navigation.push('Loft')} activeOpacity={0.85} style={{ marginBottom: 24 }}>
+            <LinearGradient
+              colors={['#1f1014', '#2d161c', '#3a1e24']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={styles.loftBanner}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: '#f5e2c4', fontWeight: '500' }}>
+                  {lang === 'en' ? 'The Loft' : '夜閣'}
+                </Text>
+                <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: 'rgba(245,226,196,0.6)', marginTop: 2 }}>
+                  {lang === 'en' ? 'opens midnight · face to face · veiled' : '午夜開啟 · 面對面 · 帶紗'}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'center', gap: 4 }}>
+                <WickGlyph size={18} color="#e8a557" />
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 2, color: 'rgba(232,165,87,0.7)', textTransform: 'uppercase' }}>
+                  {lang === 'en' ? 'enter' : '進入'}
+                </Text>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
           {/* FOOTER */}
           <View style={styles.footer}>
             <SoftButton p={p} variant="primary" size="lg" full onPress={handleEnter}>
@@ -172,4 +207,6 @@ const styles = StyleSheet.create({
   footer:        { gap: 10, marginTop: 8 },
   skip:          { alignItems: 'center', paddingVertical: 6 },
   skipText:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
+  wicksBtn:      { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 0.5 },
+  loftBanner:    { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20, gap: 12 },
 });

@@ -30,7 +30,7 @@ export default function OnboardingScreen({ navigation }: Props) {
       setStep(step + 1);
     } else {
       setOnboardingDone();
-      navigation.replace('Mood');
+      navigation.replace('Setup');
     }
   };
 

@@ -1,0 +1,209 @@
+import React, { useState } from 'react';
+import {
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView,
+} from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation';
+import { DIRECTIONS } from '../lib/theme';
+import { VaporBackground, GlassCard, Cap, WickGlyph, PhotoVeil } from '../components/ui';
+import { Identity } from '../components/identity/Identity';
+import { ColorAdjLabel } from '../components/identity/Identity';
+import { useAppStore } from '../hooks/useAppStore';
+import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN } from '../lib/identity';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
+
+const DIARY = [
+  { d: '06.08', zh: '他睡了。我在陽台站了很久。', en: 'He sleeps. I stood on the balcony a long time.' },
+  { d: '06.06', zh: '今天差點哭出來，在超市。', en: 'Nearly cried today, in the supermarket.' },
+];
+
+export default function ProfileScreen({ navigation }: Props) {
+  const { direction, lang, identityKind, seed, wicks, vigil } = useAppStore();
+  const p = DIRECTIONS[direction];
+  const [loftVisible, setLoftVisible] = useState(true);
+  const [colorIdx, setColorIdx] = useState(0);
+  const [adjIdx, setAdjIdx] = useState(0);
+
+  const colors = lang === 'en' ? COLOR_NAMES_EN : COLOR_NAMES_ZH;
+  const adjs = lang === 'en' ? ADJ_EN : ADJ_ZH;
+  const nightName = lang === 'en' ? `${colors[colorIdx]} ${adjs[adjIdx]}` : `${colors[colorIdx]}的${adjs[adjIdx]}`;
+
+  const interests = lang === 'en'
+    ? ['old films', 'late walks', 'whisky', 'jazz', 'rain']
+    : ['老電影', '深夜散步', '威士忌', '爵士', '雨聲'];
+
+  return (
+    <VaporBackground p={p} style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* Top bar */}
+          <View style={styles.topBar}>
+            <TouchableOpacity onPress={() => navigation.goBack()}
+              style={[styles.backBtn, { backgroundColor: p.surface, borderColor: p.line }]}>
+              <Text style={{ color: p.muted, fontSize: 18 }}>‹</Text>
+            </TouchableOpacity>
+            <Cap p={p}>{lang === 'en' ? 'My page' : '我的頁面'}</Cap>
+            <TouchableOpacity onPress={() => navigation.push('Settings')}
+              style={[styles.backBtn, { backgroundColor: p.surface, borderColor: p.line }]}>
+              <Text style={{ color: p.muted, fontSize: 14 }}>⚙</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Identity + wicks card */}
+          <GlassCard p={p} padding={18} radius={24}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              <Identity kind={identityKind} seed={seed} size={64} palette={p} lang={lang} trust={0.4} />
+              <View style={{ flex: 1 }}>
+                <ColorAdjLabel seed={seed} lang={lang} palette={p} />
+                <Text style={{ fontFamily: lang === 'en' ? 'NotoSerifTC-Regular' : 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 4 }}>
+                  {lang === 'en' ? 'identity regenerates daily' : '識別每天重新生成'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => navigation.push('Upgrade')}
+                style={{ alignItems: 'center', gap: 2, backgroundColor: p.accentSoft, borderWidth: 0.5, borderColor: p.accent + '40', borderRadius: 14, padding: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <WickGlyph size={12} color={p.accent} />
+                  <Text style={{ fontFamily: 'Inter-Regular', fontSize: 18, color: p.accent, fontWeight: '500' }}>{wicks}</Text>
+                </View>
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 8, letterSpacing: 1.5, textTransform: 'uppercase', color: p.muted }}>
+                  {lang === 'en' ? 'buy more' : '購買'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: p.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>
+                {vigil ? (lang === 'en' ? 'Vigil member' : '守夜會員') : (lang === 'en' ? 'One Candle (free)' : '一根蠟燭（免費）')}
+              </Text>
+              <TouchableOpacity onPress={() => navigation.push('Upgrade')}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
+                  {vigil ? (lang === 'en' ? 'manage' : '管理') : (lang === 'en' ? 'upgrade →' : '升級 →')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </GlassCard>
+
+          {/* Night name composer (Loft) */}
+          <View style={[styles.nightNameBox, { backgroundColor: 'rgba(45,22,28,0.9)', borderColor: 'rgba(232,165,87,0.3)' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: '#f5e2c4' }}>
+                {lang === 'en' ? 'Night name · Loft only' : '夜名 · 僅夜閣使用'}
+              </Text>
+              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: 'rgba(245,226,196,0.55)' }}>
+                {lang === 'en' ? 'composed, never typed' : '只能組合不能輸入'}
+              </Text>
+            </View>
+            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 22, color: '#e8a557', letterSpacing: 2, textAlign: 'center', marginTop: 10 }}>
+              {nightName}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {colors.slice(0, 8).map((c, i) => (
+                  <TouchableOpacity key={c} onPress={() => setColorIdx(i)}
+                    style={{ paddingVertical: 5, paddingHorizontal: 12, borderRadius: 999, backgroundColor: colorIdx === i ? '#e8a557' : 'rgba(245,226,196,0.06)', borderWidth: 0.5, borderColor: 'rgba(232,165,87,0.25)' }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: colorIdx === i ? '#1f1014' : 'rgba(245,226,196,0.7)' }}>{c}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {adjs.slice(0, 8).map((a, i) => (
+                  <TouchableOpacity key={a} onPress={() => setAdjIdx(i)}
+                    style={{ paddingVertical: 5, paddingHorizontal: 12, borderRadius: 999, backgroundColor: adjIdx === i ? '#e8a557' : 'rgba(245,226,196,0.06)', borderWidth: 0.5, borderColor: 'rgba(232,165,87,0.25)' }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: adjIdx === i ? '#1f1014' : 'rgba(245,226,196,0.7)' }}>{a}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+
+          {/* Loft visibility toggle */}
+          <View style={[styles.loftToggle, { backgroundColor: 'rgba(45,22,28,0.7)', borderColor: 'rgba(232,165,87,0.3)' }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: '#f5e2c4' }}>
+                {lang === 'en' ? 'Show my page in the Loft' : '在夜閣顯示我的頁面'}
+              </Text>
+              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: 'rgba(245,226,196,0.55)', marginTop: 2 }}>
+                {lang === 'en' ? 'Visitors pay wicks to look' : '訪客看要付燭芯'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setLoftVisible(!loftVisible)}
+              style={{ width: 40, height: 24, borderRadius: 24, backgroundColor: loftVisible ? '#e8a557' : 'rgba(245,226,196,0.2)', justifyContent: 'center' }}>
+              <View style={{ position: 'absolute', left: loftVisible ? 18 : 2, top: 2, width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' }} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Diary */}
+          <View style={styles.profileSection}>
+            <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Diary · 日記' : '日記 · Diary'}</Cap>
+            <GlassCard p={p} padding={0} radius={18}>
+              {DIARY.map((d, i) => (
+                <View key={i} style={[styles.diaryRow, i > 0 && { borderTopWidth: 0.5, borderTopColor: p.line }]}>
+                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, flexShrink: 0 }}>{d.d}</Text>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, lineHeight: 22, flex: 1 }}>
+                    {lang === 'en' ? d.en : d.zh}
+                  </Text>
+                </View>
+              ))}
+            </GlassCard>
+          </View>
+
+          {/* Photos */}
+          <View style={styles.profileSection}>
+            <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Photos · 相簿' : '相簿 · Photos'}</Cap>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {[0, 1, 2].map(i => (
+                <PhotoVeil key={i} p={p} liftLevel={4} size={100} lang={lang} />
+              ))}
+            </View>
+          </View>
+
+          {/* Quote */}
+          <View style={styles.profileSection}>
+            <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'A line · 語錄' : '語錄 · A line'}</Cap>
+            <View style={{ paddingLeft: 14, borderLeftWidth: 2, borderLeftColor: p.accent + '60' }}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, lineHeight: 26 }}>
+                {lang === 'en' ? '"Marriage is two people taking turns being lonely."' : '「婚姻是兩個人輪流孤獨。」'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Status + interests */}
+          <View style={styles.profileSection}>
+            <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Status · Interests' : '感情狀態 · 興趣'}</Cap>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <View style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.accent }}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.dark ? '#1f1014' : '#fbf5e4' }}>
+                  {lang === 'en' ? 'married · 12 yrs' : '已婚 · 十二年'}
+                </Text>
+              </View>
+              {interests.map(it => (
+                <View key={it} style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>{it}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <Text style={[styles.footer, { color: p.muted }]}>
+            {lang === 'en'
+              ? 'Your page is invisible in the Park. Only the Loft can see it — and only what you allow.'
+              : '公園裡沒有人看得到你的頁面。只有夜閣看得到——而且只有你允許的部分。'}
+          </Text>
+        </ScrollView>
+      </SafeAreaView>
+    </VaporBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  scroll:          { padding: 22, paddingBottom: 48 },
+  topBar:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 20 },
+  backBtn:         { width: 36, height: 36, borderRadius: 18, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+  nightNameBox:    { marginTop: 16, padding: 16, borderRadius: 16, borderWidth: 0.5 },
+  loftToggle:      { marginTop: 10, padding: 14, borderRadius: 14, borderWidth: 0.5, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  profileSection:  { marginTop: 22 },
+  diaryRow:        { padding: 13, flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  footer:          { fontFamily: 'EBGaramond-Italic', fontSize: 11, textAlign: 'center', opacity: 0.7, lineHeight: 20, marginTop: 24 },
+});
