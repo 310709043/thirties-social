@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  ScrollView, StyleSheet, SafeAreaView,
+  ScrollView, StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
@@ -12,7 +12,8 @@ import {
 } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore } from '../hooks/useAppStore';
+import { useAppStore, checkAndClaimDailyReward } from '../hooks/useAppStore';
+import { subscribeToActiveRooms, DbRoom } from '../lib/db';
 import { LinearGradient } from 'expo-linear-gradient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
@@ -22,16 +23,22 @@ const SUGGESTED_ROOMS = [
   'room_cant_sleep', 'room_quiet', 'room_transition',
 ] as const;
 
-const LIVE_COUNTS: Record<string, number> = {
-  room_partner: 12, room_lonely: 8, room_doubt: 5,
-  room_cant_sleep: 14, room_quiet: 3, room_transition: 7,
-};
-
 export default function MoodScreen({ navigation }: Props) {
   const { seed, direction, lang, identityKind, wicks } = useAppStore();
   const p = DIRECTIONS[direction];
   const [text, setText] = useState('');
   const [timeStr, setTimeStr] = useState('');
+  const [rooms, setRooms] = useState<DbRoom[]>([]);
+
+  useEffect(() => { return subscribeToActiveRooms(setRooms); }, []);
+
+  useEffect(() => {
+    checkAndClaimDailyReward().then(r => {
+      if (r.rewarded && r.amount) {
+        Alert.alert('', `🕯 每日燭芯 +${r.amount}`, [{ text: '收下', style: 'default' }]);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const tick = () => {
@@ -133,7 +140,7 @@ export default function MoodScreen({ navigation }: Props) {
                 <BreathDot p={p} size={5} />
                 <Text style={[styles.chipText, { color: p.ink }]}>{t(rk, lang)}</Text>
                 <View style={[styles.chipCount, { backgroundColor: p.accentSoft }]}>
-                  <Text style={[styles.chipCountText, { color: p.accent }]}>{LIVE_COUNTS[rk]}</Text>
+                  <Text style={[styles.chipCountText, { color: p.accent }]}>{rooms.find(r => r.roomKey === rk)?.messageCount ?? 0}</Text>
                 </View>
               </TouchableOpacity>
             ))}

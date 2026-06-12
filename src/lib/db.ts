@@ -441,3 +441,94 @@ export async function fileReport(params: {
     return true;
   } catch { return false; }
 }
+
+// ── Daily Reward ──────────────────────────────────────────
+export async function claimDailyReward(): Promise<{
+  ok: boolean;
+  rewarded: boolean;
+  amount?: number;
+  balance?: number;
+  error?: string;
+}> {
+  const uid = getCurrentUid();
+  if (!uid) return { ok: false, rewarded: false, error: 'not_authenticated' };
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    let rewarded = false;
+    let amount = 0;
+    let newBalance = 0;
+    await runTransaction(db, async tx => {
+      const userRef = doc(db, 'users', uid);
+      const snap = await tx.get(userRef);
+      if (!snap.exists()) throw new Error('user_not_found');
+      const data = snap.data();
+      if (data.lastRewardDate === today) { newBalance = data.wicks; return; }
+      amount = data.vigil ? 2 : 1;
+      newBalance = data.wicks + amount;
+      rewarded = true;
+      tx.update(userRef, { wicks: newBalance, lastRewardDate: today, lastActiveAt: serverTimestamp() });
+      tx.set(doc(collection(db, 'wicksTransactions')), {
+        userId: uid, amount, balanceAfter: newBalance, type: 'daily_reward',
+        referenceId: today, note: data.vigil ? '守夜每日燭芯 ×2' : '每日登入燭芯',
+        createdAt: serverTimestamp(),
+      });
+    });
+    return { ok: true, rewarded, amount: amount || undefined, balance: newBalance };
+  } catch (e: any) {
+    return { ok: false, rewarded: false, error: e.message };
+  }
+}
+
+// ── Subscribe to Active Rooms ─────────────────────────────
+export function subscribeToActiveRooms(onChange: (rooms: DbRoom[]) => void): () => void {
+  const q = query(collection(db, 'rooms'), where('isActive', '==', true), orderBy('messageCount', 'desc'), limit(20));
+  return onSnapshot(q, snap => { onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }) as DbRoom)); });
+}
+
+// ── Get or create a preset room ────────────────────────────
+export async function getOrCreatePresetRoom(params: {
+  roomKey: string; topicZh: string; topicEn: string;
+}): Promise<DbRoom | null> {
+  try {
+    const q = query(collection(db, 'rooms'), where('roomKey', '==', params.roomKey), where('isActive', '==', true), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() } as DbRoom;
+    const uid = getCurrentUid();
+    const data = {
+      creatorId: uid ?? null, roomKey: params.roomKey,
+      customTopicZh: params.topicZh, customTopicEn: params.topicEn,
+      isActive: true, isUserCreated: false, messageCount: 0,
+      createdAt: serverTimestamp(),
+      closesAt: Timestamp.fromDate(new Date(Date.now() + 86400 * 1000)),
+    };
+    const ref = await addDoc(collection(db, 'rooms'), data);
+    return { id: ref.id, ...data } as DbRoom;
+  } catch { return null; }
+}
+
+// ── Conversations ─────────────────────────────────────────
+export interface DbConversation {
+  id: string; userAId: string; userBId: string; roomId: string | null;
+  messageCount: number; createdAt: any; expiresAt: any; endedAt: any; endedReason: string | null;
+}
+
+export async function createConversation(params: { userBId: string; roomId?: string }): Promise<DbConversation | null> {
+  const uid = getCurrentUid();
+  if (!uid) return null;
+  try {
+    const data = {
+      userAId: uid, userBId: params.userBId, roomId: params.roomId ?? null,
+      messageCount: 0, createdAt: serverTimestamp(),
+      expiresAt: Timestamp.fromDate(new Date(Date.now() + 30 * 60 * 1000)),
+      endedAt: null, endedReason: null,
+    };
+    const ref = await addDoc(collection(db, 'conversations'), data);
+    return { id: ref.id, ...data } as DbConversation;
+  } catch { return null; }
+}
+
+export async function endConversation(conversationId: string, reason: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, 'conversations', conversationId), { endedAt: serverTimestamp(), endedReason: reason });
+  } catch {}
+}

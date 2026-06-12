@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,7 +8,9 @@ import { RootStackParamList } from '../navigation';
 import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { WickGlyph, Cap } from '../components/ui';
-import { useAppStore, setWicks as saveWicks } from '../hooks/useAppStore';
+import { useAppStore } from '../hooks/useAppStore';
+import { enterLoft, fetchTonightLoftSessions, DbLoftSession } from '../lib/db';
+import { getColorAdj } from '../lib/identity';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Loft'>;
 
@@ -29,15 +31,20 @@ const TONIGHT = [
 ];
 
 export default function LoftScreen({ navigation }: Props) {
-  const { lang, wicks } = useAppStore();
+  const { lang, wicks, seed } = useAppStore();
   const [inside, setInside] = useState(false);
   const [showBroke, setShowBroke] = useState(false);
   const [brokeLine] = useState(() => BROKE_LINES[Math.floor(Math.random() * BROKE_LINES.length)]);
 
-  const handleEnter = () => {
-    if (wicks >= 5) {
-      saveWicks(wicks - 5);
+  const handleEnter = async () => {
+    const nightName = getColorAdj(seed, lang);
+    const result = await enterLoft(nightName);
+    if (result.ok) {
       setInside(true);
+    } else if (result.error === 'already_entered_tonight') {
+      setInside(true); // already in, just show inside
+    } else if (result.error === 'insufficient_wicks') {
+      setShowBroke(true);
     } else {
       setShowBroke(true);
     }
@@ -181,6 +188,24 @@ export default function LoftScreen({ navigation }: Props) {
 }
 
 function LoftInside({ lang, wicks, onBack, onEnter }: any) {
+  const [sessions, setSessions] = React.useState<DbLoftSession[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetchTonightLoftSessions().then(s => {
+      setSessions(s);
+      setLoading(false);
+    });
+  }, []);
+
+  const tonight = sessions.map(s => ({
+    seed: s.userId,
+    zh: `「${s.nightName}」`,
+    en: `"${s.nightName}"`,
+    who_zh: s.nightName,
+    who_en: s.nightName,
+  }));
+
   return (
     <LinearGradient colors={L.bg as any} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -217,29 +242,37 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
 
           {/* Listing */}
           <ScrollView style={{ marginTop: 18 }} showsVerticalScrollIndicator={false}>
-            {TONIGHT.map(m => (
-              <TouchableOpacity key={m.seed} onPress={() => onEnter(m.seed)} activeOpacity={0.85}
-                style={[styles.loftCard, { backgroundColor: 'rgba(245,226,196,0.04)', borderColor: 'rgba(232,165,87,0.18)' }]}>
-                {/* Veiled portrait */}
-                <View style={{ width: 60, height: 80, borderRadius: 10, backgroundColor: '#3a2028', overflow: 'hidden', flexShrink: 0 }}>
-                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.45, backgroundColor: '#7a3a4a' }} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: L.ink, lineHeight: 24, letterSpacing: 0.5 }}>
-                    「{lang === 'en' ? m.en : m.zh}」
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                    <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, letterSpacing: 1 }}>
-                      {lang === 'en' ? m.who_en : m.who_zh}
-                    </Text>
-                    <Text style={{ color: L.muted, opacity: 0.4 }}>·</Text>
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
-                      ● {lang === 'en' ? 'open' : '門開'}
-                    </Text>
+            {loading ? (
+              <ActivityIndicator color={L.candle} style={{ marginTop: 32 }} />
+            ) : tonight.length === 0 ? (
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: L.muted, textAlign: 'center', marginTop: 32 }}>
+                今晚還沒有人
+              </Text>
+            ) : (
+              tonight.map(m => (
+                <TouchableOpacity key={m.seed} onPress={() => onEnter(m.seed)} activeOpacity={0.85}
+                  style={[styles.loftCard, { backgroundColor: 'rgba(245,226,196,0.04)', borderColor: 'rgba(232,165,87,0.18)' }]}>
+                  {/* Veiled portrait */}
+                  <View style={{ width: 60, height: 80, borderRadius: 10, backgroundColor: '#3a2028', overflow: 'hidden', flexShrink: 0 }}>
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.45, backgroundColor: '#7a3a4a' }} />
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: L.ink, lineHeight: 24, letterSpacing: 0.5 }}>
+                      {lang === 'en' ? m.en : m.zh}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                      <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, letterSpacing: 1 }}>
+                        {lang === 'en' ? m.who_en : m.who_zh}
+                      </Text>
+                      <Text style={{ color: L.muted, opacity: 0.4 }}>·</Text>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
+                        ● {lang === 'en' ? 'open' : '門開'}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
 
           <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.faint, textAlign: 'center', lineHeight: 18, marginTop: 14 }}>

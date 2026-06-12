@@ -20,9 +20,9 @@ export type RootStackParamList = {
   Onboarding: undefined;
   Setup: undefined;
   Mood: undefined;
-  Room: { roomKey: string };
+  Room: { roomKey: string; roomId?: string };
   Match: { fromSeed: string; moodText: string };
-  Chat: { otherSeed: string };
+  Chat: { otherSeed: string; conversationId?: string };
   Safety: undefined;
   Close: undefined;
   Profile: undefined;
@@ -34,11 +34,15 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function Navigation() {
+interface NavigationProps {
+  initialRoute?: string;
+}
+
+export default function Navigation({ initialRoute = 'Onboarding' }: NavigationProps) {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="Onboarding"
+        initialRouteName={initialRoute as any}
         screenOptions={{ headerShown: false, animation: 'fade' }}
       >
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
