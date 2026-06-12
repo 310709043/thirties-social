@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { WickGlyph, Cap } from '../components/ui';
-import { useAppStore, setWicks as saveWicks } from '../hooks/useAppStore';
+import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber } from '../components/ui';
+import { useAppStore } from '../hooks/useAppStore';
+import { enterLoft, fetchTonightLoftSessions, DbLoftSession } from '../lib/db';
+import { getColorAdj } from '../lib/identity';
+import { playBlow } from '../lib/sound';
+import { hapticMedium, hapticWarning } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Loft'>;
 
@@ -29,23 +33,30 @@ const TONIGHT = [
 ];
 
 export default function LoftScreen({ navigation }: Props) {
-  const { lang, wicks } = useAppStore();
+  const { lang, wicks, seed } = useAppStore();
   const [inside, setInside] = useState(false);
+  const [entering, setEntering] = useState(false);
   const [showBroke, setShowBroke] = useState(false);
   const [brokeLine] = useState(() => BROKE_LINES[Math.floor(Math.random() * BROKE_LINES.length)]);
 
-  const handleEnter = () => {
-    if (wicks >= 5) {
-      saveWicks(wicks - 5);
-      setInside(true);
+  const handleEnter = async () => {
+    const nightName = getColorAdj(seed, lang).label;
+    const result = await enterLoft(nightName);
+    if (result.ok) {
+      playBlow();          // candle-lighting whoosh
+      hapticMedium();
+      setEntering(true);   // plays immersive transition, onDone -> setInside(true)
+    } else if (result.error === 'already_entered_tonight') {
+      setInside(true); // already in, just show inside
     } else {
+      hapticWarning();
       setShowBroke(true);
     }
   };
 
   if (inside) {
     return <LoftInside lang={lang} wicks={wicks} onBack={() => setInside(false)}
-      onEnter={(seed) => navigation.push('LoftChat', { otherSeed: seed })} />;
+      onEnter={(seed: string) => navigation.push('LoftChat', { otherSeed: seed })} />;
   }
 
   return (
@@ -70,9 +81,7 @@ export default function LoftScreen({ navigation }: Props) {
 
           {/* Flame */}
           <View style={{ alignItems: 'center', marginTop: 18 }}>
-            <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(232,165,87,0.3)', alignItems: 'center', justifyContent: 'center' }}>
-              <View style={{ width: 28, height: 40, borderRadius: 14, backgroundColor: '#e8a557', opacity: 0.9 }} />
-            </View>
+            <Flame size={56} />
           </View>
 
           {/* Title */}
@@ -119,7 +128,7 @@ export default function LoftScreen({ navigation }: Props) {
             }]}>
             {wicks >= 5 ? (
               <LinearGradient colors={['#e8a557', '#c25a3b']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 999 }]} />
+                style={[StyleSheet.absoluteFill, { borderRadius: 999 }]} />
             ) : null}
             <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 17, fontWeight: '500', letterSpacing: 3, color: wicks >= 5 ? '#1f1014' : L.faint, zIndex: 1 }}>
               {t('loftAgree', lang)}
@@ -163,7 +172,7 @@ export default function LoftScreen({ navigation }: Props) {
             <TouchableOpacity onPress={() => { setShowBroke(false); navigation.push('Upgrade'); }}
               style={styles.buyBtn}>
               <LinearGradient colors={['#e8a557', '#c25a3b']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 999 }]} />
+                style={[StyleSheet.absoluteFill, { borderRadius: 999 }]} />
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, fontWeight: '500', letterSpacing: 2, color: '#1f1014', zIndex: 1 }}>
                 {lang === 'en' ? 'Buy wicks' : '去買燭芯'}
               </Text>
@@ -176,11 +185,33 @@ export default function LoftScreen({ navigation }: Props) {
           </View>
         </View>
       )}
+
+      {entering && (
+        <LoftTransition lang={lang} onDone={() => { setEntering(false); setInside(true); }} />
+      )}
     </LinearGradient>
   );
 }
 
 function LoftInside({ lang, wicks, onBack, onEnter }: any) {
+  const [sessions, setSessions] = React.useState<DbLoftSession[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetchTonightLoftSessions().then(s => {
+      setSessions(s);
+      setLoading(false);
+    });
+  }, []);
+
+  const tonight = sessions.map(s => ({
+    seed: s.userId,
+    zh: `「${s.nightName}」`,
+    en: `"${s.nightName}"`,
+    who_zh: s.nightName,
+    who_en: s.nightName,
+  }));
+
   return (
     <LinearGradient colors={L.bg as any} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -201,7 +232,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: 'rgba(232,165,87,0.1)', borderRadius: 999 }}>
               <WickGlyph size={10} color={L.candle} />
-              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: L.candle }}>{wicks}</Text>
+              <AnimatedNumber value={wicks} style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: L.candle }} />
             </View>
           </View>
 
@@ -217,29 +248,37 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
 
           {/* Listing */}
           <ScrollView style={{ marginTop: 18 }} showsVerticalScrollIndicator={false}>
-            {TONIGHT.map(m => (
-              <TouchableOpacity key={m.seed} onPress={() => onEnter(m.seed)} activeOpacity={0.85}
-                style={[styles.loftCard, { backgroundColor: 'rgba(245,226,196,0.04)', borderColor: 'rgba(232,165,87,0.18)' }]}>
-                {/* Veiled portrait */}
-                <View style={{ width: 60, height: 80, borderRadius: 10, backgroundColor: '#3a2028', overflow: 'hidden', flexShrink: 0 }}>
-                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.45, backgroundColor: '#7a3a4a' }} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: L.ink, lineHeight: 24, letterSpacing: 0.5 }}>
-                    「{lang === 'en' ? m.en : m.zh}」
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                    <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, letterSpacing: 1 }}>
-                      {lang === 'en' ? m.who_en : m.who_zh}
-                    </Text>
-                    <Text style={{ color: L.muted, opacity: 0.4 }}>·</Text>
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
-                      ● {lang === 'en' ? 'open' : '門開'}
-                    </Text>
+            {loading ? (
+              <ActivityIndicator color={L.candle} style={{ marginTop: 32 }} />
+            ) : tonight.length === 0 ? (
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: L.muted, textAlign: 'center', marginTop: 32 }}>
+                今晚還沒有人
+              </Text>
+            ) : (
+              tonight.map(m => (
+                <TouchableOpacity key={m.seed} onPress={() => onEnter(m.seed)} activeOpacity={0.85}
+                  style={[styles.loftCard, { backgroundColor: 'rgba(245,226,196,0.04)', borderColor: 'rgba(232,165,87,0.18)' }]}>
+                  {/* Veiled portrait */}
+                  <View style={{ width: 60, height: 80, borderRadius: 10, backgroundColor: '#3a2028', overflow: 'hidden', flexShrink: 0 }}>
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.45, backgroundColor: '#7a3a4a' }} />
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: L.ink, lineHeight: 24, letterSpacing: 0.5 }}>
+                      {lang === 'en' ? m.en : m.zh}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                      <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, letterSpacing: 1 }}>
+                        {lang === 'en' ? m.who_en : m.who_zh}
+                      </Text>
+                      <Text style={{ color: L.muted, opacity: 0.4 }}>·</Text>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
+                        ● {lang === 'en' ? 'open' : '門開'}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
 
           <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.faint, textAlign: 'center', lineHeight: 18, marginTop: 14 }}>

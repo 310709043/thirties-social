@@ -7,8 +7,11 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { VaporBackground, GlassCard, Cap, WickGlyph } from '../components/ui';
-import { useAppStore, setWicks, setVigil } from '../hooks/useAppStore';
+import { VaporBackground, GlassCard, Cap, WickGlyph, AnimatedNumber } from '../components/ui';
+import { useAppStore, setVigil } from '../hooks/useAppStore';
+import { addWicks } from '../lib/db';
+import { playChime } from '../lib/sound';
+import { hapticSuccess } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Upgrade'>;
 
@@ -22,12 +25,20 @@ export default function UpgradeScreen({ navigation }: Props) {
   const { direction, lang, wicks, vigil } = useAppStore();
   const p = DIRECTIONS[direction];
 
-  const handleBuyWicks = (amount: number) => {
-    setWicks(wicks + amount);
+  // TODO: gate behind real IAP purchase flow
+  const handleBuyPack = async (amount: number) => {
+    const result = await addWicks(amount, 'purchase', undefined, `購買 ${amount} 燭芯`);
+    if (result.ok) {
+      playChime();
+      hapticSuccess();
+    }
   };
 
+  // TODO: gate behind real IAP purchase flow
   const handleVigil = () => {
     setVigil(true);
+    playChime();
+    hapticSuccess();
     navigation.goBack();
   };
 
@@ -46,7 +57,7 @@ export default function UpgradeScreen({ navigation }: Props) {
           <View style={{ alignItems: 'center', marginBottom: 32 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <WickGlyph size={28} color={p.accent} />
-              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 48, color: p.ink, fontWeight: '300' }}>{wicks}</Text>
+              <AnimatedNumber value={wicks} style={{ fontFamily: 'Inter-Regular', fontSize: 48, color: p.ink, fontWeight: '300' }} />
             </View>
             <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted }}>
               {lang === 'en' ? `${wicks} wicks remaining` : `剩餘 ${wicks} 燭芯`}
@@ -114,7 +125,7 @@ export default function UpgradeScreen({ navigation }: Props) {
               {t('wicksBlurb', lang)}
             </Text>
             {WICK_PACKS.map(pack => (
-              <TouchableOpacity key={pack.key} onPress={() => handleBuyWicks(pack.amount)}
+              <TouchableOpacity key={pack.key} onPress={() => handleBuyPack(pack.amount)}
                 activeOpacity={0.85}
                 style={[styles.packRow, {
                   backgroundColor: pack.highlight ? p.accentSoft : p.surface,

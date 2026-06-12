@@ -1,49 +1,88 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  TextInput, StyleSheet, SafeAreaView,
+  TextInput, StyleSheet, SafeAreaView, RefreshControl,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { VaporBackground, GlassCard, Hairline, WickGlyph } from '../components/ui';
+import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkeleton } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
-import { getDailySeed } from '../lib/identity';
+import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoomMessage } from '../lib/db';
+import { t as getT } from '../lib/copy';
+import { hapticLight } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Room'>;
 
-const MESSAGES = [
-  { seed: 'a7x', zh: '結婚十年，最近說話像在公司開會。', en: 'Ten years married. Talking feels like a meeting.', age: 3 },
-  { seed: 'k2m', zh: '想找人說但又不想被認識。', en: 'Want someone to talk to, but not be known.', age: 7 },
-  { seed: 'q9b', zh: '他在身邊，我還是覺得很孤單。', en: 'He is next to me. I still feel alone.', age: 12 },
-  { seed: 'r4n', zh: '不是想離開。只是想被聽到。', en: 'Not leaving. Just want to be heard.', age: 18 },
-];
 
 export default function RoomScreen({ navigation, route }: Props) {
   const { roomKey } = route.params;
   const { seed, direction, lang, identityKind, deviceId } = useAppStore();
   const p = DIRECTIONS[direction];
-  const [inviting, setInviting] = useState<typeof MESSAGES[0] | null>(null);
+  const [inviting, setInviting] = useState<{seed: string; zh: string; en: string; age: number} | null>(null);
   const [inviteSent, setInviteSent] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [roomTopic, setRoomTopic] = useState('');
   const [roomCreated, setRoomCreated] = useState(false);
   const [identitySeed, setIdentitySeed] = useState(seed);
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<DbRoomMessage[]>([]);
+  const [sending, setSending] = useState(false);
+  const [inputText, setInputText] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const reshuffleIdentity = () => {
     setIdentitySeed(Math.random().toString(36).slice(2));
   };
 
-  // When invite sent, simulate acceptance → go to Chat
+  const onRefresh = async () => {
+    setRefreshing(true);
+    const room = await getOrCreatePresetRoom({
+      roomKey,
+      topicZh: getT(roomKey as any, 'zh'),
+      topicEn: getT(roomKey as any, 'en'),
+    });
+    if (room) setRoomId(room.id);
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    getOrCreatePresetRoom({
+      roomKey,
+      topicZh: getT(roomKey as any, 'zh'),
+      topicEn: getT(roomKey as any, 'en'),
+    }).then(room => {
+      if (room) setRoomId(room.id);
+    });
+  }, [roomKey]);
+
+  useEffect(() => {
+    if (!roomId) return;
+    return subscribeToRoomMessages(roomId, setMessages);
+  }, [roomId]);
+
+  // When invite sent, create a real conversation → go to Chat
   useEffect(() => {
     if (inviteSent) {
-      const id = setTimeout(() => navigation.push('Chat', { otherSeed: inviting!.seed }), 2400);
+      const id = setTimeout(async () => {
+        const conv = await createConversation({ userBId: 'anon_' + inviting!.seed, roomId: roomId ?? undefined });
+        navigation.push('Chat', { otherSeed: inviting!.seed, conversationId: conv?.id });
+      }, 2400);
       return () => clearTimeout(id);
     }
   }, [inviteSent]);
+
+  const handleSend = async () => {
+    if (!inputText.trim() || !roomId) return;
+    setSending(true);
+    await sendRoomMessage({ roomId, content: inputText.trim(), senderSeed: identitySeed });
+    setInputText('');
+    setSending(false);
+    hapticLight();
+  };
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
@@ -103,34 +142,54 @@ export default function RoomScreen({ navigation, route }: Props) {
         </View>
 
         {/* MESSAGE FEED */}
-        <ScrollView style={styles.feed} contentContainerStyle={{ gap: 12, padding: 24 }}>
-          {MESSAGES.map((m, i) => (
-            <TouchableOpacity key={i} onPress={() => setInviting(m)} activeOpacity={0.8}>
-              <View style={{ flexDirection: 'row', gap: 12, opacity: Math.max(0.35, 1 - m.age * 0.04) }}>
-                <Identity kind={identityKind === 'character' ? 'sigil' : identityKind}
-                  seed={m.seed} size={32} palette={p} lang={lang} trust={0.15} />
-                <View style={{ flex: 1 }}>
-                  <View style={[styles.bubble, { backgroundColor: p.surface, borderColor: p.line }]}>
-                    <Text style={[styles.bubbleText, { color: p.ink }]}>
-                      {lang === 'en' ? m.en : m.zh}
-                    </Text>
+        <ScrollView
+          style={styles.feed}
+          contentContainerStyle={{ gap: 12, padding: 24 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={p.muted} />
+          }
+        >
+          {roomId === null ? (
+            <>
+              <MessageSkeleton color={p.muted + '60'} />
+              <MessageSkeleton color={p.muted + '60'} />
+              <MessageSkeleton color={p.muted + '60'} />
+            </>
+          ) : messages.length === 0 ? (
+            <Text style={[styles.dissolved, { color: p.muted, marginTop: 20 }]}>
+              {lang === 'en' ? 'be the first to whisper here.' : '成為第一個在這裡說話的人。'}
+            </Text>
+          ) : (
+            messages.map((msg, i) => (
+              <FadeInUp key={msg.id} distance={10} delay={Math.min(i * 30, 180)}>
+                <TouchableOpacity onPress={() => setInviting({ seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 })} activeOpacity={0.8}>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <Identity kind={identityKind === 'character' ? 'sigil' : identityKind} seed={msg.senderSeed} size={32} palette={p} lang={lang} trust={0.15} />
+                    <View style={{ flex: 1 }}>
+                      <View style={[styles.bubble, { backgroundColor: p.surface, borderColor: p.line }]}>
+                        <Text style={[styles.bubbleText, { color: p.ink }]}>{msg.content}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 6 }}>
+                        <ColorAdjLabel seed={msg.senderSeed} lang={lang} palette={p} />
+                      </View>
+                    </View>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 6 }}>
-                    <ColorAdjLabel seed={m.seed} lang={lang} palette={p} />
-                    <Text style={{ color: p.muted, fontSize: 10, fontFamily: 'Inter-Regular' }}>· {m.age}m {lang === 'en' ? 'ago' : '前'}</Text>
-                  </View>
-                </View>
+                </TouchableOpacity>
+              </FadeInUp>
+            ))
+          )}
+          {messages.length > 0 && (
+            <>
+              <View style={styles.divider}>
+                <Hairline p={p} style={{ flex: 1 }} />
+                <Text style={[styles.dividerText, { color: p.muted }]}>{lang === 'en' ? 'earlier' : '更早'}</Text>
+                <Hairline p={p} style={{ flex: 1 }} />
               </View>
-            </TouchableOpacity>
-          ))}
-          <View style={styles.divider}>
-            <Hairline p={p} style={{ flex: 1 }} />
-            <Text style={[styles.dividerText, { color: p.muted }]}>{lang === 'en' ? 'earlier' : '更早'}</Text>
-            <Hairline p={p} style={{ flex: 1 }} />
-          </View>
-          <Text style={[styles.dissolved, { color: p.muted }]}>
-            {lang === 'en' ? 'older fragments dissolve into the room.' : '更早的片段已融入房間之中。'}
-          </Text>
+              <Text style={[styles.dissolved, { color: p.muted }]}>
+                {lang === 'en' ? 'older fragments dissolve into the room.' : '更早的片段已融入房間之中。'}
+              </Text>
+            </>
+          )}
         </ScrollView>
 
         {/* COMPOSER */}
@@ -156,13 +215,15 @@ export default function RoomScreen({ navigation, route }: Props) {
           </Text>
           <GlassCard p={p} padding={6} radius={28} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TextInput
+              value={inputText}
+              onChangeText={setInputText}
               placeholder={lang === 'en' ? 'whisper into the room…' : '對房間說一句⋯⋯'}
               placeholderTextColor={p.muted}
               style={[styles.input, { color: p.ink }]}
             />
             <TouchableOpacity
               style={[styles.sendBtn, { backgroundColor: p.ink }]}
-              onPress={() => navigation.push('Match', { fromSeed: seed, moodText: '' })}
+              onPress={handleSend}
             >
               <Text style={{ color: p.dark ? '#1a1530' : '#fff', fontSize: 16 }}>↑</Text>
             </TouchableOpacity>
@@ -195,7 +256,12 @@ export default function RoomScreen({ navigation, route }: Props) {
                     />
                   </GlassCard>
                   <TouchableOpacity
-                    onPress={() => roomTopic.trim().length > 0 && setRoomCreated(true)}
+                    onPress={async () => {
+                      if (roomTopic.trim().length > 0) {
+                        await createRoom({ topicZh: roomTopic.trim() });
+                        setRoomCreated(true);
+                      }
+                    }}
                     style={[styles.inviteBtn, { backgroundColor: roomTopic.trim().length > 0 ? p.ink : p.line }]}
                   >
                     <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: roomTopic.trim().length > 0 ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>

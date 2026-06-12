@@ -7,10 +7,13 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t } from '../lib/copy';
-import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil } from '../components/ui';
+import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, FadeInUp } from '../components/ui';
+import { playBlow } from '../lib/sound';
+import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setWicks as saveWicks } from '../hooks/useAppStore';
+import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage } from '../lib/db';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -28,20 +31,30 @@ export default function ChatScreen({ navigation, route }: Props) {
   const { seed, direction, lang, identityKind, wicks } = useAppStore();
   const p = DIRECTIONS[direction];
   const otherSeed = route.params?.otherSeed || 'm0od7';
+  const conversationId = (route.params as any)?.conversationId as string | undefined;
 
   const [remaining, setRemaining] = useState(28 * 60 + 14);
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const [realMessages, setRealMessages] = useState<DbConvMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [showVeilSheet, setShowVeilSheet] = useState(false);
   const [veilSent, setVeilSent] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
+    if (!conversationId) return;
+    return subscribeToConversationMessages(conversationId, setRealMessages);
+  }, [conversationId]);
+
+  useEffect(() => {
     const id = setInterval(() => {
       setRemaining(r => {
         if (r <= 1) {
           clearInterval(id);
-          navigation.replace('Close');
+          (async () => {
+            if (conversationId) await endConversation(conversationId, 'timer_expired');
+            navigation.replace('Close');
+          })();
           return 0;
         }
         return r - 1;
@@ -54,12 +67,23 @@ export default function ChatScreen({ navigation, route }: Props) {
   const ss = String(remaining % 60).padStart(2, '0');
   const progress = remaining / TOTAL_SECONDS;
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!inputText.trim()) return;
-    setMessages(prev => [...prev, { from: 'me', zh: inputText, en: inputText, age: 0 }]);
+    if (conversationId) {
+      await sendConversationMessage({ conversationId, content: inputText.trim() });
+    } else {
+      setMessages(prev => [...prev, { from: 'me', zh: inputText, en: inputText, age: 0 }]);
+    }
     setInputText('');
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
+
+  const displayMessages = conversationId && realMessages.length > 0
+    ? realMessages.map(msg => ({
+        from: msg.senderId === getCurrentUid() ? 'me' : 'other',
+        zh: msg.content, en: msg.content, age: 0,
+      }))
+    : messages;
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
@@ -76,7 +100,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             {/* Back */}
             <View style={styles.headerRow}>
               <TouchableOpacity
-                onPress={() => navigation.replace('Close')}
+                onPress={() => { if (conversationId) endConversation(conversationId, 'user_ended'); navigation.replace('Close'); }}
                 style={styles.backBtn}
               >
                 <Text style={{ color: p.muted, fontSize: 20 }}>‹</Text>
@@ -135,8 +159,11 @@ export default function ChatScreen({ navigation, route }: Props) {
               {lang === 'en' ? 'opened at 23:47 · ends at 00:17' : '23:47 開啟 · 00:17 結束'}
             </Text>
 
-            {messages.map((m, i) => (
-              <ChatBubble key={i} p={p} m={m} lang={lang} />
+            {displayMessages.map((m, i) => (
+              <FadeInUp key={i} distance={10} duration={260} delay={Math.min(i * 25, 150)}>
+                <ChatBubble p={p} m={m} lang={lang}
+                  onReport={m.from !== 'me' ? () => navigation.push('Safety') : undefined} />
+              </FadeInUp>
             ))}
 
             {/* Typing indicator */}
@@ -206,7 +233,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 </View>
                 {!veilSent ? (
                   <TouchableOpacity
-                    onPress={() => { if (wicks >= 2) { saveWicks(wicks - 2); setVeilSent(true); } }}
+                    onPress={async () => { if (wicks >= 2) { const result = await spendWicks(2, 'photo_veil', conversationId); if (result.ok) { playBlow(); hapticMedium(); setVeilSent(true); } } }}
                     disabled={wicks < 2}
                     style={[styles.sendVeilBtn, { backgroundColor: wicks >= 2 ? p.ink : p.line }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -240,23 +267,30 @@ export default function ChatScreen({ navigation, route }: Props) {
   );
 }
 
-function ChatBubble({ p, m, lang }: any) {
+function ChatBubble({ p, m, lang, onReport }: any) {
   const isMe = m.from === 'me';
+  const bubble = (
+    <View style={[
+      styles.bubble,
+      isMe
+        ? { backgroundColor: p.accent, borderWidth: 0 }
+        : { backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line },
+    ]}>
+      <Text style={[
+        styles.bubbleText,
+        { color: isMe ? (p.dark ? '#15172e' : '#fbf5e4') : p.ink },
+      ]}>
+        {lang === 'en' ? m.en : m.zh}
+      </Text>
+    </View>
+  );
   return (
     <View style={[styles.bubbleRow, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}>
-      <View style={[
-        styles.bubble,
-        isMe
-          ? { backgroundColor: p.accent, borderWidth: 0 }
-          : { backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line },
-      ]}>
-        <Text style={[
-          styles.bubbleText,
-          { color: isMe ? (p.dark ? '#15172e' : '#fbf5e4') : p.ink },
-        ]}>
-          {lang === 'en' ? m.en : m.zh}
-        </Text>
-      </View>
+      {!isMe && onReport ? (
+        <TouchableOpacity onLongPress={onReport} delayLongPress={500} activeOpacity={1}>
+          {bubble}
+        </TouchableOpacity>
+      ) : bubble}
     </View>
   );
 }
