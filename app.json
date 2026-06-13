@@ -2,7 +2,7 @@
   "expo": {
     "name": "第卅者",
     "slug": "thirties-social",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -13,9 +13,16 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.thirties.social"
+      "bundleIdentifier": "com.thirties.social",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "用於選擇照片作為紗罩頭像",
+        "NSCameraUsageDescription": "用於拍攝照片作為紗罩頭像"
+      }
     },
     "android": {
+      "package": "com.thirties.social",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

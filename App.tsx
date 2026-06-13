@@ -7,6 +7,7 @@ import Navigation from './src/navigation';
 import { WickGlyph, Logo } from './src/components/ui';
 import { LOFT_PALETTE } from './src/lib/theme';
 import { ToastProvider } from './src/components/ui/Toast';
+import { ErrorBoundary } from './src/components/ui/ErrorBoundary';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -45,9 +46,11 @@ export default function App() {
   if (!fontsLoaded || !storeReady) return null;
 
   return (
-    <ToastProvider>
-      <AppGate />
-    </ToastProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <AppGate />
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
 
