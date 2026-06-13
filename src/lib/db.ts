@@ -49,6 +49,7 @@ export interface DbUser {
   boundary: string | null;
   region: string | null;
   quote: string | null;
+  loftRole: 'listener' | 'speaker' | 'undecided' | null;
   loftVisible: boolean;
   nightColorIdx: number;
   nightAdjIdx: number;
@@ -85,6 +86,7 @@ export async function upsertUser(params: {
       boundary: null,
       region: null,
       quote: null,
+      loftRole: null,
       loftVisible: true,
       nightColorIdx: 0,
       nightAdjIdx: 0,

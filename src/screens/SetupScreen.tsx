@@ -8,7 +8,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { VaporBackground, GlassCard, Cap } from '../components/ui';
-import { useAppStore, setSetupDone } from '../hooks/useAppStore';
+import { useAppStore, setSetupDone, setProfileFields, Gender, LoftRole } from '../hooks/useAppStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Setup'>;
 
@@ -61,6 +61,7 @@ export default function SetupScreen({ navigation }: Props) {
   const zh = lang !== 'en';
 
   const [gender, setGender] = useState<string | null>(null);
+  const [loftRole, setLoftRole] = useState<string | null>(null);
   const [age, setAge] = useState<string | null>(null);
   const [marriage, setMarriage] = useState<string | null>(null);
   const [shape, setShape] = useState<string | null>(null);
@@ -70,13 +71,51 @@ export default function SetupScreen({ navigation }: Props) {
   const [region, setRegion] = useState<string | null>(null);
   const [line, setLine] = useState('');
 
-  const ready = !!gender && !!age && !!marriage && seeking.length > 0 && !!boundary;
+  const ready = !!gender && !!age && !!marriage && seeking.length > 0 && !!boundary
+    && (gender !== 'x' || !!loftRole);
 
-  const handleDone = () => {
-    if (ready) {
-      setSetupDone();
-      navigation.replace('Mood');
-    }
+  // Canonical slug mappings (same index order as the chip options)
+  const MARRIAGE_ZH = ['穩定交往中', '同居', '訂婚', '已婚', '已婚·分居中', '偽單身', '開放關係', '對象是已婚的', '單身但說不清'];
+  const MARRIAGE_EN = ['in a relationship', 'cohabiting', 'engaged', 'married', 'married · separated', 'single-passing', 'open', 'seeing someone married', 'single-ish'];
+  const MARRIAGE_SLUGS = ['dating', 'cohabiting', 'engaged', 'married', 'separated', 'single-passing', 'open', 'seeing-married', 'single-ish'];
+  const SEEKING_ZH = ['一個樹洞', '情感陪伴', '曖昧', '線上親密', '不設限'];
+  const SEEKING_EN = ['someone to listen', 'companionship', 'flirtation', 'online intimacy', 'no limits'];
+  const SEEKING_SLUGS = ['listener', 'companion', 'flirt', 'online-intimacy', 'no-limits'];
+  const BOUNDARY_ZH = ['只在線上', '或許可以見面', '看感覺'];
+  const BOUNDARY_EN = ['online only', 'maybe meet', 'depends'];
+  const BOUNDARY_SLUGS = ['online-only', 'maybe-meet', 'depends'];
+  const REGION_ZH = ['北部', '中部', '南部', '東部', '不透露'];
+  const REGION_EN = ['north', 'central', 'south', 'east', 'undisclosed'];
+  const REGION_SLUGS = ['north', 'central', 'south', 'east', 'undisclosed'];
+
+  const toSlug = (zhOpts: string[], enOpts: string[], slugs: string[], val: string | null) => {
+    if (!val) return null;
+    const idx = zhOpts.indexOf(val) >= 0 ? zhOpts.indexOf(val) : enOpts.indexOf(val);
+    return idx >= 0 ? slugs[idx] : val;
+  };
+  const toSlugs = (zhOpts: string[], enOpts: string[], slugs: string[], vals: string[]) =>
+    vals.map(v => toSlug(zhOpts, enOpts, slugs, v)).filter(Boolean) as string[];
+
+  const handleDone = async () => {
+    if (!ready) return;
+    const genderMap: Record<string, Gender> = { f: 'female', m: 'male', x: 'nonbinary' };
+    const resolvedGender = genderMap[gender!] ?? 'nonbinary';
+    const resolvedRelationship = toSlug(MARRIAGE_ZH, MARRIAGE_EN, MARRIAGE_SLUGS, marriage);
+    const resolvedSeeking = toSlugs(SEEKING_ZH, SEEKING_EN, SEEKING_SLUGS, seeking);
+    const resolvedBoundary = toSlug(BOUNDARY_ZH, BOUNDARY_EN, BOUNDARY_SLUGS, boundary);
+    const resolvedRegion = toSlug(REGION_ZH, REGION_EN, REGION_SLUGS, region);
+    await setProfileFields({
+      gender: resolvedGender,
+      ageBracket: age!,
+      relationshipStatus: resolvedRelationship ?? marriage!,
+      seeking: resolvedSeeking,
+      boundary: resolvedBoundary ?? boundary!,
+      region: resolvedRegion,
+      quote: line.trim() || null,
+      loftRole: (loftRole as LoftRole | null),
+    });
+    await setSetupDone();
+    navigation.replace('Mood');
   };
 
   return (
@@ -121,6 +160,33 @@ export default function SetupScreen({ navigation }: Props) {
               ))}
             </View>
           </View>
+
+          {/* Non-binary: loft role selector */}
+          {gender === 'x' && (
+            <View style={{ marginTop: 16 }}>
+              <Cap p={p}>{zh ? '在夜閣，你想扮演' : 'In the Loft, you want to be'}</Cap>
+              <View style={{ marginTop: 10, flexDirection: 'row', gap: 8 }}>
+                {[
+                  { v: 'listener', zh: '傾聽者', en: 'Listener', note_zh: '夜閣免費', note_en: 'Loft free' },
+                  { v: 'speaker', zh: '說話者', en: 'Speaker', note_zh: '夜閣憑燭芯', note_en: 'Wicks for Loft' },
+                  { v: 'undecided', zh: '再說', en: 'Undecided', note_zh: '之後可更改', note_en: 'Change later' },
+                ].map(r => (
+                  <TouchableOpacity key={r.v} onPress={() => setLoftRole(r.v)} activeOpacity={0.8}
+                    style={[styles.genderCard, {
+                      backgroundColor: loftRole === r.v ? p.accentSoft : p.surface,
+                      borderColor: loftRole === r.v ? p.accent : p.line,
+                    }]}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
+                      {zh ? r.zh : r.en}
+                    </Text>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 10, color: p.muted, marginTop: 4, lineHeight: 14 }}>
+                      {zh ? r.note_zh : r.note_en}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
 
           <ChipRow p={p} label={zh ? '年齡' : 'Age'} alt={zh ? 'age' : '年齡'}
             options={['25−30', '31−35', '36−40', '41−45', '46+']}

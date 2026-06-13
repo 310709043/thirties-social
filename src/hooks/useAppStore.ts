@@ -206,6 +206,27 @@ export async function setVigil(on: boolean) {
   if (_state.userId) updateUser({ vigil: on });
 }
 
+export async function setProfileFields(fields: {
+  gender: Gender; ageBracket: string; relationshipStatus: string;
+  seeking: string[]; boundary: string; region: string | null;
+  quote: string | null; loftRole: LoftRole | null;
+}) {
+  _state = { ..._state, ...fields };
+  notify();
+  const stores: [string, string][] = [
+    ['gender', fields.gender],
+    ['ageBracket', fields.ageBracket],
+    ['relationshipStatus', fields.relationshipStatus],
+    ['seeking', JSON.stringify(fields.seeking)],
+    ['boundary', fields.boundary],
+  ];
+  if (fields.region) stores.push(['region', fields.region]);
+  if (fields.quote) stores.push(['quote', fields.quote]);
+  if (fields.loftRole) stores.push(['loftRole', fields.loftRole]);
+  await AsyncStorage.multiSet(stores);
+  if (_state.userId) updateUser({ ...fields });
+}
+
 export function useAppStore(): AppState;
 export function useAppStore<T>(selector: (state: AppState) => T): T;
 export function useAppStore<T>(selector?: (state: AppState) => T): T | AppState {
