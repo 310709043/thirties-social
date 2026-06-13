@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDailySeed } from '../lib/identity';
 import { Direction, DEFAULT_DIRECTION } from '../lib/theme';
@@ -17,6 +17,9 @@ async function getDeviceId(): Promise<string> {
   return id;
 }
 
+export type Gender = 'female' | 'male' | 'nonbinary';
+export type LoftRole = 'listener' | 'speaker' | 'undecided';
+
 interface AppState {
   deviceId: string;
   userId: string;
@@ -34,6 +37,14 @@ interface AppState {
   banExpiresAt: number | null;
   lastRewardDate: string | null;
   rewardPending: boolean;
+  gender: Gender | null;
+  ageBracket: string | null;
+  relationshipStatus: string | null;
+  seeking: string[];
+  boundary: string | null;
+  region: string | null;
+  quote: string | null;
+  loftRole: LoftRole | null;
 }
 
 let _state: AppState = {
@@ -41,6 +52,8 @@ let _state: AppState = {
   lang: 'zh', identityKind: 'sigil', onboardingDone: false, setupDone: false,
   dbSynced: false, wicks: 3, vigil: false, isBanned: false, banReason: null,
   banExpiresAt: null, lastRewardDate: null, rewardPending: false,
+  gender: null, ageBracket: null, relationshipStatus: null, seeking: [],
+  boundary: null, region: null, quote: null, loftRole: null,
 };
 
 const _listeners = new Set<() => void>();
@@ -49,19 +62,31 @@ function notify() { _listeners.forEach(fn => fn()); }
 export async function initStore() {
   const deviceId = await getDeviceId();
   const seed = getDailySeed(deviceId);
-  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang] = await Promise.all([
+  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedSeeking, storedBoundary, storedRegion, storedQuote, storedLoftRole] = await Promise.all([
     AsyncStorage.getItem('direction') as Promise<Direction | null>,
     AsyncStorage.getItem('onboarding_done'),
     AsyncStorage.getItem('setup_done'),
     AsyncStorage.getItem('wicks'),
     AsyncStorage.getItem('vigil'),
     AsyncStorage.getItem('lang') as Promise<Lang | null>,
+    AsyncStorage.getItem('gender') as Promise<Gender | null>,
+    AsyncStorage.getItem('ageBracket'),
+    AsyncStorage.getItem('relationshipStatus'),
+    AsyncStorage.getItem('seeking'),
+    AsyncStorage.getItem('boundary'),
+    AsyncStorage.getItem('region'),
+    AsyncStorage.getItem('quote'),
+    AsyncStorage.getItem('loftRole') as Promise<LoftRole | null>,
   ]);
   _state = {
     ..._state, deviceId, seed,
     direction: storedDir || DEFAULT_DIRECTION, lang: storedLang || 'zh',
     onboardingDone: storedDone === '1', setupDone: storedSetup === '1',
     wicks: storedWicks ? parseInt(storedWicks, 10) : 3, vigil: storedVigil === '1',
+    gender: storedGender, ageBracket: storedAge, relationshipStatus: storedRelation,
+    seeking: storedSeeking ? JSON.parse(storedSeeking) : [],
+    boundary: storedBoundary, region: storedRegion, quote: storedQuote,
+    loftRole: storedLoftRole,
   };
   notify();
   _syncWithFirebase(deviceId, seed);
@@ -81,11 +106,22 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         setupDone: dbUser.setupDone, isBanned: dbUser.isBanned, banReason: dbUser.banReason,
         banExpiresAt: (dbUser as any).banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
+        gender: dbUser.gender as Gender | null, ageBracket: dbUser.ageBracket,
+        relationshipStatus: dbUser.relationshipStatus, seeking: dbUser.seeking,
+        boundary: dbUser.boundary, region: dbUser.region, quote: dbUser.quote,
+        loftRole: (dbUser as any).loftRole as LoftRole | null ?? null,
       };
       await Promise.all([
         AsyncStorage.setItem('wicks', String(dbUser.wicks)),
         AsyncStorage.setItem('vigil', dbUser.vigil ? '1' : '0'),
         AsyncStorage.setItem('setup_done', dbUser.setupDone ? '1' : '0'),
+        dbUser.gender ? AsyncStorage.setItem('gender', dbUser.gender) : Promise.resolve(),
+        dbUser.ageBracket ? AsyncStorage.setItem('ageBracket', dbUser.ageBracket) : Promise.resolve(),
+        dbUser.relationshipStatus ? AsyncStorage.setItem('relationshipStatus', dbUser.relationshipStatus) : Promise.resolve(),
+        dbUser.seeking.length ? AsyncStorage.setItem('seeking', JSON.stringify(dbUser.seeking)) : Promise.resolve(),
+        dbUser.boundary ? AsyncStorage.setItem('boundary', dbUser.boundary) : Promise.resolve(),
+        dbUser.region ? AsyncStorage.setItem('region', dbUser.region) : Promise.resolve(),
+        dbUser.quote ? AsyncStorage.setItem('quote', dbUser.quote) : Promise.resolve(),
       ]);
     } else {
       _state = { ..._state, userId, dbSynced: true };
@@ -100,6 +136,10 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         isBanned: updated.isBanned, banReason: updated.banReason,
         banExpiresAt: (updated as any).banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
+        gender: updated.gender as Gender | null, ageBracket: updated.ageBracket,
+        relationshipStatus: updated.relationshipStatus, seeking: updated.seeking,
+        boundary: updated.boundary, region: updated.region, quote: updated.quote,
+        loftRole: (updated as any).loftRole as LoftRole | null ?? null,
       };
       AsyncStorage.setItem('wicks', String(updated.wicks));
       notify();
@@ -166,12 +206,27 @@ export async function setVigil(on: boolean) {
   if (_state.userId) updateUser({ vigil: on });
 }
 
-export function useAppStore() {
-  const [s, setS] = useState(_state);
+export function useAppStore(): AppState;
+export function useAppStore<T>(selector: (state: AppState) => T): T;
+export function useAppStore<T>(selector?: (state: AppState) => T): T | AppState {
+  const selectorRef = useRef(selector);
+  selectorRef.current = selector;
+
+  const selected = selector ? selector(_state) : _state;
+  const [s, setS] = useState(selected);
+  const prevRef = useRef(selected);
+
   useEffect(() => {
-    const update = () => setS({ ..._state });
+    const update = () => {
+      const next = selectorRef.current ? selectorRef.current(_state) : _state;
+      if (!Object.is(prevRef.current, next)) {
+        prevRef.current = next;
+        setS(next);
+      }
+    };
     _listeners.add(update);
     return () => { _listeners.delete(update); };
   }, []);
+
   return s;
 }
