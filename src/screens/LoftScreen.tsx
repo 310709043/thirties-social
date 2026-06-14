@@ -33,27 +33,22 @@ const TONIGHT = [
 ];
 
 export default function LoftScreen({ navigation }: Props) {
-  const { lang, wicks, seed, gender, vigil, loftRole } = useAppStore();
+  const { lang, wicks, seed, vigil } = useAppStore();
   const [inside, setInside] = useState(false);
   const [entering, setEntering] = useState(false);
   const [showBroke, setShowBroke] = useState(false);
   const [brokeLine] = useState(() => BROKE_LINES[Math.floor(Math.random() * BROKE_LINES.length)]);
 
-  // Gender-based pricing: female=free, male=5, nonbinary depends on loftRole
-  const loftCost = vigil ? 0
-    : gender === 'female' ? 0
-    : gender === 'nonbinary' && loftRole === 'listener' ? 0
-    : 5;
-  const isFree = loftCost === 0;
-
+  // No gender-based pricing — free: 1 entry/night, vigil: unlimited
   const handleEnter = async () => {
     const nightName = getColorAdj(seed, lang).label;
-    const result = await enterLoft(nightName, loftCost);
+    const result = await enterLoft(nightName);
     if (result.ok) {
       hapticMedium();
       setEntering(true);
     } else if (result.error === 'already_entered_tonight') {
-      setInside(true);
+      // Free user already entered tonight — show upgrade prompt
+      setShowBroke(true);
     } else {
       hapticWarning();
       setShowBroke(true);
@@ -131,24 +126,19 @@ export default function LoftScreen({ navigation }: Props) {
 
           {/* Enter button */}
           <TouchableOpacity onPress={handleEnter} activeOpacity={0.85}
-            style={[styles.enterBtn, {
-              backgroundColor: (isFree || wicks >= loftCost) ? undefined : 'rgba(245,226,196,0.08)',
-              borderWidth: (isFree || wicks >= loftCost) ? 0 : 1, borderColor: 'rgba(245,226,196,0.15)',
-            }]}>
-            {(isFree || wicks >= loftCost) ? (
-              <LinearGradient colors={['#e8a557', '#c25a3b']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={[StyleSheet.absoluteFill, { borderRadius: 999 }]} />
-            ) : null}
-            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 17, fontWeight: '500', letterSpacing: 3, color: (isFree || wicks >= loftCost) ? '#1f1014' : L.faint, zIndex: 1 }}>
+            style={[styles.enterBtn]}>
+            <LinearGradient colors={['#e8a557', '#c25a3b']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={[StyleSheet.absoluteFill, { borderRadius: 999 }]} />
+            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 17, fontWeight: '500', letterSpacing: 3, color: '#1f1014', zIndex: 1 }}>
               {t('loftAgree', lang)}
             </Text>
-            <View style={{ width: 1, height: 20, backgroundColor: (isFree || wicks >= loftCost) ? 'rgba(31,16,20,0.3)' : 'transparent', zIndex: 1 }} />
+            <View style={{ width: 1, height: 20, backgroundColor: 'rgba(31,16,20,0.3)', zIndex: 1 }} />
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, zIndex: 1 }}>
-              <WickGlyph size={11} color={(isFree || wicks >= loftCost) ? '#1f1014' : L.faint} />
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: (isFree || wicks >= loftCost) ? '#1f1014' : L.faint }}>
-                {isFree
-                  ? (lang === 'en' ? 'Free tonight' : '今晚免費')
-                  : (lang === 'en' ? `Tonight · ${loftCost} wicks` : `今晚 ${loftCost} 燭芯`)}
+              <WickGlyph size={11} color="#1f1014" />
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: '#1f1014' }}>
+                {vigil
+                  ? (lang === 'en' ? 'Unlimited tonight' : '今晚無限')
+                  : (lang === 'en' ? 'Free · 1 entry tonight' : '免費 · 今晚 1 次')}
               </Text>
             </View>
           </TouchableOpacity>
@@ -160,7 +150,7 @@ export default function LoftScreen({ navigation }: Props) {
         </View>
       </SafeAreaView>
 
-      {/* Broke sheet */}
+      {/* Broke sheet — shown when free user already entered tonight */}
       {showBroke && (
         <View style={styles.brokeOverlay}>
           <View style={styles.brokeCard}>
@@ -169,19 +159,15 @@ export default function LoftScreen({ navigation }: Props) {
               <View style={{ width: 28, height: 3, borderRadius: 2, backgroundColor: 'rgba(232,165,87,0.12)', marginTop: 2 }} />
             </View>
             <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 19, color: '#f5e2c4', lineHeight: 30, letterSpacing: 1, textAlign: 'center' }}>
-              {lang === 'en' ? brokeLine.en : brokeLine.zh}
+              {vigil
+                ? (lang === 'en' ? 'You have entered tonight.' : '你今晚已經進入過了。')
+                : (lang === 'en' ? 'Free entry used. Upgrade for unlimited.' : '免費次數已用完。升級享無限通行。')}
             </Text>
             <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: 'rgba(245,226,196,0.5)', marginTop: 8, textAlign: 'center' }}>
-              {lang === 'en' ? brokeLine.zh : brokeLine.en}
+              {vigil
+                ? (lang === 'en' ? 'Come back tomorrow.' : '明天再來。')
+                : (lang === 'en' ? 'Vigil: unlimited entries + 5 wicks/day' : '守夜：無限通行 + 每日 5 芯')}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16 }}>
-              <WickGlyph size={10} color="#e8a557" />
-              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: 'rgba(245,226,196,0.55)' }}>
-                {lang === 'en' ? `you have ${wicks} · the door asks ${loftCost}` : `你有 ${wicks} 芯 · 這扇門要 ${loftCost} 芯`}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => { setShowBroke(false); navigation.push('Upgrade'); }}
-              style={styles.buyBtn}>
               <LinearGradient colors={['#e8a557', '#c25a3b']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                 style={[StyleSheet.absoluteFill, { borderRadius: 999 }]} />
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, fontWeight: '500', letterSpacing: 2, color: '#1f1014', zIndex: 1 }}>

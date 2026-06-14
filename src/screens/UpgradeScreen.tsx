@@ -17,9 +17,9 @@ import { buyWickPack, buyVigilSubscription, restorePurchases, IAP_PRODUCT_IDS } 
 type Props = NativeStackScreenProps<RootStackParamList, 'Upgrade'>;
 
 const WICK_PACKS = [
-  { key: 'wick10', amount: 10, price: 'NT$ 49', priceNote: '4.9/芯' },
-  { key: 'wick30', amount: 30, price: 'NT$ 129', priceNote: '4.3/芯', highlight: true },
-  { key: 'wick100', amount: 100, price: 'NT$ 349', priceNote: '3.5/芯' },
+  { key: 'wick10', amount: 10, price: 'NT$ 35', priceNote: '3.5/芯' },
+  { key: 'wick30', amount: 30, price: 'NT$ 99', priceNote: '3.3/芯', highlight: true },
+  { key: 'wick100', amount: 100, price: 'NT$ 299', priceNote: '3.0/芯' },
 ];
 
 export default function UpgradeScreen({ navigation }: Props) {

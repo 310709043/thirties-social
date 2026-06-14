@@ -71,8 +71,7 @@ export default function SetupScreen({ navigation }: Props) {
   const [region, setRegion] = useState<string | null>(null);
   const [line, setLine] = useState('');
 
-  const ready = !!gender && !!age && !!marriage && seeking.length > 0 && !!boundary
-    && (gender !== 'x' || !!loftRole);
+  const ready = !!gender && !!age && !!marriage && seeking.length > 0 && !!boundary;
 
   // Canonical slug mappings (same index order as the chip options)
   const MARRIAGE_ZH = ['穩定交往中', '同居', '訂婚', '已婚', '已婚·分居中', '偽單身', '開放關係', '對象是已婚的', '單身但說不清'];
@@ -112,7 +111,7 @@ export default function SetupScreen({ navigation }: Props) {
       boundary: resolvedBoundary ?? boundary!,
       region: resolvedRegion,
       quote: line.trim() || null,
-      loftRole: (loftRole as LoftRole | null),
+      loftRole: null,
     });
     await setSetupDone();
     navigation.replace('Mood');
@@ -141,9 +140,9 @@ export default function SetupScreen({ navigation }: Props) {
             <Cap p={p}>{zh ? '我是' : 'I am'}</Cap>
             <View style={{ marginTop: 10, flexDirection: 'row', gap: 8 }}>
               {[
-                { v: 'f', zh: '女生', en: 'Woman', note_zh: '夜閣免費', note_en: 'Loft free' },
-                { v: 'm', zh: '男生', en: 'Man', note_zh: '夜閣憑燭芯', note_en: 'Wicks for Loft' },
-                { v: 'x', zh: '非二元', en: 'Non-binary', note_zh: '角色由你選', note_en: 'You choose role' },
+                { v: 'f', zh: '女生', en: 'Woman' },
+                { v: 'm', zh: '男生', en: 'Man' },
+                { v: 'x', zh: '非二元', en: 'Non-binary' },
               ].map(g => (
                 <TouchableOpacity key={g.v} onPress={() => setGender(g.v)} activeOpacity={0.8}
                   style={[styles.genderCard, {
@@ -153,40 +152,10 @@ export default function SetupScreen({ navigation }: Props) {
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
                     {zh ? g.zh : g.en}
                   </Text>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 10, color: p.muted, marginTop: 4, lineHeight: 14 }}>
-                    {zh ? g.note_zh : g.note_en}
-                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
-
-          {/* Non-binary: loft role selector */}
-          {gender === 'x' && (
-            <View style={{ marginTop: 16 }}>
-              <Cap p={p}>{zh ? '在夜閣，你想扮演' : 'In the Loft, you want to be'}</Cap>
-              <View style={{ marginTop: 10, flexDirection: 'row', gap: 8 }}>
-                {[
-                  { v: 'listener', zh: '傾聽者', en: 'Listener', note_zh: '夜閣免費', note_en: 'Loft free' },
-                  { v: 'speaker', zh: '說話者', en: 'Speaker', note_zh: '夜閣憑燭芯', note_en: 'Wicks for Loft' },
-                  { v: 'undecided', zh: '再說', en: 'Undecided', note_zh: '之後可更改', note_en: 'Change later' },
-                ].map(r => (
-                  <TouchableOpacity key={r.v} onPress={() => setLoftRole(r.v)} activeOpacity={0.8}
-                    style={[styles.genderCard, {
-                      backgroundColor: loftRole === r.v ? p.accentSoft : p.surface,
-                      borderColor: loftRole === r.v ? p.accent : p.line,
-                    }]}>
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
-                      {zh ? r.zh : r.en}
-                    </Text>
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 10, color: p.muted, marginTop: 4, lineHeight: 14 }}>
-                      {zh ? r.note_zh : r.note_en}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
 
           <ChipRow p={p} label={zh ? '年齡' : 'Age'} alt={zh ? 'age' : '年齡'}
             options={['25−30', '31−35', '36−40', '41−45', '46+']}

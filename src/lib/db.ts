@@ -348,7 +348,7 @@ export function subscribeToTyping(
 }
 
 // ── Loft ─────────────────────────────────────────────────
-export async function enterLoft(nightName: string, cost: number = 5): Promise<{
+export async function enterLoft(nightName: string): Promise<{
   ok: boolean; sessionId?: string; balance?: number; error?: string;
 }> {
   const uid = getCurrentUid();
@@ -363,12 +363,14 @@ export async function enterLoft(nightName: string, cost: number = 5): Promise<{
     where('nightDate', '==', tonight),
   );
   const existing = await getDocs(q);
-  if (!existing.empty) return { ok: false, error: 'already_entered_tonight' };
 
-  // Free entry if cost is 0 (women / vigil / listener role)
-  if (cost > 0) {
-    const result = await spendWicks(cost, 'loft_entry', undefined, '夜閣入場');
-    if (!result.ok) return result;
+  // Get user to check vigil status
+  const userSnap = await getDoc(doc(db, 'users', uid));
+  const isVigil = userSnap.exists() ? (userSnap.data() as any).vigil : false;
+
+  // Free users: only 1 entry per night
+  if (!isVigil && !existing.empty) {
+    return { ok: false, error: 'already_entered_tonight' };
   }
 
   const ref = await addDoc(collection(db, 'loftSessions'), {
@@ -379,7 +381,6 @@ export async function enterLoft(nightName: string, cost: number = 5): Promise<{
     leftAt: null,
   });
 
-  const userSnap = await getDoc(doc(db, 'users', uid));
   const balance = userSnap.exists() ? (userSnap.data() as any).wicks : 0;
   return { ok: true, sessionId: ref.id, balance };
 }
@@ -685,13 +686,14 @@ export async function claimDailyReward(): Promise<{
       if (!snap.exists()) throw new Error('user_not_found');
       const data = snap.data();
       if (data.lastRewardDate === today) { newBalance = data.wicks; return; }
-      amount = data.vigil ? 2 : 1;
+      // Free: +2/day, Vigil: +5/day
+      amount = data.vigil ? 5 : 2;
       newBalance = data.wicks + amount;
       rewarded = true;
       tx.update(userRef, { wicks: newBalance, lastRewardDate: today, lastActiveAt: serverTimestamp() });
       tx.set(doc(collection(db, 'wicksTransactions')), {
         userId: uid, amount, balanceAfter: newBalance, type: 'daily_reward',
-        referenceId: today, note: data.vigil ? '守夜每日燭芯 ×2' : '每日登入燭芯',
+        referenceId: today, note: data.vigil ? '守夜每日燭芯 ×5' : '每日燭芯 +2',
         createdAt: serverTimestamp(),
       });
     });
