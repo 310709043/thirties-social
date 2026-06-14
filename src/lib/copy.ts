@@ -21,7 +21,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   // Mood
   moodHeader:      { zh: '今晚怎麼了？',     en: 'What is it tonight?' },
   moodPrompt:      { zh: '寫一句關於最近的事。可以是和另一半的，也可以不是。', en: 'A line about what is happening. About a partner, or not.' },
-  moodPlaceholder: { zh: '最近和他⋯⋯',       en: 'Lately with them…' },
+  moodPlaceholder: { zh: '最近和那個人⋯⋯',     en: 'Lately with them…' },
   moodEnter:       { zh: '進入',             en: 'Enter' },
   moodSkip:        { zh: '不想寫，給我一個房間', en: 'Skip — just find me a room' },
   moodSuggested:   { zh: '今晚有人在說',     en: 'People are talking about' },
@@ -40,7 +40,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
 
   // Match
   matchHeader:     { zh: '有人想和你說話',   en: 'Someone wants to talk' },
-  matchSubhead:    { zh: '他寫的是：',       en: 'They wrote:' },
+  matchSubhead:    { zh: '對方寫的是：',     en: 'They wrote:' },
   matchAccept:     { zh: '接受 · 開始 30 分鐘', en: 'Accept · start 30 min' },
   matchDecline:    { zh: '不是現在',         en: 'Not now' },
   matchTime:       { zh: '30 分鐘窗口',      en: '30-minute window' },
@@ -118,7 +118,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   loftPulse3:       { zh: '躺下了',           en: 'lying down' },
   loftPulse4:       { zh: '有你真好',         en: 'glad you are here' },
   loftPulseCost:    { zh: '1 芯',             en: '1 wick' },
-  loftGift:         { zh: '送出一根燭·謝謝他', en: 'Send a candle · thank them' },
+  loftGift:         { zh: '送出一根燭·謝謝對方', en: 'Send a candle · thank them' },
   loftGiftCost:     { zh: '5 芯',             en: '5 wicks' },
 
   // Wicks / subscription

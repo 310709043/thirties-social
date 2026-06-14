@@ -14,25 +14,56 @@ import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN } from '../lib/identity'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
-const DIARY = [
-  { d: '06.08', zh: '他睡了。我在陽台站了很久。', en: 'He sleeps. I stood on the balcony a long time.' },
-  { d: '06.06', zh: '今天差點哭出來，在超市。', en: 'Nearly cried today, in the supermarket.' },
-];
+// Reverse-map DB slugs to display labels
+const STATUS_MAP: Record<string, { zh: string; en: string }> = {
+  dating:          { zh: '穩定交往中',     en: 'in a relationship' },
+  cohabiting:      { zh: '同居',           en: 'cohabiting' },
+  engaged:         { zh: '訂婚',           en: 'engaged' },
+  married:         { zh: '已婚',           en: 'married' },
+  separated:       { zh: '已婚·分居中',    en: 'married · separated' },
+  'single-passing':{ zh: '偽單身',         en: 'single-passing' },
+  open:            { zh: '開放關係',       en: 'open' },
+  'seeing-married':{ zh: '對象是已婚的',   en: 'seeing someone married' },
+  'single-ish':    { zh: '單身但說不清',   en: 'single-ish' },
+};
+
+const SEEKING_MAP: Record<string, { zh: string; en: string }> = {
+  listener:         { zh: '一個樹洞',     en: 'someone to listen' },
+  companion:        { zh: '情感陪伴',     en: 'companionship' },
+  flirt:            { zh: '曖昧',         en: 'flirtation' },
+  'online-intimacy':{ zh: '線上親密',     en: 'online intimacy' },
+  'no-limits':      { zh: '不設限',       en: 'no limits' },
+};
+
+const BOUNDARY_MAP: Record<string, { zh: string; en: string }> = {
+  'online-only': { zh: '只在線上', en: 'online only' },
+  'maybe-meet':  { zh: '或許可以見面', en: 'maybe meet' },
+  depends:       { zh: '看感覺', en: 'depends' },
+};
 
 export default function ProfileScreen({ navigation }: Props) {
-  const { direction, lang, identityKind, seed, wicks, vigil } = useAppStore();
+  const {
+    direction, lang, identityKind, seed, wicks, vigil,
+    gender, ageBracket, relationshipStatus, seeking, boundary, region, quote,
+  } = useAppStore();
   const p = DIRECTIONS[direction];
   const [loftVisible, setLoftVisible] = useState(true);
   const [colorIdx, setColorIdx] = useState(0);
   const [adjIdx, setAdjIdx] = useState(0);
 
+  const statusLabel = relationshipStatus && STATUS_MAP[relationshipStatus]
+    ? (lang === 'en' ? STATUS_MAP[relationshipStatus].en : STATUS_MAP[relationshipStatus].zh)
+    : (lang === 'en' ? 'not set' : '未設定');
+  const seekingLabels = seeking.map(s =>
+    SEEKING_MAP[s] ? (lang === 'en' ? SEEKING_MAP[s].en : SEEKING_MAP[s].zh) : s
+  );
+  const boundaryLabel = boundary && BOUNDARY_MAP[boundary]
+    ? (lang === 'en' ? BOUNDARY_MAP[boundary].en : BOUNDARY_MAP[boundary].zh)
+    : null;
+
   const colors = lang === 'en' ? COLOR_NAMES_EN : COLOR_NAMES_ZH;
   const adjs = lang === 'en' ? ADJ_EN : ADJ_ZH;
   const nightName = lang === 'en' ? `${colors[colorIdx]} ${adjs[adjIdx]}` : `${colors[colorIdx]}的${adjs[adjIdx]}`;
-
-  const interests = lang === 'en'
-    ? ['old films', 'late walks', 'whisky', 'jazz', 'rain']
-    : ['老電影', '深夜散步', '威士忌', '爵士', '雨聲'];
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
@@ -178,7 +209,9 @@ export default function ProfileScreen({ navigation }: Props) {
             <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'A line · 語錄' : '語錄 · A line'}</Cap>
             <View style={{ paddingLeft: 14, borderLeftWidth: 2, borderLeftColor: p.accent + '60' }}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, lineHeight: 26 }}>
-                {lang === 'en' ? '"Marriage is two people taking turns being lonely."' : '「婚姻是兩個人輪流孤獨。」'}
+                {quote
+                  ? `「${quote}」`
+                  : (lang === 'en' ? 'No quote yet.' : '尚未留下語錄。')}
               </Text>
             </View>
           </View>
@@ -187,14 +220,19 @@ export default function ProfileScreen({ navigation }: Props) {
           {/* Status + interests */}
           <FadeInUp delay={560} distance={10}>
             <View style={styles.profileSection}>
-            <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Status · Interests' : '感情狀態 · 興趣'}</Cap>
+            <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Status · Seeking' : '感情狀態 · 在找'}</Cap>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               <View style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.accent }}>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.dark ? '#1f1014' : '#fbf5e4' }}>
-                  {lang === 'en' ? 'married · 12 yrs' : '已婚 · 十二年'}
+                  {statusLabel}
                 </Text>
               </View>
-              {interests.map(it => (
+              {boundaryLabel && (
+                <View style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.accentSoft, borderWidth: 0.5, borderColor: p.accent + '40' }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>{boundaryLabel}</Text>
+                </View>
+              )}
+              {seekingLabels.map(it => (
                 <View key={it} style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>{it}</Text>
                 </View>

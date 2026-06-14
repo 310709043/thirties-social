@@ -341,7 +341,7 @@ export function subscribeToConversationMessages(
 }
 
 // ── Loft ─────────────────────────────────────────────────
-export async function enterLoft(nightName: string): Promise<{
+export async function enterLoft(nightName: string, cost: number = 5): Promise<{
   ok: boolean; sessionId?: string; balance?: number; error?: string;
 }> {
   const uid = getCurrentUid();
@@ -358,9 +358,11 @@ export async function enterLoft(nightName: string): Promise<{
   const existing = await getDocs(q);
   if (!existing.empty) return { ok: false, error: 'already_entered_tonight' };
 
-  // Spend 5 wicks
-  const result = await spendWicks(5, 'loft_entry', undefined, '夜閣入場');
-  if (!result.ok) return result;
+  // Free entry if cost is 0 (women / vigil / listener role)
+  if (cost > 0) {
+    const result = await spendWicks(cost, 'loft_entry', undefined, '夜閣入場');
+    if (!result.ok) return result;
+  }
 
   const ref = await addDoc(collection(db, 'loftSessions'), {
     userId: uid,
@@ -370,7 +372,9 @@ export async function enterLoft(nightName: string): Promise<{
     leftAt: null,
   });
 
-  return { ok: true, sessionId: ref.id, balance: result.balance };
+  const userSnap = await getDoc(doc(db, 'users', uid));
+  const balance = userSnap.exists() ? (userSnap.data() as any).wicks : 0;
+  return { ok: true, sessionId: ref.id, balance };
 }
 
 export interface DbLoftSession {
