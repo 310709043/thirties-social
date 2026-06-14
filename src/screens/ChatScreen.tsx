@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Alert,
-  ScrollView, StyleSheet, KeyboardAvoidingView, Platform,
+  ScrollView, StyleSheet, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -16,6 +16,7 @@ import { useAppStore, setWicks as saveWicks, trackConversation } from '../hooks/
 import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping } from '../lib/db';
 import { filterMessage } from '../lib/filter';
 import { analytics } from '../lib/analytics';
+import { pickImage, uploadVeiledPhoto } from '../lib/photos';
 import * as ScreenCapture from 'expo-screen-capture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
@@ -35,6 +36,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [inputText, setInputText] = useState('');
   const [showVeilSheet, setShowVeilSheet] = useState(false);
   const [veilSent, setVeilSent] = useState(false);
+  const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [otherTyping, setOtherTyping] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -126,6 +128,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const displayMessages = realMessages.map(msg => ({
     from: msg.senderId === getCurrentUid() ? 'me' : 'other',
     zh: msg.content, en: msg.content, age: 0,
+    messageType: msg.messageType ?? 'text',
+    photoId: msg.messageType === 'photo' ? msg.content : null,
   }));
 
   return (
@@ -284,23 +288,64 @@ export default function ChatScreen({ navigation, route }: Props) {
                     : '照片會藏在紗罩下。對方每揭一層需要 2 燭芯，並且需要先同意。'}
                 </Text>
                 <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                  <PhotoVeil p={p} liftLevel={0} size={160} lang={lang} />
-                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 8 }}>
-                    {lang === 'en' ? 'preview — 4 layers of veil' : '預覽 — 四層紗罩'}
-                  </Text>
+                  {selectedPhotoUri ? (
+                    <View style={{ width: 160, height: 160, borderRadius: 12, overflow: 'hidden', backgroundColor: p.surface }}>
+                      <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, textAlign: 'center', marginTop: 70 }}>
+                        {lang === 'en' ? 'Photo selected' : '已選擇照片'}
+                      </Text>
+                    </View>
+                  ) : (
+                    <>
+                      <PhotoVeil p={p} liftLevel={0} size={160} lang={lang} />
+                      <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 8 }}>
+                        {lang === 'en' ? 'preview — 4 layers of veil' : '預覽 — 四層紗罩'}
+                      </Text>
+                    </>
+                  )}
                 </View>
+
+                {/* Pick Photo Button */}
+                {!selectedPhotoUri && !veilSent && (
+                  <TouchableOpacity
+                    onPress={async () => {
+                      const uri = await pickImage();
+                      if (uri) setSelectedPhotoUri(uri);
+                    }}
+                    style={[styles.sendVeilBtn, { backgroundColor: p.accentSoft, borderColor: p.accent + '40', marginBottom: 8 }]}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.accent }}>
+                      {lang === 'en' ? 'Choose a photo' : '挑一張照片'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 {!veilSent ? (
                   <TouchableOpacity
-                    onPress={async () => { if (wicks >= 2) { const result = await spendWicks(2, 'photo_veil', conversationId); if (result.ok) { hapticMedium(); setVeilSent(true); } } }}
-                    disabled={wicks < 2}
-                    style={[styles.sendVeilBtn, { backgroundColor: wicks >= 2 ? p.ink : p.line }]}>
+                    onPress={async () => {
+                      if (!selectedPhotoUri || !conversationId || wicks < 2) return;
+                      const result = await spendWicks(2, 'photo_veil', conversationId);
+                      if (result.ok) {
+                        const photo = await uploadVeiledPhoto({ conversationId, uri: selectedPhotoUri });
+                        if (photo) {
+                          await sendConversationMessage({
+                            conversationId,
+                            content: photo.id,
+                            messageType: 'photo',
+                          });
+                          hapticMedium();
+                          setVeilSent(true);
+                          analytics.loftVeilLift(0);
+                        }
+                      }
+                    }}
+                    disabled={!selectedPhotoUri || wicks < 2}
+                    style={[styles.sendVeilBtn, { backgroundColor: (selectedPhotoUri && wicks >= 2) ? p.ink : p.line }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: wicks >= 2 ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: (selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
                         {lang === 'en' ? 'Send veiled photo' : '送出帶紗照片'}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <WickGlyph size={11} color={wicks >= 2 ? (p.dark ? '#1a1530' : '#fff') : p.muted} />
-                        <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: wicks >= 2 ? (p.dark ? '#1a1530' : 'rgba(255,255,255,0.7)') : p.muted }}>2</Text>
+                        <WickGlyph size={11} color={(selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : '#fff') : p.muted} />
+                        <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: (selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : 'rgba(255,255,255,0.7)') : p.muted }}>2</Text>
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -311,7 +356,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     </Text>
                   </View>
                 )}
-                <TouchableOpacity onPress={() => { setShowVeilSheet(false); setVeilSent(false); }} style={{ alignItems: 'center', paddingVertical: 10 }}>
+                <TouchableOpacity onPress={() => { setShowVeilSheet(false); setVeilSent(false); setSelectedPhotoUri(null); }} style={{ alignItems: 'center', paddingVertical: 10 }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted }}>
                     {lang === 'en' ? 'close' : '關閉'}
                   </Text>
@@ -327,7 +372,26 @@ export default function ChatScreen({ navigation, route }: Props) {
 
 function ChatBubble({ p, m, lang, onReport }: any) {
   const isMe = m.from === 'me';
-  const bubble = (
+  const isPhoto = m.messageType === 'photo';
+
+  const bubble = isPhoto ? (
+    <View style={[
+      styles.bubble,
+      { padding: 4, overflow: 'hidden' },
+      isMe
+        ? { backgroundColor: p.accent, borderWidth: 0 }
+        : { backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line },
+    ]}>
+      <PhotoVeil p={p} liftLevel={0} size={120} lang={lang} />
+      <Text style={{
+        fontFamily: 'EBGaramond-Italic', fontSize: 10,
+        color: isMe ? 'rgba(255,255,255,0.7)' : p.muted,
+        textAlign: 'center', marginTop: 4,
+      }}>
+        {lang === 'en' ? 'veiled photo' : '紗罩照片'}
+      </Text>
+    </View>
+  ) : (
     <View style={[
       styles.bubble,
       isMe
