@@ -4,6 +4,7 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { initStore, useAppStore } from './src/hooks/useAppStore';
 import { initIAP, endIAP } from './src/lib/iap';
+import { registerForPushNotifications, addNotificationListener } from './src/lib/notifications';
 import Navigation from './src/navigation';
 import { WickGlyph, Logo } from './src/components/ui';
 import { LOFT_PALETTE } from './src/lib/theme';
@@ -35,9 +36,28 @@ export default function App() {
   });
 
   useEffect(() => {
-    initStore().then(() => setStoreReady(true));
+    initStore().then(() => {
+      setStoreReady(true);
+      registerForPushNotifications();
+    });
     initIAP();
-    return () => { endIAP(); };
+
+    // Handle notification taps
+    const removeListeners = addNotificationListener(
+      (notification) => {},
+      (response) => {
+        // Handle notification tap — navigate to relevant screen
+        const data = response.notification.request.content.data;
+        if (data?.screen) {
+          // Navigation will handle this via deep linking
+        }
+      },
+    );
+
+    return () => {
+      endIAP();
+      removeListeners();
+    };
   }, []);
 
   useEffect(() => {

@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
+import { sendPushToUser } from './notifications';
 
 // ── Auth ──────────────────────────────────────────────────
 export function ensureAnonAuth(): Promise<string> {
@@ -631,6 +632,13 @@ export async function tryFindMatch(): Promise<boolean> {
         conversationId: conv.id,
       });
     });
+
+    // Send push notification to the other user
+    sendPushToUser(other.userId, {
+      title: '有人想和你說話',
+      body: myEntry.moodText ? `「${myEntry.moodText}」` : '有人想找你聊天',
+      data: { screen: 'Match', conversationId: conv.id, otherSeed: myEntry.seed },
+    }).catch(() => {});
 
     return true;
   } catch {

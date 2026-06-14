@@ -44,7 +44,14 @@
       "category": "SOCIAL_NETWORKING"
     },
     "plugins": [
-      "react-native-iap"
+      "react-native-iap",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#e8a557"
+        }
+      ]
     ]
   }
 }
