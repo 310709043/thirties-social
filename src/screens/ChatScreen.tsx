@@ -13,7 +13,7 @@ import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setWicks as saveWicks, trackConversation } from '../hooks/useAppStore';
-import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage } from '../lib/db';
+import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping } from '../lib/db';
 import { filterMessage } from '../lib/filter';
 import * as ScreenCapture from 'expo-screen-capture';
 
@@ -34,12 +34,22 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [inputText, setInputText] = useState('');
   const [showVeilSheet, setShowVeilSheet] = useState(false);
   const [veilSent, setVeilSent] = useState(false);
+  const [otherTyping, setOtherTyping] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!conversationId) return;
     trackConversation();
     return subscribeToConversationMessages(conversationId, setRealMessages);
+  }, [conversationId]);
+
+  // Subscribe to other user's typing state
+  useEffect(() => {
+    if (!conversationId) return;
+    const uid = getCurrentUid();
+    if (!uid) return;
+    return subscribeToTyping(conversationId, uid, setOtherTyping);
   }, [conversationId]);
 
   useEffect(() => {
@@ -63,6 +73,23 @@ export default function ChatScreen({ navigation, route }: Props) {
   const ss = String(remaining % 60).padStart(2, '0');
   const progress = remaining / TOTAL_SECONDS;
 
+  // Debounced typing indicator
+  const handleInputChange = (text: string) => {
+    setInputText(text);
+    if (!conversationId) return;
+    if (text.length > 0) {
+      setTyping(conversationId, true);
+      // Clear previous timeout
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      // Auto-stop typing after 3 seconds of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        setTyping(conversationId, false);
+      }, 3000);
+    } else {
+      setTyping(conversationId, false);
+    }
+  };
+
   const sendMessage = async () => {
     if (!inputText.trim()) return;
     const check = filterMessage(inputText.trim());
@@ -75,6 +102,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
     if (conversationId) {
       await sendConversationMessage({ conversationId, content: inputText.trim() });
+      // Clear typing state after sending
+      setTyping(conversationId, false);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     }
     setInputText('');
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -175,6 +205,18 @@ export default function ChatScreen({ navigation, route }: Props) {
           </ScrollView>
           </View>
 
+          {/* Typing indicator */}
+          {otherTyping && (
+            <View style={styles.typingRow}>
+              <Identity kind={identityKind} seed={otherSeed} size={20} palette={p} lang={lang} trust={0.25} />
+              <View style={[styles.typingBubble, { backgroundColor: p.surface, borderColor: p.line }]}>
+                {[0, 1, 2].map(i => (
+                  <View key={i} style={[styles.typingDot, { backgroundColor: p.muted }]} />
+                ))}
+              </View>
+            </View>
+          )}
+
           {/* COMPOSER */}
           <View style={styles.composer}>
             {/* Photo veil bar */}
@@ -192,7 +234,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TextInput
                 value={inputText}
-                onChangeText={setInputText}
+                onChangeText={handleInputChange}
                 placeholder={t('chatPlaceholder', lang)}
                 placeholderTextColor={p.muted}
                 style={[styles.input, { color: p.ink }]}

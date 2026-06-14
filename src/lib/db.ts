@@ -280,63 +280,34 @@ export async function sendRoomMessage(params: {
   } catch { return false; }
 }
 
-export function subscribeToRoomMessages(
-  roomId: string,
-  onMessage: (msgs: DbRoomMessage[]) => void,
-) {
-  const q = query(
-    collection(db, 'rooms', roomId, 'messages'),
-    orderBy('createdAt', 'asc'),
-    limit(50),
-  );
-  return onSnapshot(q, snap => {
-    onMessage(snap.docs.map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage));
-  });
-}
-
-// ── Conversation Messages ─────────────────────────────────
-export interface DbConvMessage {
-  id: string;
-  conversationId: string;
-  senderId: string;
-  content: string;
-  messageType: string;
-  createdAt: any;
-}
-
-export async function sendConversationMessage(params: {
-  conversationId: string;
-  content: string;
-  messageType?: string;
-}): Promise<boolean> {
+// ── Typing Indicator ─────────────────────────────────────
+export function setTyping(conversationId: string, isTyping: boolean): Promise<void> {
   const uid = getCurrentUid();
-  if (!uid) return false;
-  try {
-    await addDoc(collection(db, 'conversations', params.conversationId, 'messages'), {
-      senderId: uid,
-      content: params.content,
-      messageType: params.messageType ?? 'text',
-      createdAt: serverTimestamp(),
-    });
-    await updateDoc(doc(db, 'conversations', params.conversationId), {
-      messageCount: increment(1),
-    });
-    return true;
-  } catch { return false; }
+  if (!uid) return Promise.resolve();
+  const field = `typing_${uid}`;
+  return updateDoc(doc(db, 'conversations', conversationId), {
+    [field]: isTyping,
+    [`${field}_at`]: serverTimestamp(),
+  }).catch(() => {});
 }
 
-export function subscribeToConversationMessages(
+export function subscribeToTyping(
   conversationId: string,
-  onUpdate: (msgs: DbConvMessage[]) => void,
-) {
-  const q = query(
-    collection(db, 'conversations', conversationId, 'messages'),
-    orderBy('createdAt', 'asc'),
-  );
-  return onSnapshot(q, snap => {
-    onUpdate(snap.docs.map(d => ({
-      id: d.id, conversationId, ...d.data(),
-    }) as DbConvMessage));
+  otherUserId: string,
+  onTyping: (isTyping: boolean) => void,
+): () => void {
+  const field = `typing_${otherUserId}`;
+  return onSnapshot(doc(db, 'conversations', conversationId), snap => {
+    if (!snap.exists()) { onTyping(false); return; }
+    const data = snap.data();
+    const isTyping = data[field] === true;
+    const typedAt = data[`${field}_at`]?.toDate?.();
+    // Auto-expire after 5 seconds
+    if (isTyping && typedAt) {
+      const elapsed = Date.now() - typedAt.getTime();
+      if (elapsed > 5000) { onTyping(false); return; }
+    }
+    onTyping(isTyping);
   });
 }
 
