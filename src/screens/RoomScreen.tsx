@@ -103,10 +103,17 @@ export default function RoomScreen({ navigation, route }: Props) {
       return;
     }
     setSending(true);
-    await sendRoomMessage({ roomId, content: inputText.trim(), senderSeed: identitySeed });
-    setInputText('');
+    const ok = await sendRoomMessage({ roomId, content: inputText.trim(), senderSeed: identitySeed });
     setSending(false);
-    hapticLight();
+    if (ok) {
+      setInputText('');
+      hapticLight();
+    } else {
+      Alert.alert(
+        lang === 'en' ? 'Failed to send' : '\u9001\u51FA\u5931\u6557',
+        lang === 'en' ? 'Please try again.' : '\u8ACB\u7A0D\u5F8C\u518D\u8A66\u4E00\u6B21\u3002',
+      );
+    }
   };
 
   return (

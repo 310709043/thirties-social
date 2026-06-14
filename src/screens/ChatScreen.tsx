@@ -101,7 +101,14 @@ export default function ChatScreen({ navigation, route }: Props) {
       return;
     }
     if (conversationId) {
-      await sendConversationMessage({ conversationId, content: inputText.trim() });
+      const ok = await sendConversationMessage({ conversationId, content: inputText.trim() });
+      if (!ok) {
+        Alert.alert(
+          lang === 'en' ? 'Failed to send' : '\u9001\u51FA\u5931\u6557',
+          lang === 'en' ? 'Please try again.' : '\u8ACB\u7A0D\u5F8C\u518D\u8A66\u4E00\u6B21\u3002',
+        );
+        return;
+      }
       // Clear typing state after sending
       setTyping(conversationId, false);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);

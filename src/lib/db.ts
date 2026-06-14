@@ -762,6 +762,52 @@ export async function endConversation(conversationId: string, reason: string): P
   } catch {}
 }
 
+// ── Conversation Messages ─────────────────────────────────
+export interface DbConvMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  messageType: string;
+  createdAt: any;
+}
+
+export async function sendConversationMessage(params: {
+  conversationId: string;
+  content: string;
+  messageType?: string;
+}): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    await addDoc(collection(db, 'conversations', params.conversationId, 'messages'), {
+      senderId: uid,
+      content: params.content,
+      messageType: params.messageType ?? 'text',
+      createdAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, 'conversations', params.conversationId), {
+      messageCount: increment(1),
+    });
+    return true;
+  } catch { return false; }
+}
+
+export function subscribeToConversationMessages(
+  conversationId: string,
+  onUpdate: (msgs: DbConvMessage[]) => void,
+) {
+  const q = query(
+    collection(db, 'conversations', conversationId, 'messages'),
+    orderBy('createdAt', 'asc'),
+  );
+  return onSnapshot(q, snap => {
+    onUpdate(snap.docs.map(d => ({
+      id: d.id, conversationId, ...d.data(),
+    }) as DbConvMessage));
+  });
+}
+
 // ── Account Deletion ─────────────────────────────────────
 export async function deleteAccount(): Promise<{ ok: boolean; error?: string }> {
   const uid = getCurrentUid();

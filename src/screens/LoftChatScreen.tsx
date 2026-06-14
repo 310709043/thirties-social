@@ -95,7 +95,14 @@ export default function LoftChatScreen({ navigation, route }: Props) {
       );
       return;
     }
-    await sendLoftMessage({ loftConversationId, content: message.trim() });
+    const ok = await sendLoftMessage({ loftConversationId, content: message.trim() });
+    if (!ok) {
+      Alert.alert(
+        lang === 'en' ? 'Failed to send' : '\u9001\u51FA\u5931\u6557',
+        lang === 'en' ? 'Please try again.' : '\u8ACB\u7A0D\u5F8C\u518D\u8A66\u4E00\u6B21\u3002',
+      );
+      return;
+    }
     setMessage('');
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
