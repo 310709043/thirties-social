@@ -12,7 +12,7 @@ import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkele
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
-import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoomMessage } from '../lib/db';
+import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoomMessage, fetchOlderRoomMessages } from '../lib/db';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
 import { filterMessage } from '../lib/filter';
@@ -35,6 +35,8 @@ export default function RoomScreen({ navigation, route }: Props) {
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
 
   const reshuffleIdentity = () => {
     setIdentitySeed(Math.random().toString(36).slice(2));
@@ -49,6 +51,19 @@ export default function RoomScreen({ navigation, route }: Props) {
     });
     if (room) setRoomId(room.id);
     setRefreshing(false);
+  };
+
+  const loadOlder = async () => {
+    if (!roomId || loadingOlder || !hasMore || messages.length === 0) return;
+    setLoadingOlder(true);
+    const oldest = messages[0];
+    const older = await fetchOlderRoomMessages(roomId, oldest.createdAt);
+    if (older.length === 0) {
+      setHasMore(false);
+    } else {
+      setMessages(prev => [...older, ...prev]);
+    }
+    setLoadingOlder(false);
   };
 
   useEffect(() => {
@@ -162,6 +177,10 @@ export default function RoomScreen({ navigation, route }: Props) {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={p.muted} />
           }
+          onScroll={(e) => {
+            if (e.nativeEvent.contentOffset.y <= 0) loadOlder();
+          }}
+          scrollEventThrottle={400}
         >
           {roomId === null ? (
             <>
@@ -174,23 +193,32 @@ export default function RoomScreen({ navigation, route }: Props) {
               {lang === 'en' ? 'be the first to whisper here.' : '成為第一個在這裡說話的人。'}
             </Text>
           ) : (
-            messages.map((msg, i) => (
-              <FadeInUp key={msg.id} distance={10} delay={Math.min(i * 30, 180)}>
-                <TouchableOpacity onPress={() => setInviting({ senderId: msg.senderId, seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 })} activeOpacity={0.8}>
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <Identity kind={identityKind === 'character' ? 'sigil' : identityKind} seed={msg.senderSeed} size={32} palette={p} lang={lang} trust={0.15} />
-                    <View style={{ flex: 1 }}>
-                      <View style={[styles.bubble, { backgroundColor: p.surface, borderColor: p.line }]}>
-                        <Text style={[styles.bubbleText, { color: p.ink }]}>{msg.content}</Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 6 }}>
-                        <ColorAdjLabel seed={msg.senderSeed} lang={lang} palette={p} />
+            <>
+              {loadingOlder && (
+                <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: p.muted }}>
+                    {lang === 'en' ? 'loading older messages…' : '載入更早的訊息⋯'}
+                  </Text>
+                </View>
+              )}
+              {messages.map((msg, i) => (
+                <FadeInUp key={msg.id} distance={10} delay={Math.min(i * 30, 180)}>
+                  <TouchableOpacity onPress={() => setInviting({ senderId: msg.senderId, seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 })} activeOpacity={0.8}>
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      <Identity kind={identityKind === 'character' ? 'sigil' : identityKind} seed={msg.senderSeed} size={32} palette={p} lang={lang} trust={0.15} />
+                      <View style={{ flex: 1 }}>
+                        <View style={[styles.bubble, { backgroundColor: p.surface, borderColor: p.line }]}>
+                          <Text style={[styles.bubbleText, { color: p.ink }]}>{msg.content}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 6 }}>
+                          <ColorAdjLabel seed={msg.senderSeed} lang={lang} palette={p} />
+                        </View>
                       </View>
                     </View>
-                  </View>
-                </TouchableOpacity>
-              </FadeInUp>
-            ))
+                  </TouchableOpacity>
+                </FadeInUp>
+              ))}
+            </>
           )}
           {messages.length > 0 && (
             <>

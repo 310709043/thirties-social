@@ -251,11 +251,47 @@ export interface DbRoomMessage {
 export async function fetchRoomMessages(roomId: string): Promise<DbRoomMessage[]> {
   const q = query(
     collection(db, 'rooms', roomId, 'messages'),
-    orderBy('createdAt', 'asc'),
-    limit(50),
+    orderBy('createdAt', 'desc'),
+    limit(30),
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage);
+  return snap.docs
+    .map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage)
+    .reverse();
+}
+
+export async function fetchOlderRoomMessages(
+  roomId: string,
+  beforeTimestamp: any,
+): Promise<DbRoomMessage[]> {
+  const q = query(
+    collection(db, 'rooms', roomId, 'messages'),
+    orderBy('createdAt', 'desc'),
+    limit(30),
+  );
+  const snap = await getDocs(q);
+  const older = snap.docs
+    .map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage)
+    .filter(m => {
+      const t = m.createdAt?.toDate?.()?.getTime?.();
+      const before = beforeTimestamp?.toDate?.()?.getTime?.();
+      return t && before && t < before;
+    });
+  return older.reverse();
+}
+
+export function subscribeToRoomMessages(
+  roomId: string,
+  onMessage: (msgs: DbRoomMessage[]) => void,
+): () => void {
+  const q = query(
+    collection(db, 'rooms', roomId, 'messages'),
+    orderBy('createdAt', 'asc'),
+    limit(100),
+  );
+  return onSnapshot(q, snap => {
+    onMessage(snap.docs.map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage));
+  });
 }
 
 export async function sendRoomMessage(params: {
