@@ -6,7 +6,9 @@ import { initStore, useAppStore } from './src/hooks/useAppStore';
 import { initIAP, endIAP } from './src/lib/iap';
 import { registerForPushNotifications, addNotificationListener } from './src/lib/notifications';
 import { analytics } from './src/lib/analytics';
+import { navigationRef, resetAndNavigate } from './src/lib/navigationRef';
 import Navigation from './src/navigation';
+import LoadingScreen from './src/components/LoadingScreen';
 import { WickGlyph, Logo } from './src/components/ui';
 import { LOFT_PALETTE } from './src/lib/theme';
 import { ToastProvider } from './src/components/ui/Toast';
@@ -16,6 +18,7 @@ SplashScreen.preventAutoHideAsync();
 
 export default function App() {
   const [storeReady, setStoreReady] = useState(false);
+  const [showLoading, setShowLoading] = useState(true);
 
   const [fontsLoaded] = useFonts({
     'NotoSerifTC-Light':
@@ -48,10 +51,9 @@ export default function App() {
     const removeListeners = addNotificationListener(
       (notification) => {},
       (response) => {
-        // Handle notification tap — navigate to relevant screen
         const data = response.notification.request.content.data;
         if (data?.screen) {
-          // Navigation will handle this via deep linking
+          resetAndNavigate(data.screen, data);
         }
       },
     );
@@ -69,6 +71,14 @@ export default function App() {
   }, [fontsLoaded, storeReady]);
 
   if (!fontsLoaded || !storeReady) return null;
+
+  if (showLoading) {
+    return (
+      <ErrorBoundary>
+        <LoadingScreen onDone={() => setShowLoading(false)} />
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>
