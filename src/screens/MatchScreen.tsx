@@ -9,6 +9,7 @@ import { VaporBackground, GlassCard, SoftButton, FadeInUp } from '../components/
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
+import { trackPerson } from '../hooks/useAppStore';
 import { leaveMatchQueue } from '../lib/db';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Match'>;
@@ -79,6 +80,7 @@ export default function MatchScreen({ navigation, route }: Props) {
               <Animated.View style={{ transform: [{ scale: acceptPulse }] }}>
                 <SoftButton p={p} variant="primary" size="lg" full
                   onPress={async () => {
+                    await trackPerson();
                     await leaveMatchQueue();
                     navigation.replace('Chat', { otherSeed, conversationId });
                   }}>

@@ -11,7 +11,7 @@ import { useAppStore } from '../hooks/useAppStore';
 type Props = NativeStackScreenProps<RootStackParamList, 'Close'>;
 
 export default function CloseScreen({ navigation, route }: Props) {
-  const { direction, lang, conversationsToday, peopleTodayCount } = useAppStore();
+  const { direction, lang, conversationsToday, peopleTodayCount, wicks, vigil } = useAppStore();
   const convCount = (route.params as any)?.conversationsCount ?? conversationsToday;
   const peopleCount = (route.params as any)?.peopleCount ?? peopleTodayCount;
   const p = DIRECTIONS[direction];
@@ -88,9 +88,9 @@ export default function CloseScreen({ navigation, route }: Props) {
                 </View>
                 <View style={[styles.statDivider, { backgroundColor: p.line }]} />
                 <View style={styles.statCell}>
-                  <Text style={[styles.statNum, { color: p.ink }]}>0</Text>
+                  <Text style={[styles.statNum, { color: p.ink }]}>{vigil ? '+5' : '+2'}</Text>
                   <Text style={[styles.statLabel, { color: p.muted }]}>
-                    {lang === 'en' ? 'stored' : '儲存'}
+                    {lang === 'en' ? 'wicks earned' : '獲得燭芯'}
                   </Text>
                 </View>
               </View>

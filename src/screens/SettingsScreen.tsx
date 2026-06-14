@@ -118,8 +118,8 @@ export default function SettingsScreen({ navigation }: Props) {
                 <SettingRow p={p}
                   title={lang === 'en' ? 'Daily quiet limit' : '每日對話上限'}
                   alt={lang === 'en' ? '每日對話上限' : 'Daily quiet limit'}
-                  sub={lang === 'en' ? '3 conversations per cycle.' : '每個 24 小時最多 3 段對話。'}
-                  control={<Text style={{ fontFamily: 'Inter-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>{vigil ? '∞' : '3'}</Text>}
+                  sub={lang === 'en' ? '5 conversations per cycle.' : '每個 24 小時最多 5 段對話。'}
+                  control={<Text style={{ fontFamily: 'Inter-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>{vigil ? '∞' : '5'}</Text>}
                 />
               </GlassCard>
             </View>

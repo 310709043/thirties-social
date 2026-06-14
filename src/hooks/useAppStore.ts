@@ -261,13 +261,27 @@ export async function setIdentityKind(kind: IdentityKind) {
   notify();
 }
 
-export async function trackConversation() {
+let _countedConversations: Set<string> = new Set();
+
+export async function trackConversation(conversationId?: string) {
   await _resetDailyCountersIfNeeded();
+  // Prevent duplicate counting for same conversation
+  if (conversationId && _countedConversations.has(conversationId)) return;
+  if (conversationId) _countedConversations.add(conversationId);
+
   const convs = _state.conversationsToday + 1;
+  const today = new Date().toISOString().slice(0, 10);
+  _state = { ..._state, conversationsToday: convs };
+  await AsyncStorage.setItem('conversationsToday', String(convs));
+  await AsyncStorage.setItem('countersDate', today);
+  notify();
+}
+
+export async function trackPerson() {
+  await _resetDailyCountersIfNeeded();
   const people = _state.peopleTodayCount + 1;
   const today = new Date().toISOString().slice(0, 10);
-  _state = { ..._state, conversationsToday: convs, peopleTodayCount: people };
-  await AsyncStorage.setItem('conversationsToday', String(convs));
+  _state = { ..._state, peopleTodayCount: people };
   await AsyncStorage.setItem('peopleTodayCount', String(people));
   await AsyncStorage.setItem('countersDate', today);
   notify();
@@ -275,7 +289,7 @@ export async function trackConversation() {
 
 export function canStartConversation(): boolean {
   if (_state.vigil) return true;
-  return _state.conversationsToday < 3;
+  return _state.conversationsToday < 5;
 }
 
 const FREE_IDENTITY_KINDS: IdentityKind[] = ['sigil', 'color+adj', 'text'];

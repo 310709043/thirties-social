@@ -40,7 +40,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (!conversationId) return;
-    trackConversation();
+    trackConversation(conversationId);
     return subscribeToConversationMessages(conversationId, setRealMessages);
   }, [conversationId]);
 

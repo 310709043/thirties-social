@@ -127,7 +127,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   upgradeTitle:     { zh: '兩種陪你的方式',   en: 'Two ways to stay' },
   upgradeBlurb:     { zh: '不收廣告。不賣資料。不用會員等級換取曝光。', en: 'No ads. No data sold. No tiers buy you visibility.' },
   tierFree:         { zh: '一根蠟燭',         en: 'One Candle' },
-  tierFreeSub:      { zh: '每日 3 段對話 · 夜閣 1 次 · 每日 2 芯', en: '3 talks/day · Loft 1x · 2 wicks/day' },
+  tierFreeSub:      { zh: '每日 5 段對話 · 夜閣 1 次 · 每日 2 芯', en: '5 talks/day · Loft 1x · 2 wicks/day' },
   tierVigil:        { zh: '守夜會員',         en: 'Vigil' },
   tierVigilPrice:   { zh: 'NT$ 170 / 月',     en: 'NT$ 170 / mo' },
   tierVigilBlurb:   { zh: '無限對話 · 夜閣無限 · 每日 5 芯 · 紗罩脈搏免費', en: 'Unlimited talks · Loft unlimited · 5 wicks/day · veils & pulses free' },
