@@ -24,7 +24,7 @@ export default function RoomScreen({ navigation, route }: Props) {
   const { roomKey } = route.params;
   const { seed, direction, lang, identityKind, deviceId } = useAppStore();
   const p = DIRECTIONS[direction];
-  const [inviting, setInviting] = useState<{seed: string; zh: string; en: string; age: number} | null>(null);
+  const [inviting, setInviting] = useState<{senderId: string; seed: string; zh: string; en: string; age: number} | null>(null);
   const [inviteSent, setInviteSent] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [roomTopic, setRoomTopic] = useState('');
@@ -70,7 +70,7 @@ export default function RoomScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (inviteSent) {
       const id = setTimeout(async () => {
-        const conv = await createConversation({ userBId: 'anon_' + inviting!.seed, roomId: roomId ?? undefined });
+        const conv = await createConversation({ userBId: inviting!.senderId, roomId: roomId ?? undefined });
         navigation.push('Chat', { otherSeed: inviting!.seed, conversationId: conv?.id });
       }, 2400);
       return () => clearTimeout(id);
@@ -176,7 +176,7 @@ export default function RoomScreen({ navigation, route }: Props) {
           ) : (
             messages.map((msg, i) => (
               <FadeInUp key={msg.id} distance={10} delay={Math.min(i * 30, 180)}>
-                <TouchableOpacity onPress={() => setInviting({ seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 })} activeOpacity={0.8}>
+                <TouchableOpacity onPress={() => setInviting({ senderId: msg.senderId, seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 })} activeOpacity={0.8}>
                   <View style={{ flexDirection: 'row', gap: 12 }}>
                     <Identity kind={identityKind === 'character' ? 'sigil' : identityKind} seed={msg.senderSeed} size={32} palette={p} lang={lang} trust={0.15} />
                     <View style={{ flex: 1 }}>

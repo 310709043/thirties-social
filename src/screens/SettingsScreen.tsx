@@ -65,13 +65,11 @@ export default function SettingsScreen({ navigation }: Props) {
                 <SettingRow p={p}
                   title={t('setVisibility', lang)}
                   alt={tAlt('setVisibility', lang)}
-                  sub={t('setVisibilitySub', lang)}
+                  sub={lang === 'en' ? 'Fixed — others see a blurred silhouette' : '固定 — 對方只看到模糊輪廓'}
                   control={
-                    <View style={{ flexDirection: 'row', gap: 4 }}>
-                      {[1, 2, 3, 4].map(i => (
-                        <View key={i} style={{ width: 6, height: 18, borderRadius: 3, backgroundColor: i <= 2 ? p.accent : p.line }} />
-                      ))}
-                    </View>
+                    <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: p.muted }}>
+                      {lang === 'en' ? 'Level 2' : '第二層'}
+                    </Text>
                   }
                 />
                 <RowDivider p={p} />
@@ -79,7 +77,11 @@ export default function SettingsScreen({ navigation }: Props) {
                   title={t('setExpiry', lang)}
                   alt={tAlt('setExpiry', lang)}
                   sub={t('setExpirySub', lang)}
-                  control={<Toggle p={p} on={true} />}
+                  control={
+                    <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: p.muted }}>
+                      {lang === 'en' ? 'Always on' : '永遠開啟'}
+                    </Text>
+                  }
                 />
                 <RowDivider p={p} />
                 <SettingRow p={p}

@@ -172,15 +172,6 @@ export default function ChatScreen({ navigation, route }: Props) {
               </FadeInUp>
             ))}
 
-            {/* Typing indicator */}
-            <View style={styles.typingRow}>
-              <Identity kind={identityKind} seed={otherSeed} size={20} palette={p} lang={lang} trust={0.25} />
-              <View style={[styles.typingBubble, { backgroundColor: p.surface, borderColor: p.line }]}>
-                {[0, 1, 2].map(i => (
-                  <View key={i} style={[styles.typingDot, { backgroundColor: p.muted }]} />
-                ))}
-              </View>
-            </View>
           </ScrollView>
           </View>
 
