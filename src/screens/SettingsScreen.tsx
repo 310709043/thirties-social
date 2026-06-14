@@ -12,6 +12,7 @@ import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setLang, setAutoFilter, setSlowMode } from '../hooks/useAppStore';
 import { deleteAccount } from '../lib/db';
+import { logout } from '../lib/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
@@ -198,6 +199,29 @@ export default function SettingsScreen({ navigation }: Props) {
                 />
               </GlassCard>
             </View>
+          </FadeInUp>
+
+          {/* Logout */}
+          <FadeInUp delay={450} distance={10}>
+            <TouchableOpacity
+              onPress={() => Alert.alert(
+                lang === 'en' ? 'Sign out' : '登出',
+                lang === 'en' ? 'Are you sure you want to sign out?' : '確定要登出嗎？',
+                [
+                  { text: lang === 'en' ? 'Cancel' : '取消', style: 'cancel' },
+                  { text: lang === 'en' ? 'Sign out' : '登出', style: 'destructive', onPress: async () => {
+                    await logout();
+                    await AsyncStorage.clear();
+                    navigation.reset({ index: 0, routes: [{ name: 'Auth' }] });
+                  }},
+                ]
+              )}
+              style={{ alignItems: 'center', paddingVertical: 14 }}
+            >
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.accent }}>
+                {lang === 'en' ? 'Sign out' : '登出'}
+              </Text>
+            </TouchableOpacity>
           </FadeInUp>
 
           <FadeInUp delay={500} distance={8}>

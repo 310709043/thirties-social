@@ -7,6 +7,7 @@ import { initIAP, endIAP } from './src/lib/iap';
 import { registerForPushNotifications, addNotificationListener } from './src/lib/notifications';
 import { analytics } from './src/lib/analytics';
 import { navigationRef, resetAndNavigate } from './src/lib/navigationRef';
+import { onAuthChange } from './src/lib/auth';
 import Navigation from './src/navigation';
 import LoadingScreen from './src/components/LoadingScreen';
 import { WickGlyph, Logo } from './src/components/ui';
@@ -19,6 +20,8 @@ SplashScreen.preventAutoHideAsync();
 export default function App() {
   const [storeReady, setStoreReady] = useState(false);
   const [showLoading, setShowLoading] = useState(true);
+  const [authUser, setAuthUser] = useState<any>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'NotoSerifTC-Light':
@@ -47,6 +50,12 @@ export default function App() {
     });
     initIAP();
 
+    // Listen for auth state changes
+    const unsubscribeAuth = onAuthChange(user => {
+      setAuthUser(user);
+      setAuthChecked(true);
+    });
+
     // Handle notification taps
     const removeListeners = addNotificationListener(
       (notification) => {},
@@ -61,6 +70,7 @@ export default function App() {
     return () => {
       endIAP();
       removeListeners();
+      unsubscribeAuth();
     };
   }, []);
 
@@ -83,15 +93,20 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
-        <AppGate />
+        <AppGate authUser={authUser} authChecked={authChecked} />
       </ToastProvider>
     </ErrorBoundary>
   );
 }
 
-function AppGate() {
+function AppGate({ authUser, authChecked }: { authUser: any; authChecked: boolean }) {
   const store = useAppStore();
   const L = LOFT_PALETTE;
+
+  // Show auth screen if not logged in
+  if (authChecked && !authUser) {
+    return <Navigation initialRoute="Auth" />;
+  }
 
   if (store.isBanned) {
     const expiryDate = store.banExpiresAt
