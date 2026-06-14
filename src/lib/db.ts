@@ -548,3 +548,40 @@ export async function endConversation(conversationId: string, reason: string): P
     await updateDoc(doc(db, 'conversations', conversationId), { endedAt: serverTimestamp(), endedReason: reason });
   } catch {}
 }
+
+// ── Account Deletion ─────────────────────────────────────
+export async function deleteAccount(): Promise<{ ok: boolean; error?: string }> {
+  const uid = getCurrentUid();
+  if (!uid) return { ok: false, error: 'not_authenticated' };
+
+  try {
+    // 1. Delete user document
+    await deleteDoc(doc(db, 'users', uid));
+
+    // 2. Delete from match queue
+    try { await deleteDoc(doc(db, 'matchQueue', uid)); } catch {}
+
+    // 3. Delete wicks transactions
+    const txQ = query(collection(db, 'wicksTransactions'), where('userId', '==', uid));
+    const txSnap = await getDocs(txQ);
+    await Promise.all(txSnap.docs.map(d => deleteDoc(d.ref)));
+
+    // 4. Delete loft sessions
+    const loftQ = query(collection(db, 'loftSessions'), where('userId', '==', uid));
+    const loftSnap = await getDocs(loftQ);
+    await Promise.all(loftSnap.docs.map(d => deleteDoc(d.ref)));
+
+    // 5. Delete reports filed by this user
+    const reportQ = query(collection(db, 'reports'), where('reporterId', '==', uid));
+    const reportSnap = await getDocs(reportQ);
+    await Promise.all(reportSnap.docs.map(d => deleteDoc(d.ref)));
+
+    // 6. Sign out Firebase anonymous auth
+    await auth.signOut();
+
+    return { ok: true };
+  } catch (e: any) {
+    console.warn('[db] deleteAccount failed:', e);
+    return { ok: false, error: e?.message ?? 'delete_failed' };
+  }
+}

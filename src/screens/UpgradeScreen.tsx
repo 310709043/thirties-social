@@ -12,6 +12,7 @@ import { VaporBackground, GlassCard, Cap, WickGlyph, AnimatedNumber, FadeInUp, P
 import { useAppStore, setVigil } from '../hooks/useAppStore';
 import { addWicks } from '../lib/db';
 import { hapticSuccess } from '../lib/haptics';
+import { buyWickPack, buyVigilSubscription, restorePurchases, IAP_PRODUCT_IDS } from '../lib/iap';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Upgrade'>;
 
@@ -36,16 +37,42 @@ export default function UpgradeScreen({ navigation }: Props) {
   }, []);
 
   const handleBuyPack = async (amount: number) => {
-    const result = await addWicks(amount, 'purchase', undefined, `購買 ${amount} 燭芯`);
+    const productMap: Record<number, string> = {
+      10: IAP_PRODUCT_IDS.wick10,
+      30: IAP_PRODUCT_IDS.wick30,
+      100: IAP_PRODUCT_IDS.wick100,
+    };
+    const productId = productMap[amount];
+    if (!productId) return;
+
+    const result = await buyWickPack(productId);
     if (result.ok) {
       hapticSuccess();
+    } else if (result.error === 'iap_not_available') {
+      // Dev fallback — direct grant (remove before production)
+      const fallback = await addWicks(amount, 'dev_grant', undefined, `DEV ${amount} 燭芯`);
+      if (fallback.ok) hapticSuccess();
     }
   };
 
-  const handleVigil = () => {
-    setVigil(true);
-    hapticSuccess();
-    navigation.goBack();
+  const handleVigil = async () => {
+    const result = await buyVigilSubscription();
+    if (result.ok) {
+      hapticSuccess();
+      navigation.goBack();
+    } else if (result.error === 'iap_not_available') {
+      // Dev fallback
+      setVigil(true);
+      hapticSuccess();
+      navigation.goBack();
+    }
+  };
+
+  const handleRestore = async () => {
+    const result = await restorePurchases();
+    if (result.ok && result.restoredVigil) {
+      hapticSuccess();
+    }
   };
 
   return (
@@ -187,6 +214,15 @@ export default function UpgradeScreen({ navigation }: Props) {
                   : '燭芯用於：揭開照片紗罩（每層 2 芯）、進入夜閣（每晚 5 芯）、傳送脈搏訊息（每則 1 芯）、送出蠟燭（5 芯）。對方永遠需要先同意。'}
               </Text>
             </View>
+          </FadeInUp>
+
+          {/* Restore purchases */}
+          <FadeInUp delay={780} distance={8}>
+            <TouchableOpacity onPress={handleRestore} style={{ alignItems: 'center', paddingTop: 16 }}>
+              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: p.muted }}>
+                {lang === 'en' ? 'Restore purchases' : '恢復購買紀錄'}
+              </Text>
+            </TouchableOpacity>
           </FadeInUp>
         </ScrollView>
       </SafeAreaView>

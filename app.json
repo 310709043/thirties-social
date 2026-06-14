@@ -19,6 +19,9 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "用於選擇照片作為紗罩頭像",
         "NSCameraUsageDescription": "用於拍攝照片作為紗罩頭像"
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": []
       }
     },
     "android": {
@@ -33,6 +36,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "privacyPolicyUrl": "https://thirties-landing.vercel.app/privacy",
+      "supportEmail": "privacy@lowbatterytown.com",
+      "ageRating": "17+",
+      "category": "SOCIAL_NETWORKING"
+    },
+    "plugins": [
+      "react-native-iap"
+    ]
   }
 }

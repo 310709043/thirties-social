@@ -11,6 +11,8 @@ import { VaporBackground, GlassCard, Cap, Toggle, Logo, FadeInUp } from '../comp
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setLang } from '../hooks/useAppStore';
+import { deleteAccount } from '../lib/db';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -167,7 +169,15 @@ export default function SettingsScreen({ navigation }: Props) {
                         : '此操作無法撤銷。您的所有資料將被永久刪除。',
                       [
                         { text: lang === 'en' ? 'Cancel' : '取消', style: 'cancel' },
-                        { text: lang === 'en' ? 'Delete' : '刪除', style: 'destructive', onPress: () => {} },
+                        { text: lang === 'en' ? 'Delete' : '刪除', style: 'destructive', onPress: async () => {
+                          const result = await deleteAccount();
+                          if (result.ok) {
+                            await AsyncStorage.clear();
+                            navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
+                          } else {
+                            Alert.alert('Error', result.error ?? 'Unknown error');
+                          }
+                        }},
                       ]
                     )}>
                       <Text style={{ color: p.danger, fontSize: 18 }}>›</Text>

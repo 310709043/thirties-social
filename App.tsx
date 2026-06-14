@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { initStore, useAppStore } from './src/hooks/useAppStore';
+import { initIAP, endIAP } from './src/lib/iap';
 import Navigation from './src/navigation';
 import { WickGlyph, Logo } from './src/components/ui';
 import { LOFT_PALETTE } from './src/lib/theme';
@@ -35,6 +36,8 @@ export default function App() {
 
   useEffect(() => {
     initStore().then(() => setStoreReady(true));
+    initIAP();
+    return () => { endIAP(); };
   }, []);
 
   useEffect(() => {
