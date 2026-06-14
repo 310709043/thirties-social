@@ -10,7 +10,7 @@ import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
-import { enterLoft, fetchTonightLoftSessions, DbLoftSession } from '../lib/db';
+import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
 
@@ -62,7 +62,10 @@ export default function LoftScreen({ navigation }: Props) {
 
   if (inside) {
     return <LoftInside lang={lang} wicks={wicks} onBack={() => setInside(false)}
-      onEnter={(seed: string) => navigation.push('LoftChat', { otherSeed: seed })} />;
+      onEnter={(otherSeed: string, loftConversationId: string, otherName: string, enteredAt?: any) => {
+        const sessionEnteredAt = enteredAt?.toDate?.()?.getTime?.() ?? Date.now();
+        navigation.push('LoftChat', { otherSeed, loftConversationId, otherName, sessionEnteredAt });
+      }} />;
   }
 
   return (
@@ -202,8 +205,11 @@ export default function LoftScreen({ navigation }: Props) {
 }
 
 function LoftInside({ lang, wicks, onBack, onEnter }: any) {
+  const { seed, identityKind } = useAppStore();
+  const myName = getColorAdj(seed, lang).label;
   const [sessions, setSessions] = React.useState<DbLoftSession[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [connecting, setConnecting] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     fetchTonightLoftSessions().then(s => {
@@ -212,7 +218,24 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
     });
   }, []);
 
+  const handlePickPerson = async (session: DbLoftSession) => {
+    if (connecting) return;
+    setConnecting(session.userId);
+    const conv = await createLoftConversation({
+      otherUserId: session.userId,
+      mySeed: seed,
+      otherSeed: session.userId,
+      myName,
+      otherName: session.nightName,
+    });
+    setConnecting(null);
+    if (conv) {
+      onEnter(session.userId, conv.id, session.nightName, session.enteredAt);
+    }
+  };
+
   const tonight = sessions.map(s => ({
+    session: s,
     seed: s.userId,
     zh: `「${s.nightName}」`,
     en: `"${s.nightName}"`,
@@ -264,7 +287,8 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
               </Text>
             ) : (
               tonight.map(m => (
-                <TouchableOpacity key={m.seed} onPress={() => onEnter(m.seed)} activeOpacity={0.85}
+                <TouchableOpacity key={m.seed} onPress={() => handlePickPerson(m.session)} activeOpacity={0.85}
+                  disabled={connecting === m.seed}
                   style={[styles.loftCard, { backgroundColor: 'rgba(245,226,196,0.04)', borderColor: 'rgba(232,165,87,0.18)' }]}>
                   {/* Veiled portrait */}
                   <View style={{ width: 60, height: 80, borderRadius: 10, backgroundColor: '#3a2028', overflow: 'hidden', flexShrink: 0 }}>

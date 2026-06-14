@@ -10,8 +10,10 @@ import { useAppStore } from '../hooks/useAppStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Close'>;
 
-export default function CloseScreen({ navigation }: Props) {
-  const { direction, lang } = useAppStore();
+export default function CloseScreen({ navigation, route }: Props) {
+  const { direction, lang, conversationsToday, peopleTodayCount } = useAppStore();
+  const convCount = (route.params as any)?.conversationsCount ?? conversationsToday;
+  const peopleCount = (route.params as any)?.peopleCount ?? peopleTodayCount;
   const p = DIRECTIONS[direction];
   const [timeStr, setTimeStr] = useState('');
   const orbPulse = useRef(new Animated.Value(0.5)).current;
@@ -72,14 +74,14 @@ export default function CloseScreen({ navigation }: Props) {
             <FadeInUp delay={450} distance={12}>
               <View style={[styles.statsRow, { borderColor: p.line }]}>
                 <View style={styles.statCell}>
-                  <Text style={[styles.statNum, { color: p.ink }]}>1</Text>
+                  <Text style={[styles.statNum, { color: p.ink }]}>{peopleCount}</Text>
                   <Text style={[styles.statLabel, { color: p.muted }]}>
                     {lang === 'en' ? 'person spoken with' : '說話的人'}
                   </Text>
                 </View>
                 <View style={[styles.statDivider, { backgroundColor: p.line }]} />
                 <View style={styles.statCell}>
-                  <Text style={[styles.statNum, { color: p.ink }]}>1</Text>
+                  <Text style={[styles.statNum, { color: p.ink }]}>{convCount}</Text>
                   <Text style={[styles.statLabel, { color: p.muted }]}>
                     {lang === 'en' ? 'conversation' : '對話'}
                   </Text>

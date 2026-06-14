@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -10,17 +10,15 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, Cap, Toggle, Logo, FadeInUp } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, setLang } from '../hooks/useAppStore';
+import { useAppStore, setLang, setAutoFilter, setSlowMode } from '../hooks/useAppStore';
 import { deleteAccount } from '../lib/db';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
-  const { direction, lang, identityKind, seed } = useAppStore();
+  const { direction, lang, identityKind, seed, autoFilter, slowMode, vigil } = useAppStore();
   const p = DIRECTIONS[direction];
-  const [autoFilter, setAutoFilter] = useState(true);
-  const [slowMode, setSlowMode] = useState(false);
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
@@ -104,6 +102,7 @@ export default function SettingsScreen({ navigation }: Props) {
                   alt={lang === 'en' ? '自動過濾辱罵言詞' : 'Auto-filter abusive language'}
                   sub={lang === 'en' ? 'On-device. We never see your conversation.' : '在裝置上完成。我們不會看到你的對話。'}
                   control={<Toggle p={p} on={autoFilter} onToggle={() => setAutoFilter(!autoFilter)} />}
+
                 />
                 <RowDivider p={p} />
                 <SettingRow p={p}
@@ -111,13 +110,14 @@ export default function SettingsScreen({ navigation }: Props) {
                   alt={lang === 'en' ? '夜間 22 點後緩衝模式' : 'Slow mode after 22:00'}
                   sub={lang === 'en' ? 'A pause before each message you send.' : '你按送出之前，給一個暫停。'}
                   control={<Toggle p={p} on={slowMode} onToggle={() => setSlowMode(!slowMode)} />}
+
                 />
                 <RowDivider p={p} />
                 <SettingRow p={p}
                   title={lang === 'en' ? 'Daily quiet limit' : '每日對話上限'}
                   alt={lang === 'en' ? '每日對話上限' : 'Daily quiet limit'}
                   sub={lang === 'en' ? '3 conversations per cycle.' : '每個 24 小時最多 3 段對話。'}
-                  control={<Text style={{ fontFamily: 'Inter-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>3</Text>}
+                  control={<Text style={{ fontFamily: 'Inter-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>{vigil ? '∞' : '3'}</Text>}
                 />
               </GlassCard>
             </View>
@@ -137,6 +137,16 @@ export default function SettingsScreen({ navigation }: Props) {
                       <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>
                         {lang === 'en' ? 'English → 中文' : '中文 → English'}
                       </Text>
+                    </TouchableOpacity>
+                  }
+                />
+                <RowDivider p={p} />
+                <SettingRow p={p}
+                  title={lang === 'en' ? 'Privacy Policy' : '\u96B1\u79C1\u6B0A\u653F\u7B56'}
+                  alt={lang === 'en' ? '\u96B1\u79C1\u6B0A\u653F\u7B56' : 'Privacy Policy'}
+                  control={
+                    <TouchableOpacity onPress={() => Linking.openURL('https://thirties-landing.vercel.app/privacy')}>
+                      <Text style={{ color: p.muted, fontSize: 18 }}>\u203A</Text>
                     </TouchableOpacity>
                   }
                 />

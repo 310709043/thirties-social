@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView,
+  View, Text, TouchableOpacity, ScrollView, Alert,
   TextInput, StyleSheet, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ import { useAppStore } from '../hooks/useAppStore';
 import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoomMessage } from '../lib/db';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
+import { filterMessage } from '../lib/filter';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Room'>;
 
@@ -78,6 +79,14 @@ export default function RoomScreen({ navigation, route }: Props) {
 
   const handleSend = async () => {
     if (!inputText.trim() || !roomId) return;
+    const check = filterMessage(inputText.trim());
+    if (check.blocked) {
+      Alert.alert(
+        lang === 'en' ? 'Message blocked' : '\u8A0A\u606F\u5DF2\u88AB\u904E\u6FFE',
+        lang === 'en' ? 'This message contains content that may be harmful.' : '\u9019\u5247\u8A0A\u606F\u5305\u542B\u53EF\u80FD\u50B7\u5BB3\u4ED6\u4EBA\u7684\u5167\u5BB9\u3002',
+      );
+      return;
+    }
     setSending(true);
     await sendRoomMessage({ roomId, content: inputText.trim(), senderSeed: identitySeed });
     setInputText('');
@@ -106,7 +115,7 @@ export default function RoomScreen({ navigation, route }: Props) {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => navigation.push('Safety')}
+              onPress={() => navigation.push('Safety', {})}
               style={[styles.labelBtn, { backgroundColor: p.surface, borderColor: p.line }]}
             >
               <Text style={[styles.labelBtnText, { color: p.muted }]}>

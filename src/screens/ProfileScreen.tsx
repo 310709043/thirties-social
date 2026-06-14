@@ -9,8 +9,8 @@ import { DIRECTIONS } from '../lib/theme';
 import { VaporBackground, GlassCard, Cap, WickGlyph, PhotoVeil, FadeInUp } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore } from '../hooks/useAppStore';
-import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN } from '../lib/identity';
+import { useAppStore, setIdentityKind, getAvailableIdentityKinds } from '../hooks/useAppStore';
+import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, IdentityKind } from '../lib/identity';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -119,8 +119,20 @@ export default function ProfileScreen({ navigation }: Props) {
           </GlassCard>
           </FadeInUp>
 
+          {/* Identity kind selector */}
+          <FadeInUp delay={120} distance={10}>
+            <IdentityKindPicker
+              current={identityKind}
+              vigil={vigil}
+              lang={lang}
+              p={p}
+              onSelect={setIdentityKind}
+              onUpgrade={() => navigation.push('Upgrade')}
+            />
+          </FadeInUp>
+
           {/* Night name composer (Loft) */}
-          <FadeInUp delay={160} distance={10}>
+          <FadeInUp delay={200} distance={10}>
             <View style={[styles.nightNameBox, { backgroundColor: 'rgba(45,22,28,0.9)', borderColor: 'rgba(232,165,87,0.3)' }]}>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: '#f5e2c4' }}>
@@ -251,6 +263,64 @@ export default function ProfileScreen({ navigation }: Props) {
         </ScrollView>
       </SafeAreaView>
     </VaporBackground>
+  );
+}
+
+const KIND_LABELS: Record<IdentityKind, { zh: string; en: string }> = {
+  sigil:       { zh: '符印',   en: 'Sigil' },
+  silhouette:  { zh: '剪影',   en: 'Silhouette' },
+  'color+adj': { zh: '色彩名', en: 'Color Name' },
+  character:   { zh: '文字',   en: 'Character' },
+  text:        { zh: '代號',   en: 'Text Code' },
+};
+
+const ALL_KINDS: IdentityKind[] = ['sigil', 'silhouette', 'color+adj', 'character', 'text'];
+
+function IdentityKindPicker({ current, vigil, lang, p, onSelect, onUpgrade }: {
+  current: IdentityKind; vigil: boolean; lang: string; p: any;
+  onSelect: (k: IdentityKind) => void; onUpgrade: () => void;
+}) {
+  const available = getAvailableIdentityKinds();
+  return (
+    <View style={{ marginTop: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 4, paddingBottom: 8 }}>
+        <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 3, textTransform: 'uppercase', color: p.muted, fontWeight: '500' }}>
+          {lang === 'en' ? 'IDENTITY STYLE' : '身份樣式'}
+        </Text>
+        <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, opacity: 0.6 }}>
+          {lang === 'en' ? '身份樣式' : 'Identity Style'}
+        </Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {ALL_KINDS.map(kind => {
+            const unlocked = available.includes(kind);
+            const selected = current === kind;
+            const label = KIND_LABELS[kind];
+            return (
+              <TouchableOpacity
+                key={kind}
+                onPress={() => unlocked ? onSelect(kind) : onUpgrade()}
+                style={{
+                  paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999,
+                  backgroundColor: selected ? p.accent : p.surface,
+                  borderWidth: 0.5, borderColor: selected ? p.accent : p.line,
+                  opacity: unlocked ? 1 : 0.5,
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                }}>
+                {!unlocked && <Text style={{ fontSize: 10 }}>🔒</Text>}
+                <Text style={{
+                  fontFamily: 'NotoSerifTC-Regular', fontSize: 12,
+                  color: selected ? (p.dark ? '#1f1014' : '#fff') : p.ink,
+                }}>
+                  {lang === 'en' ? label.en : label.zh}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 

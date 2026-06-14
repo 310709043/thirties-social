@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, TextInput, ScrollView,
+  View, Text, TouchableOpacity, TextInput, ScrollView, Alert,
   StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,49 +11,110 @@ import { LOFT_PALETTE } from '../lib/theme';
 import { t } from '../lib/copy';
 import { WickGlyph, PhotoVeil, AnimatedNumber } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
-import { spendWicks } from '../lib/db';
+import {
+  spendWicks, sendLoftMessage, subscribeToLoftMessages,
+  endLoftConversation, getCurrentUid, DbLoftMessage,
+} from '../lib/db';
 import { hapticMedium } from '../lib/haptics';
+import { filterMessage } from '../lib/filter';
+import * as ScreenCapture from 'expo-screen-capture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LoftChat'>;
 
 const L = LOFT_PALETTE;
-
-const MESSAGES = [
-  { from: 'other', zh: '你還醒著。', en: 'You\'re still awake.' },
-  { from: 'me',    zh: '今天身邊那個人，沒問我一句話。', en: 'The one beside me asked nothing today.' },
-  { from: 'other', zh: '我聽得到你的呼吸。', en: 'I can hear you breathing.' },
-  { from: 'me',    zh: '我不知道我在等什麼。', en: 'I don\'t know what I\'m waiting for.' },
-  { from: 'other', zh: '等一個人，先看你一眼。', en: 'For someone to look at you, before anything else.' },
-];
+const SESSION_DURATION = 58 * 60; // 58 minutes in seconds
 
 const PULSES = [
-  { key: 'loftPulse1', em: '♡' },
-  { key: 'loftPulse2', em: '⤳' },
-  { key: 'loftPulse3', em: '☾' },
-  { key: 'loftPulse4', em: '⊙' },
+  { key: 'loftPulse1', em: '\u2661' },
+  { key: 'loftPulse2', em: '\u2933' },
+  { key: 'loftPulse3', em: '\u263E' },
+  { key: 'loftPulse4', em: '\u2299' },
 ];
 
 export default function LoftChatScreen({ navigation, route }: Props) {
-  const { lang, wicks } = useAppStore();
-  const [remaining, setRemaining] = useState(58 * 60 + 14);
+  const { lang, wicks, seed, vigil } = useAppStore();
+  const { otherSeed, loftConversationId, otherName, sessionEnteredAt } = route.params;
+  const uid = getCurrentUid();
+  ScreenCapture.usePreventScreenCapture();
+
+  // Timer derived from actual session entry time
+  const [remaining, setRemaining] = useState(() => {
+    if (sessionEnteredAt) {
+      const elapsed = Math.floor((Date.now() - sessionEnteredAt) / 1000);
+      return Math.max(0, SESSION_DURATION - elapsed);
+    }
+    return SESSION_DURATION;
+  });
+
   const [message, setMessage] = useState('');
-  const [localMessages, setLocalMessages] = useState<{from: string; zh: string; en: string}[]>([]);
+  const [messages, setMessages] = useState<DbLoftMessage[]>([]);
   const [veilLevel, setVeilLevel] = useState(1);
   const [showVeil, setShowVeil] = useState(false);
-  const [showGift, setShowGift] = useState(false);
   const [giftSent, setGiftSent] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
 
+  // Subscribe to real-time messages
   useEffect(() => {
-    const id = setInterval(() => setRemaining(r => Math.max(0, r - 1)), 1000);
+    if (!loftConversationId) return;
+    return subscribeToLoftMessages(loftConversationId, setMessages);
+  }, [loftConversationId]);
+
+  // Countdown timer
+  useEffect(() => {
+    const id = setInterval(() => {
+      setRemaining(r => {
+        if (r <= 1) {
+          clearInterval(id);
+          (async () => {
+            if (loftConversationId) await endLoftConversation(loftConversationId);
+            navigation.goBack();
+          })();
+          return 0;
+        }
+        return r - 1;
+      });
+    }, 1000);
     return () => clearInterval(id);
   }, []);
 
   const hh = String(Math.floor(remaining / 3600)).padStart(2, '0');
   const mm = String(Math.floor((remaining % 3600) / 60)).padStart(2, '0');
 
-  const sendPulse = async (_key: string) => {
-    const result = await spendWicks(1, 'pulse');
-    if (result.ok) { hapticMedium(); }
+  // Compute open/close times from session
+  const openTime = sessionEnteredAt ? new Date(sessionEnteredAt) : new Date();
+  const closeTime = new Date(openTime.getTime() + SESSION_DURATION * 1000);
+  const fmt = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+  const sendText = async () => {
+    if (!message.trim() || !loftConversationId) return;
+    const check = filterMessage(message.trim());
+    if (check.blocked) {
+      Alert.alert(
+        lang === 'en' ? 'Message blocked' : '\u8A0A\u606F\u5DF2\u88AB\u904E\u6FFE',
+        lang === 'en' ? 'This message contains content that may be harmful.' : '\u9019\u5247\u8A0A\u606F\u5305\u542B\u53EF\u80FD\u50B7\u5BB3\u4ED6\u4EBA\u7684\u5167\u5BB9\u3002',
+      );
+      return;
+    }
+    await sendLoftMessage({ loftConversationId, content: message.trim() });
+    setMessage('');
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+  };
+
+  const sendPulse = async (emoji: string) => {
+    const result = await spendWicks(1, 'pulse', loftConversationId);
+    if (result.ok && loftConversationId) {
+      hapticMedium();
+      await sendLoftMessage({ loftConversationId, content: emoji, messageType: 'pulse' });
+    }
+  };
+
+  const sendGift = async () => {
+    const r = await spendWicks(5, 'gift', loftConversationId);
+    if (r.ok && loftConversationId) {
+      hapticMedium();
+      setGiftSent(true);
+      await sendLoftMessage({ loftConversationId, content: '🕯', messageType: 'gift' });
+    }
   };
 
   return (
@@ -65,14 +126,16 @@ export default function LoftChatScreen({ navigation, route }: Props) {
         >
           {/* TOP */}
           <View style={styles.topBar}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.topBtn}>
-              <Text style={{ color: L.muted, fontSize: 18 }}>‹</Text>
+            <TouchableOpacity onPress={async () => {
+              if (loftConversationId) await endLoftConversation(loftConversationId);
+              navigation.goBack();
+            }} style={styles.topBtn}>
+              <Text style={{ color: L.muted, fontSize: 18 }}>&#x2039;</Text>
             </TouchableOpacity>
             <View style={{ flex: 1, alignItems: 'center' }}>
-              {/* Veiled portrait in header */}
               <PhotoVeil p={L as any} liftLevel={veilLevel} size={44} lang={lang} />
               <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: 'rgba(245,226,196,0.7)', marginTop: 4 }}>
-                {lang === 'en' ? 'wine, long-bench' : '酒紅的長椅'}
+                {otherName}
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -92,15 +155,41 @@ export default function LoftChatScreen({ navigation, route }: Props) {
           </View>
 
           {/* Messages */}
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.messages}>
+          <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={styles.messages}
+            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}>
             <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, textAlign: 'center', opacity: 0.7, marginBottom: 10 }}>
-              {lang === 'en' ? 'opened at 23:47 · ends at 00:17' : '23:47 開啟 · 00:17 結束'}
+              {lang === 'en' ? `opened at ${fmt(openTime)} \u00B7 ends at ${fmt(closeTime)}` : `${fmt(openTime)} \u958B\u555F \u00B7 ${fmt(closeTime)} \u7D50\u675F`}
             </Text>
 
-            {[...MESSAGES, ...localMessages].map((m, i) => {
-              const isMe = m.from === 'me';
+            {messages.length === 0 && (
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: L.muted, textAlign: 'center', marginTop: 32, lineHeight: 24 }}>
+                {lang === 'en' ? 'Say something. The veil is between you.' : '\u8AAA\u9EDE\u4EC0\u9EBC\u3002\u7D17\u7F69\u5728\u4F60\u5011\u4E4B\u9593\u3002'}
+              </Text>
+            )}
+
+            {messages.map((m, i) => {
+              const isMe = m.senderId === uid;
+              if (m.messageType === 'pulse') {
+                return (
+                  <View key={m.id} style={{ alignItems: 'center', marginVertical: 4 }}>
+                    <Text style={{ fontSize: 24, opacity: 0.7 }}>{m.content}</Text>
+                  </View>
+                );
+              }
+              if (m.messageType === 'gift') {
+                return (
+                  <View key={m.id} style={{ alignItems: 'center', marginVertical: 8 }}>
+                    <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: L.candle }}>
+                      {isMe
+                        ? (lang === 'en' ? 'you sent a candle' : '\u4F60\u9001\u51FA\u4E86\u4E00\u6839\u71ED')
+                        : (lang === 'en' ? 'they sent you a candle' : '\u5C0D\u65B9\u9001\u4E86\u4F60\u4E00\u6839\u71ED')}
+                    </Text>
+                    <Text style={{ fontSize: 20, marginTop: 2 }}>{m.content}</Text>
+                  </View>
+                );
+              }
               return (
-                <View key={i} style={[styles.bubbleRow, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}>
+                <View key={m.id} style={[styles.bubbleRow, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}>
                   <View style={[styles.bubble, {
                     backgroundColor: isMe ? 'rgba(232,165,87,0.25)' : 'rgba(245,226,196,0.06)',
                     borderColor: isMe ? 'rgba(232,165,87,0.4)' : 'rgba(245,226,196,0.1)',
@@ -108,7 +197,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
                     borderTopLeftRadius: isMe ? 22 : 6,
                   }]}>
                     <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 24, color: L.ink, fontStyle: 'italic' }}>
-                      {lang === 'en' ? m.en : m.zh}
+                      {m.content}
                     </Text>
                   </View>
                 </View>
@@ -120,20 +209,9 @@ export default function LoftChatScreen({ navigation, route }: Props) {
               <TouchableOpacity onPress={() => setShowVeil(true)}>
                 <PhotoVeil p={L as any} liftLevel={veilLevel} size={150} lang={lang} />
                 <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, marginTop: 4, paddingLeft: 4 }}>
-                  {lang === 'en' ? `tap to lift · ${4 - veilLevel} left` : `輕點揭曉 · 還剩 ${4 - veilLevel} 層`}
+                  {lang === 'en' ? `tap to lift \u00B7 ${4 - veilLevel} left` : `\u8F15\u9EDE\u63ED\u66C9 \u00B7 \u9084\u5269 ${4 - veilLevel} \u5C64`}
                 </Text>
               </TouchableOpacity>
-            </View>
-
-            {/* Typing */}
-            <View style={[styles.bubbleRow, { justifyContent: 'flex-start', marginTop: 8 }]}>
-              <View style={[styles.bubble, { backgroundColor: 'rgba(245,226,196,0.06)', borderColor: 'rgba(245,226,196,0.1)' }]}>
-                <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
-                  {[0, 1, 2].map(i => (
-                    <View key={i} style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: L.muted, opacity: 0.6 }} />
-                  ))}
-                </View>
-              </View>
             </View>
           </ScrollView>
 
@@ -143,7 +221,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
               {t('loftWhisper', lang)}
             </Text>
             {PULSES.map(pulse => (
-              <TouchableOpacity key={pulse.key} onPress={() => sendPulse(pulse.key)}
+              <TouchableOpacity key={pulse.key} onPress={() => sendPulse(pulse.em)}
                 style={styles.pulseBtn}>
                 <Text style={{ fontSize: 16, color: L.candle }}>{pulse.em}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
@@ -155,15 +233,23 @@ export default function LoftChatScreen({ navigation, route }: Props) {
           </View>
 
           {/* Gift row */}
-          <TouchableOpacity onPress={async () => { const r = await spendWicks(5, 'gift'); if (r.ok) { hapticMedium(); setGiftSent(true); } }} style={styles.giftRow}>
-            <WickGlyph size={12} color={L.candle} />
-            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: 'rgba(245,226,196,0.8)', flex: 1 }}>
-              {t('loftGift', lang)}
-            </Text>
-            <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: 'rgba(232,165,87,0.7)' }}>
-              {t('loftGiftCost', lang)}
-            </Text>
-          </TouchableOpacity>
+          {!giftSent ? (
+            <TouchableOpacity onPress={sendGift} style={styles.giftRow}>
+              <WickGlyph size={12} color={L.candle} />
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: 'rgba(245,226,196,0.8)', flex: 1 }}>
+                {t('loftGift', lang)}
+              </Text>
+              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: 'rgba(232,165,87,0.7)' }}>
+                {t('loftGiftCost', lang)}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={[styles.giftRow, { opacity: 0.5 }]}>
+              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: L.candle }}>
+                {lang === 'en' ? '\u2713 candle sent' : '\u2713 \u71ED\u5DF2\u9001\u51FA'}
+              </Text>
+            </View>
+          )}
 
           {/* Composer */}
           <View style={styles.composer}>
@@ -174,16 +260,13 @@ export default function LoftChatScreen({ navigation, route }: Props) {
                 placeholder={t('loftWhisper', lang)}
                 placeholderTextColor={L.muted}
                 style={{ flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: L.ink, paddingHorizontal: 14, paddingVertical: 12, fontStyle: 'italic' }}
+                onSubmitEditing={sendText}
+                returnKeyType="send"
               />
               <TouchableOpacity
                 style={[styles.sendBtn, { backgroundColor: '#e8a557' }]}
-                onPress={() => {
-                  if (message.trim()) {
-                    setLocalMessages(prev => [...prev, { from: 'me', zh: message.trim(), en: message.trim() }]);
-                    setMessage('');
-                  }
-                }}>
-                <Text style={{ color: '#1f1014', fontSize: 16 }}>↑</Text>
+                onPress={sendText}>
+                <Text style={{ color: '#1f1014', fontSize: 16 }}>{'\u2191'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -205,23 +288,34 @@ export default function LoftChatScreen({ navigation, route }: Props) {
                 {t('veilOnlyHere', lang)}
               </Text>
               {veilLevel < 4 && (
-                <TouchableOpacity onPress={async () => { if (wicks >= 2) { const r = await spendWicks(2, 'veil_lift'); if (r.ok) { setVeilLevel(v => v + 1); } } }}
-                  disabled={wicks < 2}
-                  style={[styles.liftBtn, { backgroundColor: wicks >= 2 ? L.ink : L.line }]}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: wicks >= 2 ? '#f5e2c4' : L.muted }}>
+                <TouchableOpacity onPress={async () => {
+                  if (vigil) { setVeilLevel(v => v + 1); return; }
+                  if (wicks >= 2) { const r = await spendWicks(2, 'veil_lift', loftConversationId); if (r.ok) { setVeilLevel(v => v + 1); } }
+                }}
+                  disabled={!vigil && wicks < 2}
+                  style={[styles.liftBtn, { backgroundColor: (vigil || wicks >= 2) ? L.ink : L.line }]}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: (vigil || wicks >= 2) ? '#f5e2c4' : L.muted }}>
                     {t(`veilLift${veilLevel + 1}` as any, lang)}
                   </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    <WickGlyph size={12} color={wicks >= 2 ? '#f5e2c4' : L.muted} />
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: wicks >= 2 ? '#f5e2c4' : L.muted }}>
-                      {t('veilCost', lang)}
-                    </Text>
+                    {vigil ? (
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: '#f5e2c4' }}>
+                        {lang === 'en' ? 'Vigil · free' : '守夜 · 免費'}
+                      </Text>
+                    ) : (
+                      <>
+                        <WickGlyph size={12} color={wicks >= 2 ? '#f5e2c4' : L.muted} />
+                        <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: wicks >= 2 ? '#f5e2c4' : L.muted }}>
+                          {t('veilCost', lang)}
+                        </Text>
+                      </>
+                    )}
                   </View>
                 </TouchableOpacity>
               )}
               <TouchableOpacity onPress={() => setShowVeil(false)}>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: L.muted, paddingVertical: 8 }}>
-                  {lang === 'en' ? 'close' : '關上'}
+                  {lang === 'en' ? 'close' : '\u95DC\u4E0A'}
                 </Text>
               </TouchableOpacity>
             </View>

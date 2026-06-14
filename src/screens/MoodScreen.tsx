@@ -12,11 +12,11 @@ import {
   VaporBackground, GlassCard, SoftButton, BreathDot, Cap, WickGlyph, AnimatedNumber,
   FadeInUp, PressableScale, Tooltip,
 } from '../components/ui';
-import { hapticSuccess } from '../lib/haptics';
+import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, checkAndClaimDailyReward, setLang } from '../hooks/useAppStore';
-import { subscribeToActiveRooms, DbRoom } from '../lib/db';
+import { useAppStore, checkAndClaimDailyReward, setLang, canStartConversation } from '../hooks/useAppStore';
+import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch } from '../lib/db';
 import { LinearGradient } from 'expo-linear-gradient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
@@ -32,6 +32,8 @@ export default function MoodScreen({ navigation }: Props) {
   const [text, setText] = useState('');
   const [timeStr, setTimeStr] = useState('');
   const [rooms, setRooms] = useState<DbRoom[]>([]);
+  const [waiting, setWaiting] = useState(false);
+  const [waitingDots, setWaitingDots] = useState('');
 
   useEffect(() => { return subscribeToActiveRooms(setRooms); }, []);
 
@@ -61,8 +63,62 @@ export default function MoodScreen({ navigation }: Props) {
     return () => clearInterval(id);
   }, []);
 
-  const handleEnter = () => {
-    navigation.push('Room', { roomKey: 'room_partner' });
+  // Waiting dots animation
+  useEffect(() => {
+    if (!waiting) return;
+    const id = setInterval(() => {
+      setWaitingDots(d => d.length >= 3 ? '' : d + '.');
+    }, 600);
+    return () => clearInterval(id);
+  }, [waiting]);
+
+  // Subscribe to match queue when waiting
+  useEffect(() => {
+    if (!waiting) return;
+    const unsub = subscribeToMyMatch(entry => {
+      if (entry?.status === 'matched' && entry.matchedSeed && entry.conversationId) {
+        hapticMedium();
+        setWaiting(false);
+        navigation.push('Match', {
+          fromSeed: entry.matchedSeed,
+          moodText: entry.matchedMoodText ?? '',
+          conversationId: entry.conversationId,
+        });
+      }
+    });
+    return unsub;
+  }, [waiting]);
+
+  const handleEnter = async () => {
+    if (waiting) return;
+    if (!canStartConversation()) {
+      Alert.alert(
+        lang === 'en' ? 'Daily limit reached' : '\u4ECA\u65E5\u5C0D\u8A71\u5DF2\u9054\u4E0A\u9650',
+        lang === 'en'
+          ? 'Free accounts can start 3 conversations per day. Upgrade to Vigil for unlimited.'
+          : '\u514D\u8CBB\u5E33\u865F\u6BCF\u65E5\u6700\u591A 3 \u6BB5\u5C0D\u8A71\u3002\u5347\u7D1A\u5B88\u591C\u4EBA\u53EF\u89E3\u9664\u9650\u5236\u3002',
+        [
+          { text: lang === 'en' ? 'OK' : '\u77E5\u9053\u4E86', style: 'cancel' },
+          { text: lang === 'en' ? 'Upgrade' : '\u5347\u7D1A', onPress: () => navigation.push('Upgrade') },
+        ],
+      );
+      return;
+    }
+    setWaiting(true);
+    const joined = await joinMatchQueue({ moodText: text || undefined, seed });
+    if (!joined) { setWaiting(false); return; }
+    // Try to find a match immediately
+    const found = await tryFindMatch();
+    // If not found, we stay waiting and the subscription will handle it
+    if (!found) {
+      // Retry after a short delay in case someone joins right after
+      setTimeout(() => tryFindMatch(), 5000);
+    }
+  };
+
+  const handleCancelWait = async () => {
+    setWaiting(false);
+    await leaveMatchQueue();
   };
 
   return (
@@ -198,17 +254,40 @@ export default function MoodScreen({ navigation }: Props) {
           {/* FOOTER */}
           <FadeInUp delay={720} distance={12}>
             <View style={styles.footer}>
-              <SoftButton p={p} variant="primary" size="lg" full onPress={handleEnter}>
-                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
-                  {t('moodEnter', lang)}
-                  <Text style={{ opacity: 0.55, fontStyle: 'italic', fontSize: 13 }}>
-                    {' '}· {tAlt('moodEnter', lang).toLowerCase()}
-                  </Text>
-                </Text>
-              </SoftButton>
-              <TouchableOpacity onPress={handleEnter} style={styles.skip}>
-                <Text style={[styles.skipText, { color: p.muted }]}>{t('moodSkip', lang)}</Text>
-              </TouchableOpacity>
+              {waiting ? (
+                <>
+                  <View style={[styles.waitingBox, { backgroundColor: p.surface, borderColor: p.line }]}>
+                    <BreathDot p={p} size={8} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink }}>
+                        {lang === 'en' ? `Looking for someone${waitingDots}` : `正在尋找對象${waitingDots}`}
+                      </Text>
+                      <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 2 }}>
+                        {lang === 'en' ? 'you will be matched shortly' : '配對成功時會自動進入'}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity onPress={handleCancelWait} style={styles.skip}>
+                    <Text style={[styles.skipText, { color: p.muted }]}>
+                      {lang === 'en' ? 'cancel' : '取消等待'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <SoftButton p={p} variant="primary" size="lg" full onPress={handleEnter}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
+                      {t('moodEnter', lang)}
+                      <Text style={{ opacity: 0.55, fontStyle: 'italic', fontSize: 13 }}>
+                        {' '}· {tAlt('moodEnter', lang).toLowerCase()}
+                      </Text>
+                    </Text>
+                  </SoftButton>
+                  <TouchableOpacity onPress={handleEnter} style={styles.skip}>
+                    <Text style={[styles.skipText, { color: p.muted }]}>{t('moodSkip', lang)}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </FadeInUp>
         </ScrollView>
@@ -240,6 +319,7 @@ const styles = StyleSheet.create({
   chipCount:     { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   chipCountText: { fontFamily: 'Inter-Regular', fontSize: 10 },
   footer:        { gap: 10, marginTop: 8 },
+  waitingBox:    { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18, borderRadius: 20, borderWidth: 0.5 },
   skip:          { alignItems: 'center', paddingVertical: 6 },
   skipText:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
   wicksBtn:      { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 0.5 },

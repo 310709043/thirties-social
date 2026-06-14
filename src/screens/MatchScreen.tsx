@@ -9,16 +9,14 @@ import { VaporBackground, GlassCard, SoftButton, FadeInUp } from '../components/
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
+import { leaveMatchQueue } from '../lib/db';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Match'>;
-
-const DEMO_SEED = 'm0od7';
-const DEMO_MOOD = { zh: '不是想離開。只是想被聽到。', en: 'Not leaving. Just want to be heard.' };
 
 export default function MatchScreen({ navigation, route }: Props) {
   const { direction, lang, identityKind } = useAppStore();
   const p = DIRECTIONS[direction];
-  const otherSeed = route.params?.fromSeed || DEMO_SEED;
+  const { fromSeed: otherSeed, moodText, conversationId } = route.params;
   const cardScale = useRef(new Animated.Value(0.92)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const acceptPulse = useRef(new Animated.Value(1)).current;
@@ -61,7 +59,7 @@ export default function MatchScreen({ navigation, route }: Props) {
               <View style={[styles.moodBox, { borderTopColor: p.line }]}>
                 <Text style={[styles.subhead, { color: p.muted }]}>{t('matchSubhead', lang)}</Text>
                 <Text style={[styles.moodText, { color: p.ink }]}>
-                  「{lang === 'en' ? DEMO_MOOD.en : DEMO_MOOD.zh}」
+                  {moodText ? `「${moodText}」` : (lang === 'en' ? '(no mood shared)' : '（未分享心情）')}
                 </Text>
               </View>
             </GlassCard>
@@ -80,7 +78,10 @@ export default function MatchScreen({ navigation, route }: Props) {
             <FadeInUp delay={400} distance={10}>
               <Animated.View style={{ transform: [{ scale: acceptPulse }] }}>
                 <SoftButton p={p} variant="primary" size="lg" full
-                  onPress={() => navigation.replace('Chat', { otherSeed })}>
+                  onPress={async () => {
+                    await leaveMatchQueue();
+                    navigation.replace('Chat', { otherSeed, conversationId });
+                  }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
                     {t('matchAccept', lang)}
                   </Text>
@@ -89,7 +90,7 @@ export default function MatchScreen({ navigation, route }: Props) {
             </FadeInUp>
             <FadeInUp delay={500} distance={8}>
               <TouchableOpacity
-                onPress={() => navigation.goBack()}
+                onPress={async () => { await leaveMatchQueue(); navigation.goBack(); }}
                 style={styles.decline}
               >
                 <Text style={[styles.declineText, { color: p.muted }]}>{t('matchDecline', lang)}</Text>

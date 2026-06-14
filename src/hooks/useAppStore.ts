@@ -45,6 +45,10 @@ interface AppState {
   region: string | null;
   quote: string | null;
   loftRole: LoftRole | null;
+  autoFilter: boolean;
+  slowMode: boolean;
+  conversationsToday: number;
+  peopleTodayCount: number;
 }
 
 let _state: AppState = {
@@ -54,6 +58,7 @@ let _state: AppState = {
   banExpiresAt: null, lastRewardDate: null, rewardPending: false,
   gender: null, ageBracket: null, relationshipStatus: null, seeking: [],
   boundary: null, region: null, quote: null, loftRole: null,
+  autoFilter: true, slowMode: false, conversationsToday: 0, peopleTodayCount: 0,
 };
 
 const _listeners = new Set<() => void>();
@@ -62,7 +67,7 @@ function notify() { _listeners.forEach(fn => fn()); }
 export async function initStore() {
   const deviceId = await getDeviceId();
   const seed = getDailySeed(deviceId);
-  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedSeeking, storedBoundary, storedRegion, storedQuote, storedLoftRole] = await Promise.all([
+  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedSeeking, storedBoundary, storedRegion, storedQuote, storedLoftRole, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind] = await Promise.all([
     AsyncStorage.getItem('direction') as Promise<Direction | null>,
     AsyncStorage.getItem('onboarding_done'),
     AsyncStorage.getItem('setup_done'),
@@ -77,6 +82,11 @@ export async function initStore() {
     AsyncStorage.getItem('region'),
     AsyncStorage.getItem('quote'),
     AsyncStorage.getItem('loftRole') as Promise<LoftRole | null>,
+    AsyncStorage.getItem('autoFilter'),
+    AsyncStorage.getItem('slowMode'),
+    AsyncStorage.getItem('conversationsToday'),
+    AsyncStorage.getItem('peopleTodayCount'),
+    AsyncStorage.getItem('identityKind') as Promise<IdentityKind | null>,
   ]);
   _state = {
     ..._state, deviceId, seed,
@@ -87,8 +97,14 @@ export async function initStore() {
     seeking: storedSeeking ? JSON.parse(storedSeeking) : [],
     boundary: storedBoundary, region: storedRegion, quote: storedQuote,
     loftRole: storedLoftRole,
+    identityKind: storedIdentityKind || 'sigil',
+    autoFilter: storedAutoFilter !== '0',
+    slowMode: storedSlowMode === '1',
+    conversationsToday: storedConvToday ? parseInt(storedConvToday, 10) : 0,
+    peopleTodayCount: storedPeopleToday ? parseInt(storedPeopleToday, 10) : 0,
   };
   notify();
+  _resetDailyCountersIfNeeded();
   _syncWithFirebase(deviceId, seed);
 }
 
@@ -225,6 +241,60 @@ export async function setProfileFields(fields: {
   if (fields.loftRole) stores.push(['loftRole', fields.loftRole]);
   await AsyncStorage.multiSet(stores);
   if (_state.userId) updateUser({ ...fields });
+}
+
+export async function setAutoFilter(on: boolean) {
+  _state = { ..._state, autoFilter: on };
+  await AsyncStorage.setItem('autoFilter', on ? '1' : '0');
+  notify();
+}
+
+export async function setSlowMode(on: boolean) {
+  _state = { ..._state, slowMode: on };
+  await AsyncStorage.setItem('slowMode', on ? '1' : '0');
+  notify();
+}
+
+export async function setIdentityKind(kind: IdentityKind) {
+  _state = { ..._state, identityKind: kind };
+  await AsyncStorage.setItem('identityKind', kind);
+  notify();
+}
+
+export async function trackConversation() {
+  await _resetDailyCountersIfNeeded();
+  const convs = _state.conversationsToday + 1;
+  const people = _state.peopleTodayCount + 1;
+  const today = new Date().toISOString().slice(0, 10);
+  _state = { ..._state, conversationsToday: convs, peopleTodayCount: people };
+  await AsyncStorage.setItem('conversationsToday', String(convs));
+  await AsyncStorage.setItem('peopleTodayCount', String(people));
+  await AsyncStorage.setItem('countersDate', today);
+  notify();
+}
+
+export function canStartConversation(): boolean {
+  if (_state.vigil) return true;
+  return _state.conversationsToday < 3;
+}
+
+const FREE_IDENTITY_KINDS: IdentityKind[] = ['sigil', 'color+adj', 'text'];
+const VIGIL_IDENTITY_KINDS: IdentityKind[] = ['sigil', 'silhouette', 'color+adj', 'character', 'text'];
+
+export function getAvailableIdentityKinds(): IdentityKind[] {
+  return _state.vigil ? VIGIL_IDENTITY_KINDS : FREE_IDENTITY_KINDS;
+}
+
+async function _resetDailyCountersIfNeeded() {
+  const stored = await AsyncStorage.getItem('countersDate');
+  const today = new Date().toISOString().slice(0, 10);
+  if (stored !== today) {
+    _state = { ..._state, conversationsToday: 0, peopleTodayCount: 0 };
+    await AsyncStorage.setItem('conversationsToday', '0');
+    await AsyncStorage.setItem('peopleTodayCount', '0');
+    await AsyncStorage.setItem('countersDate', today);
+    notify();
+  }
 }
 
 export function useAppStore(): AppState;

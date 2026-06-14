@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  View, Text, TextInput, TouchableOpacity, Alert,
   ScrollView, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,18 +12,12 @@ import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, Fa
 import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, setWicks as saveWicks } from '../hooks/useAppStore';
+import { useAppStore, setWicks as saveWicks, trackConversation } from '../hooks/useAppStore';
 import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage } from '../lib/db';
+import { filterMessage } from '../lib/filter';
+import * as ScreenCapture from 'expo-screen-capture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
-
-const INITIAL_MESSAGES = [
-  { from: 'other', zh: '謝謝你願意聽。', en: 'Thank you for being here.', age: 0.05 },
-  { from: 'me',    zh: '我也是。最近什麼都不太想跟身邊的人說。', en: "Me too. Lately I don't want to tell anyone close to me.", age: 0.1 },
-  { from: 'other', zh: '你寫的那句，「睡同一張床卻像隔了一條河」⋯⋯', en: '"Same bed, but feels like a river between us"…', age: 0.18 },
-  { from: 'other', zh: '我也是這樣。', en: 'I feel the same.', age: 0.18 },
-  { from: 'me',    zh: '不是不愛了。是疲倦。', en: 'Not unlove. Just tired.', age: 0.27 },
-];
 
 const TOTAL_SECONDS = 30 * 60;
 
@@ -33,8 +27,9 @@ export default function ChatScreen({ navigation, route }: Props) {
   const otherSeed = route.params?.otherSeed || 'm0od7';
   const conversationId = (route.params as any)?.conversationId as string | undefined;
 
-  const [remaining, setRemaining] = useState(28 * 60 + 14);
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  ScreenCapture.usePreventScreenCapture();
+
+  const [remaining, setRemaining] = useState(TOTAL_SECONDS);
   const [realMessages, setRealMessages] = useState<DbConvMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [showVeilSheet, setShowVeilSheet] = useState(false);
@@ -43,6 +38,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (!conversationId) return;
+    trackConversation();
     return subscribeToConversationMessages(conversationId, setRealMessages);
   }, [conversationId]);
 
@@ -69,21 +65,25 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const sendMessage = async () => {
     if (!inputText.trim()) return;
+    const check = filterMessage(inputText.trim());
+    if (check.blocked) {
+      Alert.alert(
+        lang === 'en' ? 'Message blocked' : '\u8A0A\u606F\u5DF2\u88AB\u904E\u6FFE',
+        lang === 'en' ? 'This message contains content that may be harmful.' : '\u9019\u5247\u8A0A\u606F\u5305\u542B\u53EF\u80FD\u50B7\u5BB3\u4ED6\u4EBA\u7684\u5167\u5BB9\u3002',
+      );
+      return;
+    }
     if (conversationId) {
       await sendConversationMessage({ conversationId, content: inputText.trim() });
-    } else {
-      setMessages(prev => [...prev, { from: 'me', zh: inputText, en: inputText, age: 0 }]);
     }
     setInputText('');
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
-  const displayMessages = conversationId && realMessages.length > 0
-    ? realMessages.map(msg => ({
-        from: msg.senderId === getCurrentUid() ? 'me' : 'other',
-        zh: msg.content, en: msg.content, age: 0,
-      }))
-    : messages;
+  const displayMessages = realMessages.map(msg => ({
+    from: msg.senderId === getCurrentUid() ? 'me' : 'other',
+    zh: msg.content, en: msg.content, age: 0,
+  }));
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
@@ -113,7 +113,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               </View>
 
               {/* Safety */}
-              <TouchableOpacity onPress={() => navigation.push('Safety')} style={styles.safetyBtn}>
+              <TouchableOpacity onPress={() => navigation.push('Safety', { reportedUserId: otherSeed, conversationId })} style={styles.safetyBtn}>
                 <Text style={{ color: p.muted, fontSize: 18 }}>ⓘ</Text>
               </TouchableOpacity>
             </View>
@@ -156,13 +156,19 @@ export default function ChatScreen({ navigation, route }: Props) {
             onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
           >
             <Text style={[styles.openNote, { color: p.muted }]}>
-              {lang === 'en' ? 'opened at 23:47 · ends at 00:17' : '23:47 開啟 · 00:17 結束'}
+              {lang === 'en' ? 'messages dissolve when the timer ends' : '\u8A08\u6642\u7D50\u675F\u5F8C\u8A0A\u606F\u6703\u5168\u90E8\u6D88\u6563'}
             </Text>
+
+            {displayMessages.length === 0 && (
+              <Text style={[styles.openNote, { color: p.muted, marginTop: 40, textAlign: 'center' }]}>
+                {lang === 'en' ? 'say something first. they can hear you.' : '\u5148\u8AAA\u9EDE\u4EC0\u9EBC\u3002\u5C0D\u65B9\u807D\u5F97\u5230\u3002'}
+              </Text>
+            )}
 
             {displayMessages.map((m, i) => (
               <FadeInUp key={i} distance={10} duration={260} delay={Math.min(i * 25, 150)}>
                 <ChatBubble p={p} m={m} lang={lang}
-                  onReport={m.from !== 'me' ? () => navigation.push('Safety') : undefined} />
+                  onReport={m.from !== 'me' ? () => navigation.push('Safety', { reportedUserId: otherSeed, conversationId }) : undefined} />
               </FadeInUp>
             ))}
 

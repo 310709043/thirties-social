@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Animated, Easing,
+  View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -130,7 +130,16 @@ export default function OnboardingScreen({ navigation }: Props) {
               {!isPreview && step > 0 && (
                 <TouchableOpacity onPress={handleBack} style={styles.back}>
                   <Text style={{ color: p.muted, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 }}>
-                    {lang === 'en' ? 'Back' : '上一步'}
+                    {lang === 'en' ? 'Back' : '\u4E0A\u4E00\u6B65'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {step === 0 && (
+                <TouchableOpacity
+                  onPress={() => Linking.openURL('https://thirties-landing.vercel.app/privacy')}
+                  style={styles.back}>
+                  <Text style={{ color: p.muted, fontFamily: 'EBGaramond-Italic', fontSize: 12, opacity: 0.6 }}>
+                    {lang === 'en' ? 'Privacy Policy' : '\u96B1\u79C1\u6B0A\u653F\u7B56'}
                   </Text>
                 </TouchableOpacity>
               )}

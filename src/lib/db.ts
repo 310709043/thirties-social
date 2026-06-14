@@ -386,6 +386,7 @@ export interface DbLoftSession {
 }
 
 export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
+  const uid = getCurrentUid();
   const tonight = new Date().toISOString().slice(0, 10);
   const q = query(
     collection(db, 'loftSessions'),
@@ -395,12 +396,137 @@ export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
   const snap = await getDocs(q);
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }) as DbLoftSession)
-    .filter(s => !(s as any).leftAt);
+    .filter(s => !(s as any).leftAt && s.userId !== uid);
+}
+
+// ── Loft Conversations ───────────────────────────────────
+export interface DbLoftConversation {
+  id: string;
+  userAId: string;
+  userBId: string;
+  userASeed: string;
+  userBSeed: string;
+  userAName: string;
+  userBName: string;
+  messageCount: number;
+  createdAt: any;
+  expiresAt: any;
+  endedAt: any;
+}
+
+export interface DbLoftMessage {
+  id: string;
+  loftConversationId: string;
+  senderId: string;
+  content: string;
+  messageType: 'text' | 'pulse' | 'gift';
+  createdAt: any;
+}
+
+export async function createLoftConversation(params: {
+  otherUserId: string;
+  mySeed: string;
+  otherSeed: string;
+  myName: string;
+  otherName: string;
+}): Promise<DbLoftConversation | null> {
+  const uid = getCurrentUid();
+  if (!uid) return null;
+  try {
+    // Check if conversation already exists tonight
+    const tonight = new Date().toISOString().slice(0, 10);
+    const existQ = query(
+      collection(db, 'loftConversations'),
+      where('userAId', 'in', [uid, params.otherUserId]),
+      limit(20),
+    );
+    const existSnap = await getDocs(existQ);
+    const existing = existSnap.docs.find(d => {
+      const data = d.data();
+      const involves = (data.userAId === uid && data.userBId === params.otherUserId)
+        || (data.userAId === params.otherUserId && data.userBId === uid);
+      const isTonight = data.createdAt?.toDate?.()?.toISOString?.()?.slice(0, 10) === tonight;
+      return involves && isTonight && !data.endedAt;
+    });
+    if (existing) return { id: existing.id, ...existing.data() } as DbLoftConversation;
+
+    const data = {
+      userAId: uid,
+      userBId: params.otherUserId,
+      userASeed: params.mySeed,
+      userBSeed: params.otherSeed,
+      userAName: params.myName,
+      userBName: params.otherName,
+      messageCount: 0,
+      createdAt: serverTimestamp(),
+      expiresAt: Timestamp.fromDate(new Date(Date.now() + 58 * 60 * 1000)),
+      endedAt: null,
+    };
+    const ref = await addDoc(collection(db, 'loftConversations'), data);
+    return { id: ref.id, ...data } as DbLoftConversation;
+  } catch { return null; }
+}
+
+export async function sendLoftMessage(params: {
+  loftConversationId: string;
+  content: string;
+  messageType?: 'text' | 'pulse' | 'gift';
+}): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    await addDoc(collection(db, 'loftConversations', params.loftConversationId, 'messages'), {
+      senderId: uid,
+      content: params.content,
+      messageType: params.messageType ?? 'text',
+      createdAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, 'loftConversations', params.loftConversationId), {
+      messageCount: increment(1),
+    });
+    return true;
+  } catch { return false; }
+}
+
+export function subscribeToLoftMessages(
+  loftConversationId: string,
+  onUpdate: (msgs: DbLoftMessage[]) => void,
+): () => void {
+  const q = query(
+    collection(db, 'loftConversations', loftConversationId, 'messages'),
+    orderBy('createdAt', 'asc'),
+  );
+  return onSnapshot(q, snap => {
+    onUpdate(snap.docs.map(d => ({
+      id: d.id, loftConversationId, ...d.data(),
+    }) as DbLoftMessage));
+  });
+}
+
+export async function endLoftConversation(loftConversationId: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, 'loftConversations', loftConversationId), { endedAt: serverTimestamp() });
+  } catch {}
 }
 
 // ── Match Queue ───────────────────────────────────────────
+export interface MatchQueueEntry {
+  userId: string;
+  seed: string;
+  moodText: string | null;
+  roomId: string | null;
+  status: 'waiting' | 'matched';
+  matchedWith: string | null;
+  matchedSeed: string | null;
+  matchedMoodText: string | null;
+  conversationId: string | null;
+  enteredAt: any;
+  expiresAt: any;
+}
+
 export async function joinMatchQueue(params: {
   moodText?: string;
+  seed: string;
   roomId?: string;
 }): Promise<boolean> {
   const uid = getCurrentUid();
@@ -408,9 +534,14 @@ export async function joinMatchQueue(params: {
   try {
     await setDoc(doc(db, 'matchQueue', uid), {
       userId: uid,
+      seed: params.seed,
       moodText: params.moodText ?? null,
       roomId: params.roomId ?? null,
       status: 'waiting',
+      matchedWith: null,
+      matchedSeed: null,
+      matchedMoodText: null,
+      conversationId: null,
       enteredAt: serverTimestamp(),
       expiresAt: Timestamp.fromDate(new Date(Date.now() + 30 * 60 * 1000)),
     });
@@ -421,7 +552,82 @@ export async function joinMatchQueue(params: {
 export async function leaveMatchQueue(): Promise<void> {
   const uid = getCurrentUid();
   if (!uid) return;
-  await deleteDoc(doc(db, 'matchQueue', uid));
+  try { await deleteDoc(doc(db, 'matchQueue', uid)); } catch {}
+}
+
+/** Subscribe to current user's match queue entry for real-time status changes */
+export function subscribeToMyMatch(
+  onChange: (entry: MatchQueueEntry | null) => void,
+): () => void {
+  const uid = getCurrentUid();
+  if (!uid) return () => {};
+  return onSnapshot(doc(db, 'matchQueue', uid), snap => {
+    if (!snap.exists()) { onChange(null); return; }
+    onChange({ ...snap.data() } as MatchQueueEntry);
+  });
+}
+
+/** Try to find another waiting user and pair them with the current user */
+export async function tryFindMatch(): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+
+  try {
+    const q = query(
+      collection(db, 'matchQueue'),
+      where('status', '==', 'waiting'),
+      limit(10),
+    );
+    const snap = await getDocs(q);
+    const candidates = snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as MatchQueueEntry & { id: string }))
+      .filter(e => e.userId !== uid);
+
+    if (candidates.length === 0) return false;
+
+    // Pick a random candidate
+    const other = candidates[Math.floor(Math.random() * candidates.length)];
+
+    // Get my own entry
+    const mySnap = await getDoc(doc(db, 'matchQueue', uid));
+    if (!mySnap.exists() || mySnap.data().status !== 'waiting') return false;
+    const myEntry = mySnap.data() as MatchQueueEntry;
+
+    // Create conversation
+    const conv = await createConversation({ userBId: other.userId });
+    if (!conv) return false;
+
+    // Update both entries atomically
+    await runTransaction(db, async tx => {
+      const myRef = doc(db, 'matchQueue', uid);
+      const otherRef = doc(db, 'matchQueue', other.userId);
+
+      const myCheck = await tx.get(myRef);
+      const otherCheck = await tx.get(otherRef);
+
+      if (!myCheck.exists() || myCheck.data().status !== 'waiting') throw new Error('already_matched');
+      if (!otherCheck.exists() || otherCheck.data().status !== 'waiting') throw new Error('other_already_matched');
+
+      tx.update(myRef, {
+        status: 'matched',
+        matchedWith: other.userId,
+        matchedSeed: other.seed,
+        matchedMoodText: other.moodText,
+        conversationId: conv.id,
+      });
+      tx.update(otherRef, {
+        status: 'matched',
+        matchedWith: uid,
+        matchedSeed: myEntry.seed,
+        matchedMoodText: myEntry.moodText,
+        conversationId: conv.id,
+      });
+    });
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ── Reports ───────────────────────────────────────────────

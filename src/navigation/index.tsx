@@ -21,14 +21,14 @@ export type RootStackParamList = {
   Setup: undefined;
   Mood: undefined;
   Room: { roomKey: string; roomId?: string };
-  Match: { fromSeed: string; moodText: string };
+  Match: { fromSeed: string; moodText: string; conversationId: string };
   Chat: { otherSeed: string; conversationId?: string };
-  Safety: undefined;
-  Close: undefined;
+  Safety: { reportedUserId?: string; conversationId?: string };
+  Close: { conversationsCount?: number; peopleCount?: number } | undefined;
   Profile: undefined;
   Settings: undefined;
   Loft: undefined;
-  LoftChat: { otherSeed: string };
+  LoftChat: { otherSeed: string; loftConversationId: string; otherName: string; sessionEnteredAt?: number };
   Upgrade: undefined;
 };
 
