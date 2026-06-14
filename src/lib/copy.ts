@@ -36,7 +36,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
 
   // Room screen
   roomPeople:      { zh: '人在這個房間',     en: 'in this room' },
-  roomEphemeral:   { zh: '這個房間 02:14 後關閉', en: 'this room closes in 02:14' },
+  roomEphemeral:   { zh: '這個房間之後會關閉', en: 'this room will close later' },
 
   // Match
   matchHeader:     { zh: '有人想和你說話',   en: 'Someone wants to talk' },

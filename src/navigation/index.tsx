@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { navigationRef } from '../lib/navigationRef';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SetupScreen from '../screens/SetupScreen';
@@ -40,7 +41,7 @@ interface NavigationProps {
 
 export default function Navigation({ initialRoute = 'Onboarding' }: NavigationProps) {
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         initialRouteName={initialRoute as any}
         screenOptions={{ headerShown: false, animation: 'fade' }}

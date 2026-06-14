@@ -43,6 +43,7 @@ export interface DbUser {
   setupDone: boolean;
   isBanned: boolean;
   banReason: string | null;
+  blockedUsers: string[];
   gender: string | null;
   ageBracket: string | null;
   relationshipStatus: string | null;
@@ -120,6 +121,51 @@ export function subscribeToUser(userId: string, onChange: (u: DbUser) => void) {
   return onSnapshot(doc(db, 'users', userId), snap => {
     if (snap.exists()) onChange({ id: snap.id, ...snap.data() } as DbUser);
   });
+}
+
+// ── Block List ──────────────────────────────────────────
+export async function blockUser(targetUserId: string): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    const userRef = doc(db, 'users', uid);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) return false;
+    const blocked = snap.data().blockedUsers ?? [];
+    if (blocked.includes(targetUserId)) return true;
+    await updateDoc(userRef, {
+      blockedUsers: [...blocked, targetUserId],
+      lastActiveAt: serverTimestamp(),
+    });
+    return true;
+  } catch { return false; }
+}
+
+export async function unblockUser(targetUserId: string): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    const userRef = doc(db, 'users', uid);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) return false;
+    const blocked = snap.data().blockedUsers ?? [];
+    await updateDoc(userRef, {
+      blockedUsers: blocked.filter((id: string) => id !== targetUserId),
+      lastActiveAt: serverTimestamp(),
+    });
+    return true;
+  } catch { return false; }
+}
+
+export async function isUserBlocked(targetUserId: string): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    if (!snap.exists()) return false;
+    const blocked = snap.data().blockedUsers ?? [];
+    return blocked.includes(targetUserId);
+  } catch { return false; }
 }
 
 // ── Wicks (atomic transactions) ───────────────────────────
