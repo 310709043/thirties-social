@@ -8,6 +8,7 @@ import { t } from '../lib/copy';
 import { VaporBackground, GlassCard, SoftButton, FadeInUp } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
 import { fileReport, endConversation } from '../lib/db';
+import { analytics } from '../lib/analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Safety'>;
 
@@ -40,7 +41,10 @@ export default function SafetyScreen({ navigation, route }: Props) {
         conversationId: conversationId ?? undefined,
       });
     }
-    if (conversationId) await endConversation(conversationId, 'blocked');
+    if (conversationId) {
+      await endConversation(conversationId, 'blocked');
+      analytics.safetyBlock(conversationId);
+    }
     setSubmitting(false);
     navigation.replace('Close');
   };
@@ -56,6 +60,7 @@ export default function SafetyScreen({ navigation, route }: Props) {
         conversationId: conversationId ?? undefined,
       });
     }
+    if (conversationId) analytics.safetyReport(conversationId);
     if (conversationId) await endConversation(conversationId, 'reported');
     setSubmitting(false);
     Alert.alert(

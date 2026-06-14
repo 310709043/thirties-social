@@ -15,6 +15,7 @@ import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setWicks as saveWicks, trackConversation } from '../hooks/useAppStore';
 import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping } from '../lib/db';
 import { filterMessage } from '../lib/filter';
+import { analytics } from '../lib/analytics';
 import * as ScreenCapture from 'expo-screen-capture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
@@ -41,6 +42,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!conversationId) return;
     trackConversation(conversationId);
+    analytics.conversationStart(conversationId);
     return subscribeToConversationMessages(conversationId, setRealMessages);
   }, [conversationId]);
 
@@ -58,7 +60,10 @@ export default function ChatScreen({ navigation, route }: Props) {
         if (r <= 1) {
           clearInterval(id);
           (async () => {
-            if (conversationId) await endConversation(conversationId, 'timer_expired');
+            if (conversationId) {
+              await endConversation(conversationId, 'timer_expired');
+              analytics.conversationEnd(conversationId, 'timer_expired');
+            }
             navigation.replace('Close');
           })();
           return 0;
@@ -109,6 +114,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         );
         return;
       }
+      analytics.messageSend(conversationId);
       // Clear typing state after sending
       setTyping(conversationId, false);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -137,7 +143,13 @@ export default function ChatScreen({ navigation, route }: Props) {
             {/* Back */}
             <View style={styles.headerRow}>
               <TouchableOpacity
-                onPress={() => { if (conversationId) endConversation(conversationId, 'user_ended'); navigation.replace('Close'); }}
+                onPress={() => {
+                  if (conversationId) {
+                    endConversation(conversationId, 'user_ended');
+                    analytics.conversationEnd(conversationId, 'user_ended');
+                  }
+                  navigation.replace('Close');
+                }}
                 style={styles.backBtn}
               >
                 <Text style={{ color: p.muted, fontSize: 20 }}>‹</Text>

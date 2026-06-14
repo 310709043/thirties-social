@@ -17,6 +17,7 @@ import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, checkAndClaimDailyReward, setLang, canStartConversation } from '../hooks/useAppStore';
 import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch } from '../lib/db';
+import { analytics } from '../lib/analytics';
 import { LinearGradient } from 'expo-linear-gradient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
@@ -78,6 +79,7 @@ export default function MoodScreen({ navigation }: Props) {
     const unsub = subscribeToMyMatch(entry => {
       if (entry?.status === 'matched' && entry.matchedSeed && entry.conversationId) {
         hapticMedium();
+        analytics.matchFound();
         setWaiting(false);
         navigation.push('Match', {
           fromSeed: entry.matchedSeed,
@@ -105,6 +107,7 @@ export default function MoodScreen({ navigation }: Props) {
       return;
     }
     setWaiting(true);
+    analytics.matchSearch(text.length);
     const joined = await joinMatchQueue({ moodText: text || undefined, seed });
     if (!joined) { setWaiting(false); return; }
     // Try to find a match immediately

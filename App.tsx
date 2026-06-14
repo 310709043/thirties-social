@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { initStore, useAppStore } from './src/hooks/useAppStore';
 import { initIAP, endIAP } from './src/lib/iap';
 import { registerForPushNotifications, addNotificationListener } from './src/lib/notifications';
+import { analytics } from './src/lib/analytics';
 import Navigation from './src/navigation';
 import { WickGlyph, Logo } from './src/components/ui';
 import { LOFT_PALETTE } from './src/lib/theme';
@@ -39,6 +40,7 @@ export default function App() {
     initStore().then(() => {
       setStoreReady(true);
       registerForPushNotifications();
+      analytics.appOpen();
     });
     initIAP();
 

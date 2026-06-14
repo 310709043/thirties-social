@@ -11,6 +11,7 @@ import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
 import { trackPerson } from '../hooks/useAppStore';
 import { leaveMatchQueue } from '../lib/db';
+import { analytics } from '../lib/analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Match'>;
 
@@ -81,6 +82,7 @@ export default function MatchScreen({ navigation, route }: Props) {
                 <SoftButton p={p} variant="primary" size="lg" full
                   onPress={async () => {
                     await trackPerson();
+                    analytics.matchAccept();
                     await leaveMatchQueue();
                     navigation.replace('Chat', { otherSeed, conversationId });
                   }}>
@@ -92,7 +94,7 @@ export default function MatchScreen({ navigation, route }: Props) {
             </FadeInUp>
             <FadeInUp delay={500} distance={8}>
               <TouchableOpacity
-                onPress={async () => { await leaveMatchQueue(); navigation.goBack(); }}
+                onPress={async () => { analytics.matchDecline(); await leaveMatchQueue(); navigation.goBack(); }}
                 style={styles.decline}
               >
                 <Text style={[styles.declineText, { color: p.muted }]}>{t('matchDecline', lang)}</Text>
