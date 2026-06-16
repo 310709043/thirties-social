@@ -26,8 +26,26 @@ const TOTAL_SECONDS = 30 * 60;
 export default function ChatScreen({ navigation, route }: Props) {
   const { seed, direction, lang, identityKind, wicks } = useAppStore();
   const p = DIRECTIONS[direction];
-  const otherSeed = route.params?.otherSeed || 'm0od7';
+  const otherSeed = route.params?.otherSeed;
   const conversationId = (route.params as any)?.conversationId as string | undefined;
+
+  // Guard: navigate back if required params are missing
+  if (!otherSeed || !conversationId) {
+    return (
+      <VaporBackground p={p} style={{ flex: 1 }}>
+        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.muted }}>
+            {lang === 'en' ? 'Conversation not found' : '找不到對話'}
+          </Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
+            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.accent }}>
+              {lang === 'en' ? 'Go back' : '返回'}
+            </Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </VaporBackground>
+    );
+  }
 
   ScreenCapture.usePreventScreenCapture();
 
@@ -39,7 +57,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [otherTyping, setOtherTyping] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -69,6 +87,10 @@ export default function ChatScreen({ navigation, route }: Props) {
             navigation.replace('Close');
           })();
           return 0;
+        }
+        // Show warning at 60s and 10s
+        if (r === 60) {
+          hapticMedium();
         }
         return r - 1;
       });
@@ -175,15 +197,17 @@ export default function ChatScreen({ navigation, route }: Props) {
             <View style={styles.countdown}>
               <View style={styles.countdownRow}>
                 <Cap p={p}>{t('chatRemaining', lang)}</Cap>
-                <Text style={[styles.timer, { color: p.ink }]}>
+                <Text style={[styles.timer, { color: remaining <= 60 ? p.danger : p.ink }]}>
                   {mm}<Text style={{ opacity: 0.4 }}>:</Text>{ss}
                 </Text>
               </View>
               <CountdownBar p={p} progress={progress} />
-              <Text style={[styles.dissolveNote, { color: p.muted }]}>
-                {lang === 'en'
-                  ? 'when this reaches zero, the entire conversation dissolves.'
-                  : '歸零之後，整段對話會全部消散。'}
+              <Text style={[styles.dissolveNote, { color: remaining <= 60 ? p.danger : p.muted }]}>
+                {remaining <= 60
+                  ? (lang === 'en' ? 'conversation dissolves soon' : '對話即將消散')
+                  : (lang === 'en'
+                    ? 'when this reaches zero, the entire conversation dissolves.'
+                    : '歸零之後，整段對話會全部消散。')}
               </Text>
             </View>
           </View>

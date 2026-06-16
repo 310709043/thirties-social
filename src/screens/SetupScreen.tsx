@@ -8,7 +8,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { VaporBackground, GlassCard, Cap } from '../components/ui';
-import { useAppStore, setSetupDone, setProfileFields, Gender, LoftRole } from '../hooks/useAppStore';
+import { useAppStore, setSetupDone, setProfileFields, Gender } from '../hooks/useAppStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Setup'>;
 
@@ -61,7 +61,6 @@ export default function SetupScreen({ navigation }: Props) {
   const zh = lang !== 'en';
 
   const [gender, setGender] = useState<string | null>(null);
-  const [loftRole, setLoftRole] = useState<string | null>(null);
   const [age, setAge] = useState<string | null>(null);
   const [marriage, setMarriage] = useState<string | null>(null);
   const [shape, setShape] = useState<string | null>(null);
@@ -111,7 +110,6 @@ export default function SetupScreen({ navigation }: Props) {
       boundary: resolvedBoundary ?? boundary!,
       region: resolvedRegion,
       quote: line.trim() || null,
-      loftRole: null,
     });
     await setSetupDone();
     navigation.replace('Mood');

@@ -18,7 +18,6 @@ async function getDeviceId(): Promise<string> {
 }
 
 export type Gender = 'female' | 'male' | 'nonbinary';
-export type LoftRole = 'listener' | 'speaker' | 'undecided';
 
 interface AppState {
   deviceId: string;
@@ -44,7 +43,6 @@ interface AppState {
   boundary: string | null;
   region: string | null;
   quote: string | null;
-  loftRole: LoftRole | null;
   autoFilter: boolean;
   slowMode: boolean;
   conversationsToday: number;
@@ -57,7 +55,7 @@ let _state: AppState = {
   dbSynced: false, wicks: 3, vigil: false, isBanned: false, banReason: null,
   banExpiresAt: null, lastRewardDate: null, rewardPending: false,
   gender: null, ageBracket: null, relationshipStatus: null, seeking: [],
-  boundary: null, region: null, quote: null, loftRole: null,
+  boundary: null, region: null, quote: null,
   autoFilter: true, slowMode: false, conversationsToday: 0, peopleTodayCount: 0,
 };
 
@@ -67,7 +65,7 @@ function notify() { _listeners.forEach(fn => fn()); }
 export async function initStore() {
   const deviceId = await getDeviceId();
   const seed = getDailySeed(deviceId);
-  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedSeeking, storedBoundary, storedRegion, storedQuote, storedLoftRole, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind] = await Promise.all([
+  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedSeeking, storedBoundary, storedRegion, storedQuote, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind] = await Promise.all([
     AsyncStorage.getItem('direction') as Promise<Direction | null>,
     AsyncStorage.getItem('onboarding_done'),
     AsyncStorage.getItem('setup_done'),
@@ -81,7 +79,6 @@ export async function initStore() {
     AsyncStorage.getItem('boundary'),
     AsyncStorage.getItem('region'),
     AsyncStorage.getItem('quote'),
-    AsyncStorage.getItem('loftRole') as Promise<LoftRole | null>,
     AsyncStorage.getItem('autoFilter'),
     AsyncStorage.getItem('slowMode'),
     AsyncStorage.getItem('conversationsToday'),
@@ -96,7 +93,6 @@ export async function initStore() {
     gender: storedGender, ageBracket: storedAge, relationshipStatus: storedRelation,
     seeking: storedSeeking ? JSON.parse(storedSeeking) : [],
     boundary: storedBoundary, region: storedRegion, quote: storedQuote,
-    loftRole: storedLoftRole,
     identityKind: storedIdentityKind || 'sigil',
     autoFilter: storedAutoFilter !== '0',
     slowMode: storedSlowMode === '1',
@@ -125,7 +121,8 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         gender: dbUser.gender as Gender | null, ageBracket: dbUser.ageBracket,
         relationshipStatus: dbUser.relationshipStatus, seeking: dbUser.seeking,
         boundary: dbUser.boundary, region: dbUser.region, quote: dbUser.quote,
-        loftRole: (dbUser as any).loftRole as LoftRole | null ?? null,
+        autoFilter: (dbUser as any).autoFilter ?? true,
+        slowMode: (dbUser as any).slowMode ?? false,
       };
       await Promise.all([
         AsyncStorage.setItem('wicks', String(dbUser.wicks)),
@@ -138,6 +135,8 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         dbUser.boundary ? AsyncStorage.setItem('boundary', dbUser.boundary) : Promise.resolve(),
         dbUser.region ? AsyncStorage.setItem('region', dbUser.region) : Promise.resolve(),
         dbUser.quote ? AsyncStorage.setItem('quote', dbUser.quote) : Promise.resolve(),
+        AsyncStorage.setItem('autoFilter', (dbUser as any).autoFilter !== false ? '1' : '0'),
+        AsyncStorage.setItem('slowMode', (dbUser as any).slowMode ? '1' : '0'),
       ]);
     } else {
       _state = { ..._state, userId, dbSynced: true };
@@ -155,7 +154,8 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         gender: updated.gender as Gender | null, ageBracket: updated.ageBracket,
         relationshipStatus: updated.relationshipStatus, seeking: updated.seeking,
         boundary: updated.boundary, region: updated.region, quote: updated.quote,
-        loftRole: (updated as any).loftRole as LoftRole | null ?? null,
+        autoFilter: (updated as any).autoFilter ?? true,
+        slowMode: (updated as any).slowMode ?? false,
       };
       AsyncStorage.setItem('wicks', String(updated.wicks));
       notify();
@@ -225,7 +225,7 @@ export async function setVigil(on: boolean) {
 export async function setProfileFields(fields: {
   gender: Gender; ageBracket: string; relationshipStatus: string;
   seeking: string[]; boundary: string; region: string | null;
-  quote: string | null; loftRole: LoftRole | null;
+  quote: string | null;
 }) {
   _state = { ..._state, ...fields };
   notify();
@@ -238,7 +238,6 @@ export async function setProfileFields(fields: {
   ];
   if (fields.region) stores.push(['region', fields.region]);
   if (fields.quote) stores.push(['quote', fields.quote]);
-  if (fields.loftRole) stores.push(['loftRole', fields.loftRole]);
   await AsyncStorage.multiSet(stores);
   if (_state.userId) updateUser({ ...fields });
 }
@@ -247,12 +246,14 @@ export async function setAutoFilter(on: boolean) {
   _state = { ..._state, autoFilter: on };
   await AsyncStorage.setItem('autoFilter', on ? '1' : '0');
   notify();
+  if (_state.userId) updateUser({ autoFilter: on });
 }
 
 export async function setSlowMode(on: boolean) {
   _state = { ..._state, slowMode: on };
   await AsyncStorage.setItem('slowMode', on ? '1' : '0');
   notify();
+  if (_state.userId) updateUser({ slowMode: on });
 }
 
 export async function setIdentityKind(kind: IdentityKind) {

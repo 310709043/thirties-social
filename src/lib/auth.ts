@@ -42,10 +42,11 @@ export async function register(email: string, password: string): Promise<{
       boundary: null,
       region: null,
       quote: null,
-      loftRole: null,
       loftVisible: true,
       nightColorIdx: 0,
       nightAdjIdx: 0,
+      autoFilter: true,
+      slowMode: false,
       createdAt: serverTimestamp(),
       lastActiveAt: serverTimestamp(),
     });

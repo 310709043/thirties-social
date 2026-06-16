@@ -12,7 +12,7 @@ import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkele
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
-import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoomMessage, fetchOlderRoomMessages } from '../lib/db';
+import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid } from '../lib/db';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
 import { filterMessage } from '../lib/filter';
@@ -31,6 +31,7 @@ export default function RoomScreen({ navigation, route }: Props) {
   const [roomCreated, setRoomCreated] = useState(false);
   const [identitySeed, setIdentitySeed] = useState(seed);
   const [roomId, setRoomId] = useState<string | null>(null);
+  const [room, setRoom] = useState<DbRoom | null>(null);
   const [messages, setMessages] = useState<DbRoomMessage[]>([]);
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -38,18 +39,23 @@ export default function RoomScreen({ navigation, route }: Props) {
   const [hasMore, setHasMore] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
 
+  const uid = getCurrentUid();
+  const isRoomFull = room && (room.memberIds?.length ?? 0) >= ROOM_CAPACITY;
+  const isMember = room && uid ? (room.memberIds ?? []).includes(uid) : false;
+  const canSend = !isRoomFull || isMember;
+
   const reshuffleIdentity = () => {
     setIdentitySeed(Math.random().toString(36).slice(2));
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    const room = await getOrCreatePresetRoom({
+    const r = await getOrCreatePresetRoom({
       roomKey,
       topicZh: getT(roomKey as any, 'zh'),
       topicEn: getT(roomKey as any, 'en'),
     });
-    if (room) setRoomId(room.id);
+    if (r) { setRoomId(r.id); setRoom(r); }
     setRefreshing(false);
   };
 
@@ -67,12 +73,16 @@ export default function RoomScreen({ navigation, route }: Props) {
   };
 
   useEffect(() => {
+    if (roomKey === 'new') {
+      setShowCreateRoom(true);
+      return;
+    }
     getOrCreatePresetRoom({
       roomKey,
       topicZh: getT(roomKey as any, 'zh'),
       topicEn: getT(roomKey as any, 'en'),
-    }).then(room => {
-      if (room) setRoomId(room.id);
+    }).then(r => {
+      if (r) { setRoomId(r.id); setRoom(r); }
     });
   }, [roomKey]);
 
@@ -93,21 +103,46 @@ export default function RoomScreen({ navigation, route }: Props) {
   }, [inviteSent]);
 
   const handleSend = async () => {
-    if (!inputText.trim() || !roomId) return;
+    if (!inputText.trim()) return;
+    console.log('[RoomScreen] handleSend called, roomId:', roomId, 'uid:', uid);
+    if (!roomId) {
+      Alert.alert(
+        lang === 'en' ? 'Still loading' : '載入中',
+        lang === 'en' ? 'Room is still loading, please wait.' : '房間仍在載入中，請稍候。',
+      );
+      return;
+    }
+    if (!uid) {
+      Alert.alert(
+        lang === 'en' ? 'Not signed in' : '未登入',
+        lang === 'en' ? 'Please sign in to send messages.' : '請先登入才能發送訊息。',
+      );
+      return;
+    }
     const check = filterMessage(inputText.trim());
     if (check.blocked) {
       Alert.alert(
-        lang === 'en' ? 'Message blocked' : '\u8A0A\u606F\u5DF2\u88AB\u904E\u6FFE',
-        lang === 'en' ? 'This message contains content that may be harmful.' : '\u9019\u5247\u8A0A\u606F\u5305\u542B\u53EF\u80FD\u50B7\u5BB3\u4ED6\u4EBA\u7684\u5167\u5BB9\u3002',
+        lang === 'en' ? 'Message blocked' : '訊息已被過濾',
+        lang === 'en' ? 'This message contains content that may be harmful.' : '這則訊息包含可能傷害他人的內容。',
       );
       return;
     }
     setSending(true);
-    const ok = await sendRoomMessage({ roomId, content: inputText.trim(), senderSeed: identitySeed });
+    console.log('[RoomScreen] Calling sendRoomMessage...');
+    const result = await sendRoomMessage({ roomId, content: inputText.trim(), senderSeed: identitySeed });
+    console.log('[RoomScreen] sendRoomMessage result:', result);
     setSending(false);
-    if (ok) {
+    if (result === true) {
       setInputText('');
       hapticLight();
+    } else if (result === 'room_full') {
+      Alert.alert(
+        lang === 'en' ? 'Room is full' : '房間已滿',
+        lang === 'en'
+          ? 'This room has reached the 20 person limit. Try another room.'
+          : '這個房間已達 20 人上限。試試其他房間。',
+        [{ text: 'OK', style: 'cancel' }],
+      );
     } else {
       Alert.alert(
         lang === 'en' ? 'Failed to send' : '\u9001\u51FA\u5931\u6557',
@@ -152,8 +187,12 @@ export default function RoomScreen({ navigation, route }: Props) {
           <Text style={[styles.roomNum, { color: p.muted }]}>
             {lang === 'en' ? 'Room' : '房間'}
           </Text>
-          <Text style={[styles.roomName, { color: p.ink }]}>{t(roomKey as any, lang)}</Text>
-          <Text style={[styles.roomNameAlt, { color: p.muted }]}>{tAlt(roomKey as any, lang)}</Text>
+          <Text style={[styles.roomName, { color: p.ink }]}>
+            {room?.customTopicZh || room?.customTopicEn || t(roomKey as any, lang)}
+          </Text>
+          {room?.customTopicZh || room?.customTopicEn ? null : (
+            <Text style={[styles.roomNameAlt, { color: p.muted }]}>{tAlt(roomKey as any, lang)}</Text>
+          )}
 
           {/* Live count */}
           <View style={styles.liveRow}>
@@ -167,10 +206,11 @@ export default function RoomScreen({ navigation, route }: Props) {
               </View>
             )}
             <Text style={[styles.liveText, { color: p.muted }]}>
-              {messages.length === 0
-                ? (lang === 'en' ? 'no one here yet' : '還沒有人')
-                : `${[...new Set(messages.map(m => m.senderSeed))].length} ${t('roomPeople', lang)}`
-              }
+              {(() => {
+                const memberCount = room?.memberIds?.length ?? 0;
+                if (memberCount === 0) return lang === 'en' ? 'no one here yet' : '還沒有人';
+                return `${memberCount}/${ROOM_CAPACITY} ${t('roomPeople', lang)}`;
+              })()}
             </Text>
             <Text style={[styles.liveDot, { color: p.muted }]}>·</Text>
             <Text style={[styles.liveText, { color: p.muted }]}>{t('roomEphemeral', lang)}</Text>
@@ -243,40 +283,54 @@ export default function RoomScreen({ navigation, route }: Props) {
 
         {/* COMPOSER */}
         <View style={[styles.composer, { backgroundColor: p.dark ? 'rgba(13,18,36,0.9)' : 'rgba(255,255,255,0.7)' }]}>
-          {/* Who you are in this room */}
-          <View style={[styles.identityComposerRow, { backgroundColor: p.surface, borderColor: p.line }]}>
-            <Identity kind={identityKind} seed={identitySeed} size={28} palette={p} lang={lang} trust={0.2} />
-            <View style={{ flex: 1 }}>
-              <ColorAdjLabel seed={identitySeed} lang={lang} palette={p} />
-              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 10, color: p.muted, marginTop: 1 }}>
-                {lang === 'en' ? 'who you are in this room' : '你在這個房間的身份'}
+          {canSend ? (
+            <>
+              {/* Who you are in this room */}
+              <View style={[styles.identityComposerRow, { backgroundColor: p.surface, borderColor: p.line }]}>
+                <Identity kind={identityKind} seed={identitySeed} size={28} palette={p} lang={lang} trust={0.2} />
+                <View style={{ flex: 1 }}>
+                  <ColorAdjLabel seed={identitySeed} lang={lang} palette={p} />
+                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 10, color: p.muted, marginTop: 1 }}>
+                    {lang === 'en' ? 'who you are in this room' : '你在這個房間的身份'}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={reshuffleIdentity}
+                  style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: p.accentSoft }}>
+                  <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.accent, letterSpacing: 0.5 }}>
+                    {lang === 'en' ? '↺ reshuffle' : '↺ 換一個'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.composerHint, { color: p.muted }]}>
+                {lang === 'en' ? 'tap any message to invite that person to talk' : '輕點任一則訊息，邀請那個人私聊'}
+              </Text>
+              <View style={[styles.inputRow, { backgroundColor: p.surface, borderColor: p.line }]}>
+                <TextInput
+                  value={inputText}
+                  onChangeText={setInputText}
+                  placeholder={lang === 'en' ? 'whisper into the room…' : '對房間說一句⋯⋯'}
+                  placeholderTextColor={p.muted}
+                  style={[styles.input, { color: p.ink }]}
+                  editable={!sending}
+                />
+                <TouchableOpacity
+                  style={[styles.sendBtn, { backgroundColor: inputText.trim() ? p.ink : p.line }]}
+                  onPress={handleSend}
+                  disabled={!inputText.trim() || sending}
+                >
+                  <Text style={{ color: inputText.trim() ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontSize: 16 }}>↑</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <View style={[styles.identityComposerRow, { backgroundColor: p.surface, borderColor: p.line }]}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center', flex: 1 }}>
+                {lang === 'en'
+                  ? `Room full (${ROOM_CAPACITY}/${ROOM_CAPACITY}) — you can read but not send`
+                  : `房間已滿（${ROOM_CAPACITY}/${ROOM_CAPACITY}）— 可以閱讀但無法發言`}
               </Text>
             </View>
-            <TouchableOpacity onPress={reshuffleIdentity}
-              style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: p.accentSoft }}>
-              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.accent, letterSpacing: 0.5 }}>
-                {lang === 'en' ? '↺ reshuffle' : '↺ 換一個'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={[styles.composerHint, { color: p.muted }]}>
-            {lang === 'en' ? 'tap any message to invite that person to talk' : '輕點任一則訊息，邀請那個人私聊'}
-          </Text>
-          <GlassCard p={p} padding={6} radius={28} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TextInput
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder={lang === 'en' ? 'whisper into the room…' : '對房間說一句⋯⋯'}
-              placeholderTextColor={p.muted}
-              style={[styles.input, { color: p.ink }]}
-            />
-            <TouchableOpacity
-              style={[styles.sendBtn, { backgroundColor: p.ink }]}
-              onPress={handleSend}
-            >
-              <Text style={{ color: p.dark ? '#1a1530' : '#fff', fontSize: 16 }}>↑</Text>
-            </TouchableOpacity>
-          </GlassCard>
+          )}
         </View>
 
         {/* CREATE ROOM SHEET */}
@@ -307,7 +361,11 @@ export default function RoomScreen({ navigation, route }: Props) {
                   <TouchableOpacity
                     onPress={async () => {
                       if (roomTopic.trim().length > 0) {
-                        await createRoom({ topicZh: roomTopic.trim() });
+                        const newRoom = await createRoom({ topicZh: roomTopic.trim() });
+                        if (newRoom) {
+                          setRoomId(newRoom.id);
+                          setRoom(newRoom);
+                        }
                         setRoomCreated(true);
                       }
                     }}
@@ -425,7 +483,8 @@ const styles = StyleSheet.create({
   composer:              { padding: 12, paddingBottom: 18, gap: 8 },
   composerHint:          { fontFamily: 'NotoSerifTC-Regular', fontSize: 12, textAlign: 'center' },
   identityComposerRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14, borderWidth: 0.5 },
-  input:        { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 15, paddingHorizontal: 14, paddingVertical: 12 },
+  inputRow:              { flexDirection: 'row', alignItems: 'center', borderRadius: 28, borderWidth: 0.5, paddingLeft: 4, paddingRight: 4, paddingVertical: 4 },
+  input:        { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 15, paddingHorizontal: 14, paddingVertical: 10 },
   sendBtn:      { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   // Invite sheet
   sheetOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' },

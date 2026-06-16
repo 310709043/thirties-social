@@ -10,13 +10,15 @@ service cloud.firestore {
                     // Prevent client from self-modifying wicks (use transactions)
                     && !('isBanned' in request.resource.data.diff(resource.data).affectedKeys())
                     && !('banReason' in request.resource.data.diff(resource.data).affectedKeys());
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // ── Wicks Transactions ──────────────────────────────
     match /wicksTransactions/{txId} {
       allow read:   if request.auth != null && resource.data.userId == request.auth.uid;
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if false; // immutable
+      allow update: if false;
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
 
     // ── Rooms ──────────────────────────────────────────
@@ -45,11 +47,16 @@ service cloud.firestore {
       allow read: if request.auth != null
                   && (resource.data.userAId == request.auth.uid
                       || resource.data.userBId == request.auth.uid);
+      allow create: if request.auth != null
+                    && request.resource.data.userAId == request.auth.uid;
       allow update: if request.auth != null
                     && (resource.data.userAId == request.auth.uid
                         || resource.data.userBId == request.auth.uid)
                     && request.resource.data.diff(resource.data).affectedKeys()
                        .hasOnly(['messageCount', 'endedAt', 'endedReason']);
+      allow delete: if request.auth != null
+                    && (resource.data.userAId == request.auth.uid
+                        || resource.data.userBId == request.auth.uid);
 
       match /messages/{msgId} {
         allow read: if request.auth != null
@@ -57,7 +64,10 @@ service cloud.firestore {
                         || get(/databases/$(database)/documents/conversations/$(convId)).data.userBId == request.auth.uid);
         allow create: if request.auth != null
                       && request.resource.data.senderId == request.auth.uid;
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if request.auth != null
+                      && (get(/databases/$(database)/documents/conversations/$(convId)).data.userAId == request.auth.uid
+                          || get(/databases/$(database)/documents/conversations/$(convId)).data.userBId == request.auth.uid);
       }
     }
 
@@ -69,6 +79,35 @@ service cloud.firestore {
                     && request.resource.data.userId == request.auth.uid;
       allow update: if request.auth != null
                     && resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
+    }
+
+    // ── Loft Conversations ──────────────────────────────
+    match /loftConversations/{convId} {
+      allow read: if request.auth != null
+                  && (resource.data.userAId == request.auth.uid
+                      || resource.data.userBId == request.auth.uid);
+      allow create: if request.auth != null
+                    && request.resource.data.userAId == request.auth.uid;
+      allow update: if request.auth != null
+                    && (resource.data.userAId == request.auth.uid
+                        || resource.data.userBId == request.auth.uid);
+      allow delete: if request.auth != null
+                    && (resource.data.userAId == request.auth.uid
+                        || resource.data.userBId == request.auth.uid);
+
+      match /messages/{msgId} {
+        allow read: if request.auth != null
+                    && (get(/databases/$(database)/documents/loftConversations/$(convId)).data.userAId == request.auth.uid
+                        || get(/databases/$(database)/documents/loftConversations/$(convId)).data.userBId == request.auth.uid);
+        allow create: if request.auth != null
+                      && request.resource.data.senderId == request.auth.uid;
+        allow update: if false;
+        allow delete: if request.auth != null
+                      && (get(/databases/$(database)/documents/loftConversations/$(convId)).data.userAId == request.auth.uid
+                          || get(/databases/$(database)/documents/loftConversations/$(convId)).data.userBId == request.auth.uid);
+      }
     }
 
     // ── Match Queue ─────────────────────────────────────
@@ -82,7 +121,20 @@ service cloud.firestore {
                     && request.resource.data.reporterId == request.auth.uid;
       allow read:   if request.auth != null
                     && resource.data.reporterId == request.auth.uid;
-      allow update, delete: if false; // admin only via Admin SDK
+      allow update: if false;
+      allow delete: if request.auth != null
+                    && resource.data.reporterId == request.auth.uid;
+    }
+
+    // ── Veiled Photos ───────────────────────────────────
+    match /veiledPhotos/{photoId} {
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      allow update: if false;
+      allow delete: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
     }
 
     // ── Admin collections ───────────────────────────────

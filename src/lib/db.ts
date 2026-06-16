@@ -51,10 +51,11 @@ export interface DbUser {
   boundary: string | null;
   region: string | null;
   quote: string | null;
-  loftRole: 'listener' | 'speaker' | 'undecided' | null;
   loftVisible: boolean;
   nightColorIdx: number;
   nightAdjIdx: number;
+  autoFilter: boolean;
+  slowMode: boolean;
   createdAt: any;
   lastActiveAt: any;
 }
@@ -81,6 +82,7 @@ export async function upsertUser(params: {
       setupDone: false,
       isBanned: false,
       banReason: null,
+      blockedUsers: [],
       gender: null,
       ageBracket: null,
       relationshipStatus: null,
@@ -88,10 +90,11 @@ export async function upsertUser(params: {
       boundary: null,
       region: null,
       quote: null,
-      loftRole: null,
       loftVisible: true,
       nightColorIdx: 0,
       nightAdjIdx: 0,
+      autoFilter: true,
+      slowMode: false,
       createdAt: serverTimestamp(),
       lastActiveAt: serverTimestamp(),
     };
@@ -246,10 +249,13 @@ export interface DbRoom {
   isActive: boolean;
   isUserCreated: boolean;
   messageCount: number;
+  memberIds: string[];
   creatorId: string | null;
   createdAt: any;
   closesAt: any;
 }
+
+export const ROOM_CAPACITY = 20;
 
 export async function fetchActiveRooms(): Promise<DbRoom[]> {
   const q = query(
@@ -278,6 +284,7 @@ export async function createRoom(params: {
     isActive: true,
     isUserCreated: true,
     messageCount: 0,
+    memberIds: [],
     createdAt: serverTimestamp(),
     closesAt: Timestamp.fromDate(new Date(Date.now() + 86400 * 1000)),
   };
@@ -345,22 +352,41 @@ export async function sendRoomMessage(params: {
   roomId: string;
   content: string;
   senderSeed: string;
-}): Promise<boolean> {
+}): Promise<boolean | 'room_full'> {
   const uid = getCurrentUid();
-  if (!uid) return false;
+  if (!uid) {
+    console.warn('[sendRoomMessage] No uid - user not authenticated');
+    return false;
+  }
   try {
+    const roomRef = doc(db, 'rooms', params.roomId);
+    const result = await runTransaction(db, async tx => {
+      const roomSnap = await tx.get(roomRef);
+      if (!roomSnap.exists()) throw new Error('room_not_found');
+      const roomData = roomSnap.data();
+      const memberIds: string[] = roomData.memberIds ?? [];
+      if (!memberIds.includes(uid)) {
+        if (memberIds.length >= ROOM_CAPACITY) return 'room_full' as const;
+        tx.update(roomRef, { memberIds: [...memberIds, uid] });
+      }
+      return 'ok' as const;
+    });
+    if (result === 'room_full') return 'room_full';
+
     await addDoc(collection(db, 'rooms', params.roomId, 'messages'), {
       senderId: uid,
       senderSeed: params.senderSeed,
       content: params.content,
       createdAt: serverTimestamp(),
     });
-    // Increment room message count
     await updateDoc(doc(db, 'rooms', params.roomId), {
       messageCount: increment(1),
     });
     return true;
-  } catch { return false; }
+  } catch (e: any) {
+    console.warn('[sendRoomMessage] Error:', e?.message, e?.code);
+    return false;
+  }
 }
 
 // ── Typing Indicator ─────────────────────────────────────
@@ -782,7 +808,7 @@ export async function getOrCreatePresetRoom(params: {
     const data = {
       creatorId: uid ?? null, roomKey: params.roomKey,
       customTopicZh: params.topicZh, customTopicEn: params.topicEn,
-      isActive: true, isUserCreated: false, messageCount: 0,
+      isActive: true, isUserCreated: false, messageCount: 0, memberIds: [],
       createdAt: serverTimestamp(),
       closesAt: Timestamp.fromDate(new Date(Date.now() + 86400 * 1000)),
     };
@@ -891,7 +917,38 @@ export async function deleteAccount(): Promise<{ ok: boolean; error?: string }> 
     const reportSnap = await getDocs(reportQ);
     await Promise.all(reportSnap.docs.map(d => deleteDoc(d.ref)));
 
-    // 6. Sign out Firebase anonymous auth
+    // 6. Delete conversations and their messages
+    const convAQ = query(collection(db, 'conversations'), where('userAId', '==', uid));
+    const convBQ = query(collection(db, 'conversations'), where('userBId', '==', uid));
+    const [convASnap, convBSnap] = await Promise.all([getDocs(convAQ), getDocs(convBQ)]);
+    const convIds = new Set<string>();
+    convASnap.docs.forEach(d => convIds.add(d.id));
+    convBSnap.docs.forEach(d => convIds.add(d.id));
+    await Promise.all(Array.from(convIds).map(async cid => {
+      const msgs = await getDocs(collection(db, 'conversations', cid, 'messages'));
+      await Promise.all(msgs.docs.map(m => deleteDoc(m.ref)));
+      await deleteDoc(doc(db, 'conversations', cid));
+    }));
+
+    // 7. Delete loft conversations and their messages
+    const lconvAQ = query(collection(db, 'loftConversations'), where('userAId', '==', uid));
+    const lconvBQ = query(collection(db, 'loftConversations'), where('userBId', '==', uid));
+    const [lconvASnap, lconvBSnap] = await Promise.all([getDocs(lconvAQ), getDocs(lconvBQ)]);
+    const lconvIds = new Set<string>();
+    lconvASnap.docs.forEach(d => lconvIds.add(d.id));
+    lconvBSnap.docs.forEach(d => lconvIds.add(d.id));
+    await Promise.all(Array.from(lconvIds).map(async cid => {
+      const msgs = await getDocs(collection(db, 'loftConversations', cid, 'messages'));
+      await Promise.all(msgs.docs.map(m => deleteDoc(m.ref)));
+      await deleteDoc(doc(db, 'loftConversations', cid));
+    }));
+
+    // 8. Delete veiled photos
+    const vpQ = query(collection(db, 'veiledPhotos'), where('userId', '==', uid));
+    const vpSnap = await getDocs(vpQ);
+    await Promise.all(vpSnap.docs.map(d => deleteDoc(d.ref)));
+
+    // 9. Sign out Firebase
     await auth.signOut();
 
     return { ok: true };

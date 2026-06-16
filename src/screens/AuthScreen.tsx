@@ -12,6 +12,7 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, SoftButton, FadeInUp, Logo } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
 import { register, login, resetPassword } from '../lib/auth';
+import { ensureAnonAuth } from '../lib/db';
 import { hapticMedium, hapticSuccess } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
@@ -230,7 +231,11 @@ export default function AuthScreen({ navigation }: Props) {
             {mode === 'login' && (
               <FadeInUp delay={400} distance={8}>
                 <TouchableOpacity
-                  onPress={() => navigation.replace('Onboarding')}
+                  onPress={async () => {
+                    try { await ensureAnonAuth(); } catch {}
+                    hapticSuccess();
+                    navigation.replace('Onboarding');
+                  }}
                   style={styles.guestBtn}
                 >
                   <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: p.muted }}>

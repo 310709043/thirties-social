@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated, Easing,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated, Easing, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,8 +9,7 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, Cap, WickGlyph, AnimatedNumber, FadeInUp, PressableScale } from '../components/ui';
-import { useAppStore, setVigil } from '../hooks/useAppStore';
-import { addWicks } from '../lib/db';
+import { useAppStore } from '../hooks/useAppStore';
 import { hapticSuccess } from '../lib/haptics';
 import { buyWickPack, buyVigilSubscription, restorePurchases, IAP_PRODUCT_IDS } from '../lib/iap';
 
@@ -48,10 +47,14 @@ export default function UpgradeScreen({ navigation }: Props) {
     const result = await buyWickPack(productId);
     if (result.ok) {
       hapticSuccess();
-    } else if (result.error === 'iap_not_available') {
-      // Dev fallback — direct grant (remove before production)
-      const fallback = await addWicks(amount, 'dev_grant', undefined, `DEV ${amount} 燭芯`);
-      if (fallback.ok) hapticSuccess();
+    } else {
+      Alert.alert(
+        lang === 'en' ? 'Purchase failed' : '購買失敗',
+        lang === 'en'
+          ? 'Could not complete purchase. Please try again.'
+          : '無法完成購買。請再試一次。',
+        [{ text: 'OK', style: 'cancel' }],
+      );
     }
   };
 
@@ -60,11 +63,14 @@ export default function UpgradeScreen({ navigation }: Props) {
     if (result.ok) {
       hapticSuccess();
       navigation.goBack();
-    } else if (result.error === 'iap_not_available') {
-      // Dev fallback
-      setVigil(true);
-      hapticSuccess();
-      navigation.goBack();
+    } else {
+      Alert.alert(
+        lang === 'en' ? 'Purchase failed' : '購買失敗',
+        lang === 'en'
+          ? 'Could not complete subscription. Please try again.'
+          : '無法完成訂閱。請再試一次。',
+        [{ text: 'OK', style: 'cancel' }],
+      );
     }
   };
 
@@ -72,6 +78,14 @@ export default function UpgradeScreen({ navigation }: Props) {
     const result = await restorePurchases();
     if (result.ok && result.restoredVigil) {
       hapticSuccess();
+    } else {
+      Alert.alert(
+        lang === 'en' ? 'Nothing to restore' : '沒有可還原的購買',
+        lang === 'en'
+          ? 'No previous purchases found.'
+          : '找不到之前的購買記錄。',
+        [{ text: 'OK', style: 'cancel' }],
+      );
     }
   };
 

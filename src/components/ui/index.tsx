@@ -69,10 +69,10 @@ type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'accent' | 'danger';
 type BtnSize = 'sm' | 'md' | 'lg';
 
 export const SoftButton = React.memo(function SoftButton({
-  p, children, onPress, variant = 'primary', size = 'md', full = false, style,
+  p, children, onPress, variant = 'primary', size = 'md', full = false, style, disabled = false,
 }: {
   p: Palette; children: ReactNode; onPress?: () => void;
-  variant?: BtnVariant; size?: BtnSize; full?: boolean; style?: ViewStyle;
+  variant?: BtnVariant; size?: BtnSize; full?: boolean; style?: ViewStyle; disabled?: boolean;
 }) {
   const sizes = {
     sm: { height: 36, fontSize: 13, paddingH: 14 },
@@ -93,6 +93,7 @@ export const SoftButton = React.memo(function SoftButton({
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
+      disabled={disabled}
       style={[{
         height: sizes.height,
         paddingHorizontal: sizes.paddingH,
@@ -105,6 +106,7 @@ export const SoftButton = React.memo(function SoftButton({
         flexDirection: 'row',
         gap: 8,
         width: full ? '100%' : undefined,
+        opacity: disabled ? 0.5 : 1,
       }, style]}
     >
       {typeof children === 'string'

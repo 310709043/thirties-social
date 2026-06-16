@@ -14,6 +14,12 @@ import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, IdentityKind } from '..
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
+const DIARY = [
+  { d: 'Mon', zh: '今天沒什麼特別的。', en: 'Nothing special today.' },
+  { d: 'Tue', zh: '又夢到那個地方了。', en: 'Dreamt of that place again.' },
+  { d: 'Wed', zh: '沉默有時候是一種溫柔。', en: 'Silence can be a kind of tenderness.' },
+];
+
 // Reverse-map DB slugs to display labels
 const STATUS_MAP: Record<string, { zh: string; en: string }> = {
   dating:          { zh: '穩定交往中',     en: 'in a relationship' },

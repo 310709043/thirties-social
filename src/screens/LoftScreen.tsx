@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,11 +47,16 @@ export default function LoftScreen({ navigation }: Props) {
       hapticMedium();
       setEntering(true);
     } else if (result.error === 'already_entered_tonight') {
-      // Free user already entered tonight — show upgrade prompt
       setShowBroke(true);
     } else {
       hapticWarning();
-      setShowBroke(true);
+      Alert.alert(
+        lang === 'en' ? 'Something went wrong' : '出了點問題',
+        lang === 'en'
+          ? 'Could not enter the Loft. Please try again.'
+          : '無法進入夜閣。請再試一次。',
+        [{ text: 'OK', style: 'cancel' }],
+      );
     }
   };
 
@@ -168,6 +173,8 @@ export default function LoftScreen({ navigation }: Props) {
                 ? (lang === 'en' ? 'Come back tomorrow.' : '明天再來。')
                 : (lang === 'en' ? 'Vigil: unlimited entries + 5 wicks/day' : '守夜：無限通行 + 每日 5 芯')}
             </Text>
+            <TouchableOpacity onPress={() => { setShowBroke(false); navigation.navigate('Upgrade'); }}
+              style={[styles.buyBtn]}>
               <LinearGradient colors={['#e8a557', '#c25a3b']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                 style={[StyleSheet.absoluteFill, { borderRadius: 999 }]} />
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, fontWeight: '500', letterSpacing: 2, color: '#1f1014', zIndex: 1 }}>
@@ -269,7 +276,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
               <ActivityIndicator color={L.candle} style={{ marginTop: 32 }} />
             ) : tonight.length === 0 ? (
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: L.muted, textAlign: 'center', marginTop: 32 }}>
-                今晚還沒有人
+                {lang === 'en' ? 'No one is in the Loft tonight' : '今晚還沒有人'}
               </Text>
             ) : (
               tonight.map(m => (

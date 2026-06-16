@@ -7,6 +7,7 @@ import { initIAP, endIAP } from './src/lib/iap';
 import { registerForPushNotifications, addNotificationListener } from './src/lib/notifications';
 import { analytics } from './src/lib/analytics';
 import { navigationRef, resetAndNavigate } from './src/lib/navigationRef';
+import { RootStackParamList } from './src/navigation';
 import { onAuthChange } from './src/lib/auth';
 import Navigation from './src/navigation';
 import LoadingScreen from './src/components/LoadingScreen';
@@ -62,7 +63,7 @@ export default function App() {
       (response) => {
         const data = response.notification.request.content.data;
         if (data?.screen) {
-          resetAndNavigate(data.screen, data);
+          resetAndNavigate(data.screen as keyof RootStackParamList, data);
         }
       },
     );

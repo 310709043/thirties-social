@@ -59,7 +59,7 @@ export default function SafetyScreen({ navigation, route }: Props) {
       await fileReport({
         reportedUserId,
         reportType: 'report',
-        description: lang === 'en' ? 'Reported for inappropriate behavior' : 'Reported for inappropriate behavior',
+        description: lang === 'en' ? 'Reported for inappropriate behavior' : '因不當行為被檢舉',
         conversationId: conversationId ?? undefined,
       });
     }
