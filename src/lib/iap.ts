@@ -5,13 +5,13 @@ import { Platform } from 'react-native';
 import {
   initConnection,
   endConnection,
-  getProducts,
+  fetchProducts as rnFetchProducts,
   requestPurchase,
   getAvailablePurchases,
   finishTransaction,
   purchaseUpdatedListener,
   purchaseErrorListener,
-  type ProductPurchase,
+  type Purchase,
   type PurchaseError,
   type Product,
 } from 'react-native-iap';
@@ -59,12 +59,12 @@ export async function initIAP(): Promise<boolean> {
     _connected = true;
 
     // Listen for purchase updates
-    _purchaseUpdateSub = purchaseUpdatedListener(async (purchase: ProductPurchase) => {
+    _purchaseUpdateSub = purchaseUpdatedListener(async (purchase: Purchase) => {
       const productId = purchase.productId;
 
       if (WICK_AMOUNTS[productId]) {
         // Consumable wick pack
-        await addWicks(WICK_AMOUNTS[productId], 'iap_purchase', purchase.transactionId ?? undefined, `IAP ${productId}`);
+        await addWicks(WICK_AMOUNTS[productId], 'iap_purchase', purchase.id ?? undefined, `IAP ${productId}`);
       } else if (productId === VIGIL_SUB) {
         // Subscription
         await setVigil(true);
@@ -100,7 +100,7 @@ export function endIAP() {
 export async function fetchProducts(): Promise<Product[]> {
   if (!_connected) await initIAP();
   try {
-    _products = await getProducts({ skus: WICK_PRODUCTS });
+    _products = ((await rnFetchProducts({ skus: WICK_PRODUCTS, type: 'in-app' })) ?? []) as Product[];
     return _products;
   } catch (e) {
     console.warn('[IAP] fetchProducts failed:', e);
@@ -119,7 +119,7 @@ export async function buyWickPack(productId: string): Promise<{ ok: boolean; err
     if (!init) return { ok: false, error: 'iap_not_available' };
   }
   try {
-    await requestPurchase({ sku: productId });
+    await requestPurchase({ request: { apple: { sku: productId } }, type: 'in-app' });
     return { ok: true };
   } catch (e: any) {
     if (e?.code === 'E_USER_CANCELLED') return { ok: false, error: 'cancelled' };
@@ -134,7 +134,7 @@ export async function buyVigilSubscription(): Promise<{ ok: boolean; error?: str
     if (!init) return { ok: false, error: 'iap_not_available' };
   }
   try {
-    await requestPurchase({ sku: VIGIL_SUB });
+    await requestPurchase({ request: { apple: { sku: VIGIL_SUB } }, type: 'subs' });
     return { ok: true };
   } catch (e: any) {
     if (e?.code === 'E_USER_CANCELLED') return { ok: false, error: 'cancelled' };
