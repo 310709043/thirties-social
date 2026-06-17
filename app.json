@@ -47,7 +47,6 @@
       }
     },
     "plugins": [
-      "react-native-iap",
       [
         "expo-notifications",
         {
