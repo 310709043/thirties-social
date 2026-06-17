@@ -542,10 +542,14 @@ export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
     where('nightDate', '==', tonight),
     limit(50),
   );
-  const snap = await getDocs(q);
+  const [snap, myUserSnap] = await Promise.all([
+    getDocs(q),
+    uid ? getDoc(doc(db, 'users', uid)) : Promise.resolve(null),
+  ]);
+  const myBlocked: string[] = myUserSnap?.exists() ? (myUserSnap.data().blockedUsers ?? []) : [];
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }) as DbLoftSession)
-    .filter(s => !(s as any).leftAt && s.userId !== uid);
+    .filter(s => !(s as any).leftAt && s.userId !== uid && !myBlocked.includes(s.userId));
 }
 
 // ── Loft Conversations ───────────────────────────────────
@@ -728,9 +732,12 @@ export async function tryFindMatch(): Promise<boolean> {
       limit(10),
     );
     const snap = await getDocs(q);
+    // Never match someone I've blocked.
+    const myUserSnap = await getDoc(doc(db, 'users', uid));
+    const myBlocked: string[] = myUserSnap.exists() ? (myUserSnap.data().blockedUsers ?? []) : [];
     const candidates = snap.docs
       .map(d => ({ id: d.id, ...d.data() } as MatchQueueEntry & { id: string }))
-      .filter(e => e.userId !== uid);
+      .filter(e => e.userId !== uid && !myBlocked.includes(e.userId));
 
     if (candidates.length === 0) return false;
 
