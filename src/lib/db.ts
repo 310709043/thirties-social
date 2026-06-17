@@ -288,7 +288,7 @@ export async function createRoom(params: {
     isUserCreated: true,
     messageCount: 0,
     createdAt: serverTimestamp(),
-    closesAt: Timestamp.fromDate(new Date(Date.now() + 86400 * 1000)),
+    closesAt: Timestamp.fromDate(new Date(Date.now() + 43200 * 1000)),
   };
   const ref = await addDoc(collection(db, 'rooms'), data);
   return { id: ref.id, ...data } as DbRoom;
@@ -402,8 +402,8 @@ export async function sendRoomMessage(params: {
     });
     await updateDoc(doc(db, 'rooms', params.roomId), {
       messageCount: increment(1),
-      // Keep the brazier alive while it's active; it fades 24h after the last message.
-      closesAt: Timestamp.fromDate(new Date(Date.now() + 86400 * 1000)),
+      // Keep the brazier alive while it's active; it fades 12h after the last message.
+      closesAt: Timestamp.fromDate(new Date(Date.now() + 43200 * 1000)),
     });
     return true;
   } catch {
@@ -974,7 +974,7 @@ export async function getOrCreatePresetRoom(params: {
       customTopicZh: params.topicZh, customTopicEn: params.topicEn,
       isActive: true, isUserCreated: false, messageCount: 0,
       createdAt: serverTimestamp(),
-      closesAt: Timestamp.fromDate(new Date(Date.now() + 86400 * 1000)),
+      closesAt: Timestamp.fromDate(new Date(Date.now() + 43200 * 1000)),
     };
     const ref = await addDoc(collection(db, 'rooms'), data);
     return { id: ref.id, ...data } as DbRoom;
