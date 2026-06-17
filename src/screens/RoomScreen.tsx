@@ -12,7 +12,8 @@ import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkele
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, canCreateRoom, getTier, ROOM_CREATE_COST } from '../hooks/useAppStore';
-import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence, spendWicks } from '../lib/db';
+import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence, spendWicks, reactToRoomMessage } from '../lib/db';
+import { RESONANCE_SYMBOLS, resonanceLabel } from '../lib/resonance';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
 import { filterMessage } from '../lib/filter';
@@ -40,6 +41,7 @@ export default function RoomScreen({ navigation, route }: Props) {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [presence, setPresence] = useState<RoomPresence[]>([]);
   const [readOnly, setReadOnly] = useState(false);
+  const [reactingMsg, setReactingMsg] = useState<string | null>(null);
 
   const uid = getCurrentUid();
   // Live "who's here" comes from fresh presence heartbeats, not cumulative
@@ -302,8 +304,22 @@ export default function RoomScreen({ navigation, route }: Props) {
                         <View style={[styles.bubble, { backgroundColor: p.surface, borderColor: p.line }]}>
                           <Text style={[styles.bubbleText, { color: p.ink }]}>{msg.content}</Text>
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 5, paddingLeft: 6 }}>
                           <ColorAdjLabel seed={msg.senderSeed} lang={lang} palette={p} />
+                          {Object.entries(msg.reactions ?? {})
+                            .filter(([, n]) => (n as number) > 0)
+                            .map(([sym, n]) => (
+                              <View key={sym} style={[styles.resoPill, { backgroundColor: p.accentSoft, borderColor: p.accent + '33' }]}>
+                                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: p.accent }}>{resonanceLabel(sym, lang)}</Text>
+                                {(n as number) > 1 && <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.accent, marginLeft: 3 }}>{n as number}</Text>}
+                              </View>
+                            ))}
+                          <TouchableOpacity onPress={() => setReactingMsg(msg.id)} hitSlop={8}
+                            style={[styles.resoAdd, { borderColor: p.line }]}>
+                            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: p.muted }}>
+                              {lang === 'en' ? '+ resonate' : '＋ 共鳴'}
+                            </Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
                     </View>
@@ -514,12 +530,40 @@ export default function RoomScreen({ navigation, route }: Props) {
             </View>
           </View>
         )}
+
+        {/* RESONANCE PICKER */}
+        {reactingMsg && (
+          <TouchableOpacity activeOpacity={1} onPress={() => setReactingMsg(null)}
+            style={styles.resoOverlay}>
+            <View style={[styles.resoSheet, { backgroundColor: p.surfaceSolid, borderColor: p.line }]}>
+              <Text style={[styles.resoTitle, { color: p.muted }]}>
+                {lang === 'en' ? 'Send resonance' : '送出共鳴'}
+              </Text>
+              <View style={styles.resoGrid}>
+                {RESONANCE_SYMBOLS.map(s => (
+                  <TouchableOpacity key={s.id} activeOpacity={0.8}
+                    onPress={() => { const id = reactingMsg; setReactingMsg(null); if (id) { reactToRoomMessage(roomId!, id, s.id); hapticLight(); } }}
+                    style={[styles.resoChoice, { backgroundColor: p.accentSoft, borderColor: p.accent + '33' }]}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.accent }}>{lang === 'en' ? s.en : s.zh}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
       </SafeAreaView>
     </VaporBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  resoPill:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 0.5 },
+  resoAdd:      { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 0.5 },
+  resoOverlay:  { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  resoSheet:    { padding: 20, paddingBottom: 36, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 0.5 },
+  resoTitle:    { fontFamily: 'Inter-Regular', fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', textAlign: 'center', marginBottom: 14 },
+  resoGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
+  resoChoice:   { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, borderWidth: 0.5 },
   topBar:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18, paddingTop: 8 },
   iconBtn:      { width: 36, height: 36, borderRadius: 18, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
   labelBtn:     { height: 36, paddingHorizontal: 14, borderRadius: 18, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },

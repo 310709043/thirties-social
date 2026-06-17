@@ -302,6 +302,42 @@ export interface DbRoomMessage {
   senderSeed: string;
   content: string;
   createdAt: any;
+  reactions?: Record<string, number>;
+}
+
+/**
+ * Toggle the current user's resonance reaction on a Brazier message. One
+ * reaction per user per message: tapping the same symbol removes it, a
+ * different symbol switches. Counts live on the message doc (read with the
+ * message); the per-user choice is tracked in a reactions/{uid} subdoc.
+ */
+export async function reactToRoomMessage(
+  roomId: string,
+  msgId: string,
+  symbolId: string,
+): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  const msgRef = doc(db, 'rooms', roomId, 'messages', msgId);
+  const myRef = doc(db, 'rooms', roomId, 'messages', msgId, 'reactions', uid);
+  try {
+    await runTransaction(db, async tx => {
+      const mine = await tx.get(myRef);
+      const prev = mine.exists() ? (mine.data().symbol as string) : null;
+      if (prev === symbolId) {
+        // Toggle off.
+        tx.update(msgRef, { [`reactions.${symbolId}`]: increment(-1) });
+        tx.delete(myRef);
+      } else {
+        if (prev) tx.update(msgRef, { [`reactions.${prev}`]: increment(-1) });
+        tx.update(msgRef, { [`reactions.${symbolId}`]: increment(1) });
+        tx.set(myRef, { symbol: symbolId, userId: uid, createdAt: serverTimestamp() });
+      }
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function fetchRoomMessages(roomId: string): Promise<DbRoomMessage[]> {
