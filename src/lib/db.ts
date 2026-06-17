@@ -473,6 +473,22 @@ function localNightDate(): string {
   return `${y}-${m}-${day}`;
 }
 
+// The Loft is open from midnight to 05:00 (matching the in-app copy).
+export const LOFT_OPEN_HOUR = 0;
+export const LOFT_CLOSE_HOUR = 5;
+
+/**
+ * Whether the Loft is currently open. Always open in dev builds, or when
+ * EXPO_PUBLIC_LOFT_ALWAYS_OPEN=1 — a test bypass so the Loft can be exercised
+ * outside its midnight–05:00 window.
+ */
+export function isLoftOpen(now: Date = new Date()): boolean {
+  if (__DEV__) return true;
+  if (process.env.EXPO_PUBLIC_LOFT_ALWAYS_OPEN === '1') return true;
+  const h = now.getHours();
+  return h >= LOFT_OPEN_HOUR && h < LOFT_CLOSE_HOUR;
+}
+
 export async function enterLoft(nightName: string): Promise<{
   ok: boolean; sessionId?: string; balance?: number; error?: string;
 }> {

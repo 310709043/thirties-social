@@ -10,7 +10,7 @@ import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
-import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation } from '../lib/db';
+import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, LOFT_OPEN_HOUR, LOFT_CLOSE_HOUR } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
 
@@ -34,6 +34,19 @@ export default function LoftScreen({ navigation }: Props) {
 
   // No gender-based pricing — free: 1 entry/night, vigil: unlimited
   const handleEnter = async () => {
+    if (!isLoftOpen()) {
+      const open = String(LOFT_OPEN_HOUR).padStart(2, '0');
+      const close = String(LOFT_CLOSE_HOUR).padStart(2, '0');
+      hapticWarning();
+      Alert.alert(
+        lang === 'en' ? 'The Loft is closed' : '夜閣還沒開',
+        lang === 'en'
+          ? `The Loft opens between ${open}:00 and ${close}:00.`
+          : `夜閣只在 ${open}:00–${close}:00 開放。`,
+        [{ text: 'OK', style: 'cancel' }],
+      );
+      return;
+    }
     const nightName = getColorAdj(seed, lang).label;
     const result = await enterLoft(nightName);
     if (result.ok) {
