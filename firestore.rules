@@ -27,9 +27,9 @@ service cloud.firestore {
       allow create: if request.auth != null
                     && request.resource.data.creatorId == request.auth.uid;
       allow update: if request.auth != null
-                    // Only allow incrementing messageCount
+                    // Sending a message bumps messageCount and extends closesAt.
                     && request.resource.data.diff(resource.data).affectedKeys()
-                       .hasOnly(['messageCount']);
+                       .hasOnly(['messageCount', 'closesAt']);
 
       // Room messages subcollection
       match /messages/{msgId} {

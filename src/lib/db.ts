@@ -402,6 +402,8 @@ export async function sendRoomMessage(params: {
     });
     await updateDoc(doc(db, 'rooms', params.roomId), {
       messageCount: increment(1),
+      // Keep the brazier alive while it's active; it fades 24h after the last message.
+      closesAt: Timestamp.fromDate(new Date(Date.now() + 86400 * 1000)),
     });
     return true;
   } catch {
