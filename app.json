@@ -41,7 +41,10 @@
       "privacyPolicyUrl": "https://thirties-landing.vercel.app/privacy",
       "supportEmail": "privacy@lowbatterytown.com",
       "ageRating": "17+",
-      "category": "SOCIAL_NETWORKING"
+      "category": "SOCIAL_NETWORKING",
+      "eas": {
+        "projectId": "d2729381-91aa-41ed-b510-c9549b4c8f39"
+      }
     },
     "plugins": [
       "react-native-iap",
@@ -52,6 +55,7 @@
           "color": "#e8a557"
         }
       ]
-    ]
+    ],
+    "owner": "simontang"
   }
 }
