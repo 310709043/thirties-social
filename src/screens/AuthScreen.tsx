@@ -12,6 +12,7 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, SoftButton, FadeInUp, Logo } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
 import { register, login, resetPassword } from '../lib/auth';
+import { signInWithGoogle, isGoogleAvailable } from '../lib/googleAuth';
 import { ensureAnonAuth } from '../lib/db';
 import { hapticMedium, hapticSuccess } from '../lib/haptics';
 
@@ -66,6 +67,19 @@ export default function AuthScreen({ navigation, route }: Props) {
       navigation.replace(setupDone ? 'Mood' : 'Setup');
     } else {
       setError(result.error ?? '註冊失敗');
+    }
+  };
+
+  const handleGoogle = async () => {
+    setLoading(true);
+    setError('');
+    const result = await signInWithGoogle();
+    setLoading(false);
+    if (result.ok) {
+      hapticSuccess();
+      navigation.replace(setupDone ? 'Mood' : 'Setup');
+    } else if (result.error !== 'cancelled') {
+      setError(lang === 'en' ? 'Google sign-in failed' : 'Google 登入失敗');
     }
   };
 
@@ -195,6 +209,18 @@ export default function AuthScreen({ navigation, route }: Props) {
               </GlassCard>
             </FadeInUp>
 
+            {/* Google sign-in */}
+            {(mode === 'login' || mode === 'register') && isGoogleAvailable() && (
+              <FadeInUp delay={250} distance={8}>
+                <TouchableOpacity onPress={handleGoogle} disabled={loading}
+                  style={[styles.googleBtn, { borderColor: p.line, backgroundColor: p.surface }]}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink }}>
+                    {lang === 'en' ? 'Continue with Google' : '用 Google 繼續'}
+                  </Text>
+                </TouchableOpacity>
+              </FadeInUp>
+            )}
+
             {/* Links */}
             <FadeInUp delay={300} distance={8}>
               <View style={styles.links}>
@@ -265,5 +291,6 @@ const styles = StyleSheet.create({
   msgBox:     { padding: 12, borderRadius: 12, borderWidth: 0.5, marginBottom: 16 },
   links:      { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 20 },
   link:       { fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
+  googleBtn:  { marginTop: 14, height: 50, borderRadius: 14, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
   guestBtn:   { alignItems: 'center', marginTop: 24, paddingVertical: 8 },
 });

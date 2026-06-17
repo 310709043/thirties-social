@@ -15,6 +15,7 @@ import { WickGlyph, Logo } from './src/components/ui';
 import { LOFT_PALETTE } from './src/lib/theme';
 import { ToastProvider } from './src/components/ui/Toast';
 import { ErrorBoundary } from './src/components/ui/ErrorBoundary';
+import { configureGoogle } from './src/lib/googleAuth';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -50,6 +51,7 @@ export default function App() {
       analytics.appOpen();
     });
     initIAP();
+    configureGoogle();
 
     // Listen for auth state changes
     const unsubscribeAuth = onAuthChange(user => {

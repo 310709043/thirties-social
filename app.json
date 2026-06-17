@@ -54,7 +54,8 @@
           "icon": "./assets/icon.png",
           "color": "#e8a557"
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "owner": "simontang"
   }
