@@ -11,7 +11,7 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkeleton } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore } from '../hooks/useAppStore';
+import { useAppStore, canCreateRoom } from '../hooks/useAppStore';
 import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence } from '../lib/db';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
@@ -80,9 +80,27 @@ export default function RoomScreen({ navigation, route }: Props) {
     setLoadingOlder(false);
   };
 
+  // Guests can join rooms but not open them.
+  const openCreateRoom = () => {
+    if (!canCreateRoom()) {
+      Alert.alert(
+        lang === 'en' ? 'Create an account to open a room' : '開房間需要先建立帳號',
+        lang === 'en'
+          ? 'Guests can join rooms. Create an account to open your own.'
+          : '訪客可以參與房間。建立帳號後即可開設自己的房間。',
+        [
+          { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
+          { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
+        ],
+      );
+      return;
+    }
+    setShowCreateRoom(true);
+  };
+
   useEffect(() => {
     if (roomKey === 'new') {
-      setShowCreateRoom(true);
+      openCreateRoom();
       return;
     }
     getOrCreatePresetRoom({
@@ -193,7 +211,7 @@ export default function RoomScreen({ navigation, route }: Props) {
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
-              onPress={() => setShowCreateRoom(true)}
+              onPress={openCreateRoom}
               style={[styles.labelBtn, { backgroundColor: p.accentSoft, borderColor: p.accent + '40' }]}
             >
               <Text style={[styles.labelBtnText, { color: p.accent }]}>

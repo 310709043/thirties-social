@@ -15,7 +15,7 @@ import {
 import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, checkAndClaimDailyReward, setLang, canStartConversation } from '../hooks/useAppStore';
+import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier } from '../hooks/useAppStore';
 import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch } from '../lib/db';
 import { analytics } from '../lib/analytics';
 
@@ -114,7 +114,21 @@ export default function MoodScreen({ navigation }: Props) {
 
   const handleEnter = async () => {
     if (waiting) return;
-    if (!canStartConversation()) {
+    // Guests can use rooms but not 1:1 matching.
+    if (getTier() === 'guest') {
+      Alert.alert(
+        lang === 'en' ? 'Create an account to match' : '配對需要先建立帳號',
+        lang === 'en'
+          ? 'Guests can join rooms. Create an account to start 1-on-1 matching.'
+          : '訪客可以參與房間聊天。建立帳號後即可開始一對一配對。',
+        [
+          { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
+          { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
+        ],
+      );
+      return;
+    }
+    if (!canMatch()) {
       Alert.alert(
         lang === 'en' ? 'Daily limit reached' : '今日對話已達上限',
         lang === 'en' ? 'Upgrade to Vigil for unlimited.' : '升級守夜人可解除限制。',

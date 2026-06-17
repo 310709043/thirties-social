@@ -32,8 +32,22 @@ export default function LoftScreen({ navigation }: Props) {
   const [showBroke, setShowBroke] = useState(false);
   const [brokeLine] = useState(() => BROKE_LINES[Math.floor(Math.random() * BROKE_LINES.length)]);
 
-  // No gender-based pricing — free: 1 entry/night, vigil: unlimited
+  // The Loft is a Vigil-only late-night space — free users and guests can't enter.
   const handleEnter = async () => {
+    if (!vigil) {
+      hapticWarning();
+      Alert.alert(
+        lang === 'en' ? 'The Loft is for Vigil members' : '夜閣是守夜人專屬',
+        lang === 'en'
+          ? 'The Loft is a members-only late-night space. Upgrade to Vigil to enter.'
+          : '夜閣是守夜人專屬的深夜空間，升級守夜人即可進入。',
+        [
+          { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
+          { text: lang === 'en' ? 'Upgrade' : '升級', onPress: () => navigation.push('Upgrade') },
+        ],
+      );
+      return;
+    }
     if (!isLoftOpen()) {
       const open = String(LOFT_OPEN_HOUR).padStart(2, '0');
       const close = String(LOFT_CLOSE_HOUR).padStart(2, '0');

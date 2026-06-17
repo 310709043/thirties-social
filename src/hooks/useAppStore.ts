@@ -5,6 +5,7 @@ import { Direction, DEFAULT_DIRECTION } from '../lib/theme';
 import { Lang } from '../lib/copy';
 import { IdentityKind } from '../lib/identity';
 import { ensureAnonAuth, upsertUser, updateUser, subscribeToUser, claimDailyReward } from '../lib/db';
+import { isGuest } from '../lib/auth';
 
 let _deviceId: string | null = null;
 async function getDeviceId(): Promise<string> {
@@ -291,6 +292,33 @@ export async function trackPerson() {
 export function canStartConversation(): boolean {
   if (_state.vigil) return true;
   return _state.conversationsToday < 5;
+}
+
+// ── Tiers & capabilities ──────────────────────────────────
+export type Tier = 'guest' | 'free' | 'vigil';
+
+/** Guest = anonymous, Vigil = subscriber, otherwise Free. */
+export function getTier(): Tier {
+  if (isGuest()) return 'guest';
+  return _state.vigil ? 'vigil' : 'free';
+}
+
+/** Random matching: guests can't; free is capped at 5/day; vigil unlimited. */
+export function canMatch(): boolean {
+  const t = getTier();
+  if (t === 'guest') return false;
+  if (t === 'vigil') return true;
+  return _state.conversationsToday < 5;
+}
+
+/** The Loft is a Vigil-only space (free & guests cannot enter). */
+export function canEnterLoft(): boolean {
+  return getTier() === 'vigil';
+}
+
+/** Opening a room: guests can't; free pays wicks (charged at call site); vigil free. */
+export function canCreateRoom(): boolean {
+  return getTier() !== 'guest';
 }
 
 const FREE_IDENTITY_KINDS: IdentityKind[] = ['sigil', 'color+adj', 'text'];
