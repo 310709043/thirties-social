@@ -4,6 +4,7 @@ import {
   StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
@@ -244,6 +245,29 @@ export default function MoodScreen({ navigation }: Props) {
               </Text>
             )}
           </View>
+
+          {/* ── The Loft ── */}
+          <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.push('Loft')}>
+            <LinearGradient
+              colors={['#1f1014', '#2d161c', '#3a1e24']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={styles.loftBanner}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: '#f5e2c4', fontWeight: '500' }}>
+                  {lang === 'en' ? 'The Loft' : '夜閣'}
+                </Text>
+                <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: 'rgba(245,226,196,0.6)', marginTop: 2 }}>
+                  {lang === 'en' ? 'opens midnight · face to face · veiled' : '午夜開啟 · 面對面 · 帶紗'}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'center', gap: 4 }}>
+                <WickGlyph size={18} color="#e8a557" />
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 2, color: 'rgba(232,165,87,0.7)', textTransform: 'uppercase' }}>
+                  {lang === 'en' ? 'enter' : '進入'}
+                </Text>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
 
         {/* ── Bottom: Match Button ── */}
@@ -286,6 +310,7 @@ const styles = StyleSheet.create({
 
   content:       { flex: 1, paddingHorizontal: 20, justifyContent: 'center', gap: 20 },
   heading:       { fontFamily: 'NotoSerifTC-Light', fontSize: 28, lineHeight: 36, textAlign: 'center' },
+  loftBanner:    { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20, gap: 12 },
 
   inputWrap:     { borderRadius: 20, borderWidth: 0.5, padding: 16 },
   input:         { fontFamily: 'NotoSerifTC-Regular', fontSize: 16, lineHeight: 26, minHeight: 60 },
