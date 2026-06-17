@@ -12,6 +12,7 @@ import { VaporBackground, GlassCard, Cap, WickGlyph, AnimatedNumber, FadeInUp, P
 import { useAppStore } from '../hooks/useAppStore';
 import { hapticSuccess } from '../lib/haptics';
 import { buyWickPack, buyVigilSubscription, restorePurchases, IAP_PRODUCT_IDS } from '../lib/iap';
+import { isGuest } from '../lib/auth';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Upgrade'>;
 
@@ -35,7 +36,25 @@ export default function UpgradeScreen({ navigation }: Props) {
     ).start();
   }, []);
 
+  // Guests have no recoverable identity, so a purchase made now would be lost
+  // on logout / reinstall. Require an account first.
+  const requireAccount = (): boolean => {
+    if (!isGuest()) return false;
+    Alert.alert(
+      lang === 'en' ? 'Create an account first' : '請先建立帳號',
+      lang === 'en'
+        ? 'As a guest your purchases can be lost if you log out or reinstall. Create an account to keep them safe.'
+        : '訪客身分下，登出或重裝後購買可能會遺失。請先建立帳號以保住你的購買。',
+      [
+        { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
+        { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
+      ],
+    );
+    return true;
+  };
+
   const handleBuyPack = async (amount: number) => {
+    if (requireAccount()) return;
     const productMap: Record<number, string> = {
       10: IAP_PRODUCT_IDS.wick10,
       30: IAP_PRODUCT_IDS.wick30,
@@ -59,6 +78,7 @@ export default function UpgradeScreen({ navigation }: Props) {
   };
 
   const handleVigil = async () => {
+    if (requireAccount()) return;
     const result = await buyVigilSubscription();
     if (result.ok) {
       hapticSuccess();

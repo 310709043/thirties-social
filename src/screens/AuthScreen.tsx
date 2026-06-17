@@ -19,10 +19,10 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 
 type Mode = 'login' | 'register' | 'forgot';
 
-export default function AuthScreen({ navigation }: Props) {
-  const { direction, lang } = useAppStore();
+export default function AuthScreen({ navigation, route }: Props) {
+  const { direction, lang, setupDone } = useAppStore();
   const p = DIRECTIONS[direction];
-  const [mode, setMode] = useState<Mode>('login');
+  const [mode, setMode] = useState<Mode>(route.params?.mode ?? 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -61,7 +61,9 @@ export default function AuthScreen({ navigation }: Props) {
     setLoading(false);
     if (result.ok) {
       hapticSuccess();
-      navigation.replace('Setup');
+      // A linked guest is already set up → return to the app; a brand-new
+      // account still needs onboarding.
+      navigation.replace(setupDone ? 'Mood' : 'Setup');
     } else {
       setError(result.error ?? '註冊失敗');
     }

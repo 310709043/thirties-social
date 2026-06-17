@@ -5,6 +5,8 @@ import {
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  linkWithCredential,
+  EmailAuthProvider,
   type User,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
@@ -15,14 +17,33 @@ export interface AuthUser {
   email: string | null;
 }
 
+/** True when the current session is an anonymous guest (no recoverable account). */
+export function isGuest(): boolean {
+  return auth.currentUser?.isAnonymous ?? false;
+}
+
 // ── Register ────────────────────────────────────────────
 export async function register(email: string, password: string): Promise<{
-  ok: boolean; user?: AuthUser; error?: string;
+  ok: boolean; user?: AuthUser; linked?: boolean; error?: string;
 }> {
   try {
-    const { user } = await createUserWithEmailAndPassword(auth, email, password);
+    const current = auth.currentUser;
 
-    // Create user document in Firestore
+    // Upgrade an anonymous guest in place: link the email credential so the
+    // SAME uid (and therefore all wicks, vigil and history) is preserved.
+    if (current && current.isAnonymous) {
+      const credential = EmailAuthProvider.credential(email, password);
+      const { user } = await linkWithCredential(current, credential);
+      // Keep the existing guest document — only attach the email.
+      await setDoc(doc(db, 'users', user.uid), {
+        email: user.email,
+        lastActiveAt: serverTimestamp(),
+      }, { merge: true });
+      return { ok: true, user: { uid: user.uid, email: user.email }, linked: true };
+    }
+
+    // Brand-new account.
+    const { user } = await createUserWithEmailAndPassword(auth, email, password);
     await setDoc(doc(db, 'users', user.uid), {
       email: user.email,
       deviceId: null,
@@ -51,10 +72,10 @@ export async function register(email: string, password: string): Promise<{
       lastActiveAt: serverTimestamp(),
     });
 
-    return { ok: true, user: { uid: user.uid, email: user.email } };
+    return { ok: true, user: { uid: user.uid, email: user.email }, linked: false };
   } catch (e: any) {
     const code = e?.code ?? '';
-    if (code === 'auth/email-already-in-use') {
+    if (code === 'auth/email-already-in-use' || code === 'auth/credential-already-in-use') {
       return { ok: false, error: '此 Email 已被註冊' };
     }
     if (code === 'auth/weak-password') {

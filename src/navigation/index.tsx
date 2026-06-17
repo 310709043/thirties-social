@@ -19,7 +19,7 @@ import LoftChatScreen from '../screens/LoftChatScreen';
 import UpgradeScreen from '../screens/UpgradeScreen';
 
 export type RootStackParamList = {
-  Auth: undefined;
+  Auth: { mode?: 'login' | 'register' } | undefined;
   Onboarding: undefined;
   Setup: undefined;
   Mood: undefined;
