@@ -219,7 +219,8 @@ export function Toggle({
     }}>
       <Animated.View style={{
         position: 'absolute',
-        left: knobX, top: 2,
+        top: 2, left: 0,
+        transform: [{ translateX: knobX }],
         width: 20, height: 20, borderRadius: 10,
         backgroundColor: '#fff',
         shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
