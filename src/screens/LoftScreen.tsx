@@ -25,13 +25,6 @@ const BROKE_LINES = [
   { zh: '這裡不施捨浪漫。', en: 'Romance is not given away here.' },
 ];
 
-const TONIGHT = [
-  { seed: 'l01', zh: '今天他出差。屋子很安靜。', en: 'He travels tonight. The house is quiet.', who_zh: '酒紅的長椅', who_en: 'wine, long-bench' },
-  { seed: 'l02', zh: '婚後第七年，沒有人問過我想被怎麼樣對待。', en: 'Seven years married. No one has asked how I want to be touched.', who_zh: '炭灰的舊書', who_en: 'charcoal, old-book' },
-  { seed: 'l03', zh: '不是想出軌。是想被當成一個有慾望的人。', en: 'Not seeking. Just to be wanted as someone with desire.', who_zh: '蜜色的走廊', who_en: 'honey, corridor' },
-  { seed: 'l04', zh: '今晚不想當太太。', en: 'Tonight I don\'t want to be a wife.', who_zh: '夜雨的玫', who_en: 'night-rain, rose' },
-];
-
 export default function LoftScreen({ navigation }: Props) {
   const { lang, wicks, seed, vigil } = useAppStore();
   const [inside, setInside] = useState(false);

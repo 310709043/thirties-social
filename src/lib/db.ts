@@ -460,13 +460,26 @@ export function subscribeToTyping(
 }
 
 // ── Loft ─────────────────────────────────────────────────
+/**
+ * Local calendar date (YYYY-MM-DD) for "tonight". Using the device's local
+ * date — not UTC — so the Loft night rolls over at local midnight rather than
+ * at 08:00 for UTC+8 users.
+ */
+function localNightDate(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export async function enterLoft(nightName: string): Promise<{
   ok: boolean; sessionId?: string; balance?: number; error?: string;
 }> {
   const uid = getCurrentUid();
   if (!uid) return { ok: false, error: 'not_authenticated' };
 
-  const tonight = new Date().toISOString().slice(0, 10);
+  const tonight = localNightDate();
 
   // Check if already entered tonight
   const q = query(
@@ -507,7 +520,7 @@ export interface DbLoftSession {
 
 export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
   const uid = getCurrentUid();
-  const tonight = new Date().toISOString().slice(0, 10);
+  const tonight = localNightDate();
   const q = query(
     collection(db, 'loftSessions'),
     where('nightDate', '==', tonight),
