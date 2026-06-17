@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { initStore, useAppStore } from './src/hooks/useAppStore';
-import { initIAP, endIAP } from './src/lib/iap';
+import { initPurchases } from './src/lib/purchases';
 import { registerForPushNotifications, addNotificationListener } from './src/lib/notifications';
 import { analytics } from './src/lib/analytics';
 import { navigationRef, resetAndNavigate } from './src/lib/navigationRef';
@@ -50,13 +50,14 @@ export default function App() {
       registerForPushNotifications();
       analytics.appOpen();
     });
-    initIAP();
     configureGoogle();
 
     // Listen for auth state changes
     const unsubscribeAuth = onAuthChange(user => {
       setAuthUser(user);
       setAuthChecked(true);
+      // RevenueCat appUserID = Firebase uid, so the webhook maps purchases back.
+      if (user) initPurchases(user.uid);
     });
 
     // Handle notification taps
@@ -71,7 +72,6 @@ export default function App() {
     );
 
     return () => {
-      endIAP();
       removeListeners();
       unsubscribeAuth();
     };

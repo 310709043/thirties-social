@@ -1,15 +1,24 @@
 // purchases.ts — RevenueCat (react-native-purchases) wrapper.
 //
-// Replaces the client-trusted react-native-iap flow. Purchases are verified by
-// RevenueCat server-side; wicks/vigil are granted by the RevenueCat webhook on
-// the backend (Admin SDK), never by this client. The app sees the result via
-// its Firestore user-doc subscription.
+// Purchases are verified by RevenueCat server-side; wicks/vigil are granted by
+// the RevenueCat webhook on the backend (Admin SDK), never by this client. The
+// app sees the result via its Firestore user-doc subscription.
 //
-// NOT yet wired into UpgradeScreen — that swap happens once the RevenueCat
-// account + store products + API keys are in place. Until then this file is
-// inert (imported nowhere).
+// The native module is lazy-required so a binary without it (e.g. an older dev
+// client) won't crash — purchases are simply unavailable until rebuilt.
 import { Platform } from 'react-native';
-import Purchases, { LOG_LEVEL } from 'react-native-purchases';
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+let Purchases: any = null;
+let LOG_LEVEL: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const m = require('react-native-purchases');
+  Purchases = m.default ?? m.Purchases ?? m;
+  LOG_LEVEL = m.LOG_LEVEL;
+} catch {
+  // native module not present in this binary
+}
 
 const RC_API_KEY = Platform.select({
   ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,
@@ -30,17 +39,13 @@ let _configured = false;
 
 /**
  * Configure RevenueCat. appUserID must be the Firebase uid so the webhook's
- * event.app_user_id maps back to the correct user document. Call once after
- * auth is ready.
+ * event.app_user_id maps back to the correct user document. Call once auth is
+ * ready.
  */
 export function initPurchases(appUserId: string): boolean {
-  if (_configured) return true;
-  if (!RC_API_KEY) {
-    console.warn('[purchases] No RevenueCat API key configured');
-    return false;
-  }
+  if (_configured || !RC_API_KEY || !Purchases) return _configured;
   try {
-    if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.WARN);
+    if (__DEV__ && LOG_LEVEL) Purchases.setLogLevel(LOG_LEVEL.WARN);
     Purchases.configure({ apiKey: RC_API_KEY, appUserID: appUserId });
     _configured = true;
     return true;
@@ -50,8 +55,12 @@ export function initPurchases(appUserId: string): boolean {
   }
 }
 
+export function isPurchasesAvailable(): boolean {
+  return !!RC_API_KEY && !!Purchases;
+}
+
 async function purchaseProductId(productId: string): Promise<{ ok: boolean; error?: string }> {
-  if (!_configured) return { ok: false, error: 'not_configured' };
+  if (!_configured || !Purchases) return { ok: false, error: 'not_configured' };
   try {
     const products = await Purchases.getProducts([productId]);
     if (!products.length) return { ok: false, error: 'product_not_found' };
@@ -73,10 +82,10 @@ export function buyVigilSubscription(): Promise<{ ok: boolean; error?: string }>
 }
 
 export async function restorePurchases(): Promise<{ ok: boolean; restoredVigil: boolean; error?: string }> {
-  if (!_configured) return { ok: false, restoredVigil: false, error: 'not_configured' };
+  if (!_configured || !Purchases) return { ok: false, restoredVigil: false, error: 'not_configured' };
   try {
     const info = await Purchases.restorePurchases();
-    const restoredVigil = info.entitlements.active[VIGIL_ENTITLEMENT] != null;
+    const restoredVigil = info?.entitlements?.active?.[VIGIL_ENTITLEMENT] != null;
     return { ok: true, restoredVigil };
   } catch (e: any) {
     return { ok: false, restoredVigil: false, error: e?.message ?? 'restore_failed' };

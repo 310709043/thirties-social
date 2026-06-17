@@ -11,7 +11,7 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, Cap, WickGlyph, AnimatedNumber, FadeInUp, PressableScale } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
 import { hapticSuccess } from '../lib/haptics';
-import { buyWickPack, buyVigilSubscription, restorePurchases, IAP_PRODUCT_IDS } from '../lib/iap';
+import { buyWickPack, buyVigilSubscription, restorePurchases, IAP_PRODUCT_IDS } from '../lib/purchases';
 import { isGuest } from '../lib/auth';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Upgrade'>;
