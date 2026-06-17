@@ -121,12 +121,12 @@ export default function LoadingScreen({ onDone }: Props) {
             alignItems: 'center',
             marginTop: 24,
           }}>
-            <Text style={styles.title}>第卅者</Text>
+            <Text style={styles.title}>燭影私語</Text>
           </Animated.View>
 
           {/* Subtitle */}
           <Animated.View style={{ opacity: subtitleOpacity, alignItems: 'center', marginTop: 8 }}>
-            <Text style={styles.subtitle}>The Other</Text>
+            <Text style={styles.subtitle}>Candle Whisper</Text>
           </Animated.View>
 
           {/* Tagline */}

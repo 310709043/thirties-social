@@ -160,10 +160,10 @@ export default function SettingsScreen({ navigation }: Props) {
                   alt={tAlt('setAbout', lang)}
                   control={
                     <TouchableOpacity onPress={() => Alert.alert(
-                      lang === 'en' ? 'About The Other' : '關於第卅者',
+                      lang === 'en' ? 'About Candle Whisper' : '關於燭影私語',
                       lang === 'en'
-                        ? 'The Other — for those who are the third party to no one, only themselves.\n\nVersion 0.1.0'
-                        : '第卅者 — 不為別人，只為自己當一次傾訴的對象。\n\n版本 0.1.0'
+                        ? 'Candle Whisper — in the late-night glow, what you whisper is heard.\n\nVersion 0.1.0'
+                        : '燭影私語 — 在深夜的微光裡，說出口的都有人懂。\n\n版本 0.1.0'
                     )}>
                       <Text style={{ color: p.muted, fontSize: 18 }}>›</Text>
                     </TouchableOpacity>
@@ -263,8 +263,8 @@ export default function SettingsScreen({ navigation }: Props) {
           <FadeInUp delay={500} distance={8}>
             <Text style={[styles.footer, { color: p.muted }]}>
               {lang === 'en'
-                ? '第卅者 — for those who are the third party to no one, only themselves.'
-                : '第卅者 — 不為別人，只為自己當一次傾訴的對象。'}
+                ? 'Candle Whisper — in the late-night glow, what you whisper is heard.'
+                : '燭影私語 — 在深夜的微光裡，說出口的都有人懂。'}
             </Text>
           </FadeInUp>
         </ScrollView>

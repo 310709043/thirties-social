@@ -112,7 +112,7 @@ export default function AuthScreen({ navigation, route }: Props) {
                   {mode === 'login'
                     ? (lang === 'en' ? 'Welcome back' : '歡迎回來')
                     : mode === 'register'
-                    ? (lang === 'en' ? 'Join us' : '加入第卅者')
+                    ? (lang === 'en' ? 'Join Candle Whisper' : '加入燭影私語')
                     : (lang === 'en' ? 'Reset password' : '重設密碼')}
                 </Text>
                 <Text style={[styles.subtitle, { color: p.muted }]}>

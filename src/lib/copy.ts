@@ -3,7 +3,7 @@
 export type Lang = 'zh' | 'en';
 
 const COPY: Record<string, { zh: string; en: string }> = {
-  appName:         { zh: '第卅者',           en: 'The Other' },
+  appName:         { zh: '燭影私語',         en: 'Candle Whisper' },
   appTag:          { zh: '安靜地說',         en: 'Speak quietly' },
 
   // Onboarding
