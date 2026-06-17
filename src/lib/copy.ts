@@ -7,12 +7,12 @@ const COPY: Record<string, { zh: string; en: string }> = {
   appTag:          { zh: '安靜地說',         en: 'Speak quietly' },
 
   // Onboarding
-  ob1Title:        { zh: '不用名字，也不用照片', en: 'No name. No face.' },
-  ob1Body:         { zh: '在這裡，你只是一個今晚想說話的人。', en: 'Here, you are only someone who wanted to talk tonight.' },
-  ob2Title:        { zh: '訊息會自己消失',   en: 'Messages dissolve' },
-  ob2Body:         { zh: '對話結束後，沒有人能回頭翻看。', en: 'When it ends, no one can scroll back.' },
-  ob3Title:        { zh: '一次只連結一個人', en: 'One person at a time' },
-  ob3Body:         { zh: '每二十四小時，重置一次。', en: 'Every twenty-four hours, the cycle resets.' },
+  ob1Title:        { zh: '這裡沒有人要你完美', en: 'No one needs you to be perfect here' },
+  ob1Body:         { zh: '不用名字、不用照片。你只是一個今晚想被聽見的人。', en: 'No name, no face — just someone who wants to be heard tonight.' },
+  ob2Title:        { zh: '說出口，就讓它慢慢熄滅', en: 'Say it — then let it fade' },
+  ob2Body:         { zh: '宣洩與對話都會消失，沒有人能回頭翻看。', en: 'What you pour out disappears. No one can scroll back.' },
+  ob3Title:        { zh: '總有人懂你此刻',   en: 'Someone here understands' },
+  ob3Body:         { zh: '在火盆旁取暖，或找一個人說話。你不必一個人撐著。', en: "Warm yourself by the brazier, or find one person to talk to. You don't have to carry it alone." },
   obContinue:      { zh: '我準備好了',       en: 'I am ready' },
   obSigil:         { zh: '今晚的識別符',     en: "Tonight's sigil" },
   obSigilHint:     { zh: '這是你今天的樣子。明天它會換掉。', en: 'This is how you appear today. Tomorrow it changes.' },
@@ -21,7 +21,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   // Mood
   moodHeader:      { zh: '今晚怎麼了？',     en: 'What is it tonight?' },
   moodPrompt:      { zh: '寫一句關於最近的事。可以是和另一半的，也可以不是。', en: 'A line about what is happening. About a partner, or not.' },
-  moodPlaceholder: { zh: '最近和那個人⋯⋯',     en: 'Lately with them…' },
+  moodPlaceholder: { zh: '最近，壓在心裡的是⋯⋯', en: "Lately, what's been weighing on me…" },
   moodEnter:       { zh: '進入',             en: 'Enter' },
   moodSkip:        { zh: '不想寫，給我一個火盆', en: 'Skip — just find me a room' },
   moodSuggested:   { zh: '今晚有人在說',     en: 'People are talking about' },
