@@ -249,13 +249,14 @@ export interface DbRoom {
   isActive: boolean;
   isUserCreated: boolean;
   messageCount: number;
-  memberIds: string[];
   creatorId: string | null;
   createdAt: any;
   closesAt: any;
 }
 
 export const ROOM_CAPACITY = 20;
+/** A presence entry counts as "online" if its heartbeat is within this window. */
+export const PRESENCE_STALE_MS = 45 * 1000;
 
 export async function fetchActiveRooms(): Promise<DbRoom[]> {
   const q = query(
@@ -284,7 +285,6 @@ export async function createRoom(params: {
     isActive: true,
     isUserCreated: true,
     messageCount: 0,
-    memberIds: [],
     createdAt: serverTimestamp(),
     closesAt: Timestamp.fromDate(new Date(Date.now() + 86400 * 1000)),
   };
@@ -352,27 +352,10 @@ export async function sendRoomMessage(params: {
   roomId: string;
   content: string;
   senderSeed: string;
-}): Promise<boolean | 'room_full'> {
+}): Promise<boolean> {
   const uid = getCurrentUid();
-  if (!uid) {
-    console.warn('[sendRoomMessage] No uid - user not authenticated');
-    return false;
-  }
+  if (!uid) return false;
   try {
-    const roomRef = doc(db, 'rooms', params.roomId);
-    const result = await runTransaction(db, async tx => {
-      const roomSnap = await tx.get(roomRef);
-      if (!roomSnap.exists()) throw new Error('room_not_found');
-      const roomData = roomSnap.data();
-      const memberIds: string[] = roomData.memberIds ?? [];
-      if (!memberIds.includes(uid)) {
-        if (memberIds.length >= ROOM_CAPACITY) return 'room_full' as const;
-        tx.update(roomRef, { memberIds: [...memberIds, uid] });
-      }
-      return 'ok' as const;
-    });
-    if (result === 'room_full') return 'room_full';
-
     await addDoc(collection(db, 'rooms', params.roomId, 'messages'), {
       senderId: uid,
       senderSeed: params.senderSeed,
@@ -383,10 +366,66 @@ export async function sendRoomMessage(params: {
       messageCount: increment(1),
     });
     return true;
-  } catch (e: any) {
-    console.warn('[sendRoomMessage] Error:', e?.message, e?.code);
+  } catch {
     return false;
   }
+}
+
+// ── Room Presence ─────────────────────────────────────────
+// Capacity and the live "who's here" count are driven by short-lived
+// heartbeat docs under rooms/{roomId}/presence/{uid}. Entries naturally
+// age out via PRESENCE_STALE_MS, so a crashed client never holds a slot.
+export interface RoomPresence {
+  userId: string;
+  seed: string;
+  lastSeen: any;
+}
+
+/** Count presence entries whose heartbeat is still fresh. */
+export function countActivePresence(entries: RoomPresence[]): number {
+  const now = Date.now();
+  return entries.filter(e => !e.lastSeen || now - e.lastSeen.toMillis() < PRESENCE_STALE_MS).length;
+}
+
+/** One-off read of a room's fresh presence count (used to gate entry). */
+export async function fetchActivePresenceCount(roomId: string): Promise<number> {
+  try {
+    const snap = await getDocs(collection(db, 'rooms', roomId, 'presence'));
+    return countActivePresence(snap.docs.map(d => d.data() as RoomPresence));
+  } catch { return 0; }
+}
+
+export async function joinRoomPresence(roomId: string, seed: string): Promise<void> {
+  const uid = getCurrentUid();
+  if (!uid) return;
+  try {
+    await setDoc(doc(db, 'rooms', roomId, 'presence', uid), {
+      userId: uid, seed, lastSeen: serverTimestamp(),
+    });
+  } catch {}
+}
+
+export async function heartbeatRoomPresence(roomId: string): Promise<void> {
+  const uid = getCurrentUid();
+  if (!uid) return;
+  try {
+    await setDoc(doc(db, 'rooms', roomId, 'presence', uid), { lastSeen: serverTimestamp() }, { merge: true });
+  } catch {}
+}
+
+export async function leaveRoomPresence(roomId: string): Promise<void> {
+  const uid = getCurrentUid();
+  if (!uid) return;
+  try { await deleteDoc(doc(db, 'rooms', roomId, 'presence', uid)); } catch {}
+}
+
+export function subscribeToRoomPresence(
+  roomId: string,
+  onChange: (entries: RoomPresence[]) => void,
+): () => void {
+  return onSnapshot(collection(db, 'rooms', roomId, 'presence'), snap => {
+    onChange(snap.docs.map(d => d.data() as RoomPresence));
+  });
 }
 
 // ── Typing Indicator ─────────────────────────────────────
@@ -808,7 +847,7 @@ export async function getOrCreatePresetRoom(params: {
     const data = {
       creatorId: uid ?? null, roomKey: params.roomKey,
       customTopicZh: params.topicZh, customTopicEn: params.topicEn,
-      isActive: true, isUserCreated: false, messageCount: 0, memberIds: [],
+      isActive: true, isUserCreated: false, messageCount: 0,
       createdAt: serverTimestamp(),
       closesAt: Timestamp.fromDate(new Date(Date.now() + 86400 * 1000)),
     };

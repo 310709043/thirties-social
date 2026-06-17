@@ -40,6 +40,15 @@ service cloud.firestore {
                       && request.resource.data.content.size() <= 280;
         allow update, delete: if false;
       }
+
+      // Presence heartbeats — one doc per user, keyed by uid
+      match /presence/{presenceUid} {
+        allow read:           if request.auth != null;
+        allow create, update: if request.auth != null
+                              && request.auth.uid == presenceUid;
+        allow delete:         if request.auth != null
+                              && request.auth.uid == presenceUid;
+      }
     }
 
     // ── Conversations ───────────────────────────────────

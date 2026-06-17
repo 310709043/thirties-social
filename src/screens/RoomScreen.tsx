@@ -12,7 +12,7 @@ import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkele
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
-import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid } from '../lib/db';
+import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence } from '../lib/db';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
 import { filterMessage } from '../lib/filter';
@@ -38,11 +38,19 @@ export default function RoomScreen({ navigation, route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [presence, setPresence] = useState<RoomPresence[]>([]);
+  const [readOnly, setReadOnly] = useState(false);
 
   const uid = getCurrentUid();
-  const isRoomFull = room && (room.memberIds?.length ?? 0) >= ROOM_CAPACITY;
-  const isMember = room && uid ? (room.memberIds ?? []).includes(uid) : false;
-  const canSend = !isRoomFull || isMember;
+  // Live "who's here" comes from fresh presence heartbeats, not cumulative
+  // membership — so the count shrinks when people leave or go stale.
+  const activeMembers = presence.filter(
+    e => !e.lastSeen || Date.now() - e.lastSeen.toMillis() < 45000,
+  );
+  const liveCount = activeMembers.length;
+  const isRoomFull = liveCount >= ROOM_CAPACITY;
+  // readOnly is set only when we entered an already-full room (never joined).
+  const canSend = !readOnly && !!uid;
 
   const reshuffleIdentity = () => {
     setIdentitySeed(Math.random().toString(36).slice(2));
@@ -91,6 +99,37 @@ export default function RoomScreen({ navigation, route }: Props) {
     return subscribeToRoomMessages(roomId, setMessages);
   }, [roomId]);
 
+  // Join presence on entry (unless the room is already full), heartbeat while
+  // here, and clear our slot on leave.
+  useEffect(() => {
+    if (!roomId || !uid) return;
+    let active = true;
+    let hbId: ReturnType<typeof setInterval> | undefined;
+    setReadOnly(false);
+    (async () => {
+      const others = await fetchActivePresenceCount(roomId);
+      if (!active) return;
+      if (others >= ROOM_CAPACITY) { setReadOnly(true); return; }
+      await joinRoomPresence(roomId, identitySeed);
+      if (!active) { leaveRoomPresence(roomId); return; }
+      hbId = setInterval(() => heartbeatRoomPresence(roomId), 20000);
+    })();
+    const unsub = subscribeToRoomPresence(roomId, setPresence);
+    return () => {
+      active = false;
+      if (hbId) clearInterval(hbId);
+      leaveRoomPresence(roomId);
+      unsub();
+    };
+  }, [roomId, uid]);
+
+  // Recompute the live count as heartbeats age out even without new snapshots.
+  useEffect(() => {
+    if (!roomId) return;
+    const id = setInterval(() => setPresence(p => [...p]), 15000);
+    return () => clearInterval(id);
+  }, [roomId]);
+
   // When invite sent, create a real conversation → go to Chat
   useEffect(() => {
     if (inviteSent) {
@@ -133,14 +172,6 @@ export default function RoomScreen({ navigation, route }: Props) {
     if (result === true) {
       setInputText('');
       hapticLight();
-    } else if (result === 'room_full') {
-      Alert.alert(
-        lang === 'en' ? 'Room is full' : '房間已滿',
-        lang === 'en'
-          ? 'This room has reached the 20 person limit. Try another room.'
-          : '這個房間已達 20 人上限。試試其他房間。',
-        [{ text: 'OK', style: 'cancel' }],
-      );
     } else {
       Alert.alert(
         lang === 'en' ? 'Failed to send' : '\u9001\u51FA\u5931\u6557',
@@ -194,21 +225,19 @@ export default function RoomScreen({ navigation, route }: Props) {
 
           {/* Live count */}
           <View style={styles.liveRow}>
-            {messages.length > 0 && (
+            {activeMembers.length > 0 && (
               <View style={styles.avatarStack}>
-                {[...new Set(messages.map(m => m.senderSeed))].slice(0, 4).map((s, i) => (
-                  <View key={s} style={[styles.avatarWrap, { marginLeft: i === 0 ? 0 : -10, borderColor: p.surfaceSolid, backgroundColor: p.surfaceSolid }]}>
-                    <Identity kind="sigil" seed={s} size={18} palette={p} />
+                {activeMembers.slice(0, 4).map((m, i) => (
+                  <View key={m.userId} style={[styles.avatarWrap, { marginLeft: i === 0 ? 0 : -10, borderColor: p.surfaceSolid, backgroundColor: p.surfaceSolid }]}>
+                    <Identity kind="sigil" seed={m.seed} size={18} palette={p} />
                   </View>
                 ))}
               </View>
             )}
             <Text style={[styles.liveText, { color: p.muted }]}>
-              {(() => {
-                const memberCount = room?.memberIds?.length ?? 0;
-                if (memberCount === 0) return lang === 'en' ? 'no one here yet' : '還沒有人';
-                return `${memberCount}/${ROOM_CAPACITY} ${t('roomPeople', lang)}`;
-              })()}
+              {liveCount === 0
+                ? (lang === 'en' ? 'no one here yet' : '還沒有人')
+                : `${liveCount}/${ROOM_CAPACITY} ${t('roomPeople', lang)}`}
             </Text>
             <Text style={[styles.liveDot, { color: p.muted }]}>·</Text>
             <Text style={[styles.liveText, { color: p.muted }]}>{t('roomEphemeral', lang)}</Text>

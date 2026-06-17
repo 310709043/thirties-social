@@ -30,7 +30,7 @@ export default function MoodScreen({ navigation }: Props) {
   const [waitingDots, setWaitingDots] = useState('');
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const activeRooms = rooms.filter(r => (r.memberIds?.length ?? 0) > 0);
+  const activeRooms = rooms.filter(r => (r.messageCount ?? 0) > 0);
 
   useEffect(() => { return subscribeToActiveRooms(setRooms); }, []);
 
@@ -233,7 +233,7 @@ export default function MoodScreen({ navigation }: Props) {
                       {room.customTopicZh || room.customTopicEn || t((room.roomKey ?? 'room_partner') as any, lang)}
                     </Text>
                     <Text style={[styles.roomCount, { color: p.muted }]}>
-                      {room.memberIds?.length ?? 0}
+                      {room.messageCount ?? 0}
                     </Text>
                   </TouchableOpacity>
                 ))}
