@@ -128,9 +128,7 @@ export default function RoomScreen({ navigation, route }: Props) {
       return;
     }
     setSending(true);
-    console.log('[RoomScreen] Calling sendRoomMessage...');
     const result = await sendRoomMessage({ roomId, content: inputText.trim(), senderSeed: identitySeed });
-    console.log('[RoomScreen] sendRoomMessage result:', result);
     setSending(false);
     if (result === true) {
       setInputText('');

@@ -70,7 +70,14 @@ export default function MoodScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (!waiting) return;
+    let matched = false;
+
+    // Keep actively looking for a partner while waiting.
+    const retryId = setInterval(() => { if (!matched) tryFindMatch(); }, 5000);
+
+    // Give up after 60s if still unmatched.
     matchTimeoutRef.current = setTimeout(() => {
+      if (matched) return;
       setWaiting(false);
       leaveMatchQueue();
       Alert.alert(
@@ -79,9 +86,14 @@ export default function MoodScreen({ navigation }: Props) {
         [{ text: 'OK', style: 'cancel' }],
       );
     }, 60000);
+
     const unsub = subscribeToMyMatch(entry => {
-      if (matchTimeoutRef.current) clearTimeout(matchTimeoutRef.current);
+      // onSnapshot fires immediately with the current (waiting) doc — only act
+      // on an actual match, otherwise the timeout would be cleared right away.
       if (entry?.status === 'matched' && entry.matchedSeed && entry.conversationId) {
+        matched = true;
+        if (matchTimeoutRef.current) clearTimeout(matchTimeoutRef.current);
+        clearInterval(retryId);
         hapticMedium();
         analytics.matchFound();
         setWaiting(false);
@@ -92,7 +104,11 @@ export default function MoodScreen({ navigation }: Props) {
         });
       }
     });
-    return () => { if (matchTimeoutRef.current) clearTimeout(matchTimeoutRef.current); unsub(); };
+    return () => {
+      if (matchTimeoutRef.current) clearTimeout(matchTimeoutRef.current);
+      clearInterval(retryId);
+      unsub();
+    };
   }, [waiting]);
 
   const handleEnter = async () => {
@@ -127,8 +143,9 @@ export default function MoodScreen({ navigation }: Props) {
       Alert.alert(lang === 'en' ? 'Connection issue' : '連線問題', lang === 'en' ? 'Try again.' : '請再試一次。', [{ text: 'OK' }]);
       return;
     }
-    const found = await tryFindMatch();
-    if (!found) setTimeout(() => tryFindMatch(), 5000);
+    // Try once immediately; the waiting effect keeps polling every 5s and
+    // listens for being matched by someone else.
+    tryFindMatch();
   };
 
   const handleCancelWait = async () => {
