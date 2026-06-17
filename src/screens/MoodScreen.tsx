@@ -122,7 +122,7 @@ export default function MoodScreen({ navigation }: Props) {
         lang === 'en' ? 'Create an account to match' : '配對需要先建立帳號',
         lang === 'en'
           ? 'Guests can join rooms. Create an account to start 1-on-1 matching.'
-          : '訪客可以參與房間聊天。建立帳號後即可開始一對一配對。',
+          : '訪客可以參與火盆聊天。建立帳號後即可開始一對一配對。',
         [
           { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
           { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
@@ -233,7 +233,7 @@ export default function MoodScreen({ navigation }: Props) {
           <View style={styles.roomsSection}>
             <View style={styles.roomsHeader}>
               <Text style={[styles.roomsLabel, { color: p.muted }]}>
-                {lang === 'en' ? 'ROOMS' : '房間'}
+                {lang === 'en' ? 'ROOMS' : '火盆'}
               </Text>
               <TouchableOpacity onPress={() => navigation.push('Room', { roomKey: 'new' })}>
                 <Text style={[styles.openRoomLink, { color: p.accent }]}>
@@ -263,7 +263,7 @@ export default function MoodScreen({ navigation }: Props) {
               </View>
             ) : (
               <Text style={[styles.noRooms, { color: p.muted }]}>
-                {lang === 'en' ? 'No rooms yet — start one?' : '還沒有房間——開一個？'}
+                {lang === 'en' ? 'No rooms yet — start one?' : '還沒有火盆——開一個？'}
               </Text>
             )}
           </View>

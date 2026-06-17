@@ -86,10 +86,10 @@ export default function RoomScreen({ navigation, route }: Props) {
   const openCreateRoom = () => {
     if (!canCreateRoom()) {
       Alert.alert(
-        lang === 'en' ? 'Create an account to open a room' : '開房間需要先建立帳號',
+        lang === 'en' ? 'Create an account to open a room' : '開火盆需要先建立帳號',
         lang === 'en'
           ? 'Guests can join rooms. Create an account to open your own.'
-          : '訪客可以參與房間。建立帳號後即可開設自己的房間。',
+          : '訪客可以參與火盆。建立帳號後即可開設自己的火盆。',
         [
           { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
           { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
@@ -167,7 +167,7 @@ export default function RoomScreen({ navigation, route }: Props) {
     if (!roomId) {
       Alert.alert(
         lang === 'en' ? 'Still loading' : '載入中',
-        lang === 'en' ? 'Room is still loading, please wait.' : '房間仍在載入中，請稍候。',
+        lang === 'en' ? 'Room is still loading, please wait.' : '火盆仍在載入中，請稍候。',
       );
       return;
     }
@@ -217,7 +217,7 @@ export default function RoomScreen({ navigation, route }: Props) {
               style={[styles.labelBtn, { backgroundColor: p.accentSoft, borderColor: p.accent + '40' }]}
             >
               <Text style={[styles.labelBtnText, { color: p.accent }]}>
-                {lang === 'en' ? '+ open room' : '+ 開設房間'}
+                {lang === 'en' ? '+ open room' : '+ 開設火盆'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -234,7 +234,7 @@ export default function RoomScreen({ navigation, route }: Props) {
         {/* ROOM HEADER */}
         <View style={styles.header}>
           <Text style={[styles.roomNum, { color: p.muted }]}>
-            {lang === 'en' ? 'Room' : '房間'}
+            {lang === 'en' ? 'Room' : '火盆'}
           </Text>
           <Text style={[styles.roomName, { color: p.ink }]}>
             {room?.customTopicZh || room?.customTopicEn || t(roomKey as any, lang)}
@@ -336,7 +336,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                 <Hairline p={p} style={{ flex: 1 }} />
               </View>
               <Text style={[styles.dissolved, { color: p.muted }]}>
-                {lang === 'en' ? 'older fragments dissolve into the room.' : '更早的片段已融入房間之中。'}
+                {lang === 'en' ? 'older fragments dissolve into the room.' : '更早的片段已融入火盆之中。'}
               </Text>
             </>
           )}
@@ -352,7 +352,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                 <View style={{ flex: 1 }}>
                   <ColorAdjLabel seed={identitySeed} lang={lang} palette={p} />
                   <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 10, color: p.muted, marginTop: 1 }}>
-                    {lang === 'en' ? 'who you are in this room' : '你在這個房間的身份'}
+                    {lang === 'en' ? 'who you are in this room' : '你在這個火盆的身份'}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={reshuffleIdentity}
@@ -365,11 +365,14 @@ export default function RoomScreen({ navigation, route }: Props) {
               <Text style={[styles.composerHint, { color: p.muted }]}>
                 {lang === 'en' ? 'tap any message to invite that person to talk' : '輕點任一則訊息，邀請那個人私聊'}
               </Text>
+              <Text style={[styles.composerHint, { color: p.muted, fontStyle: 'italic', marginTop: 2 }]}>
+                {lang === 'en' ? 'speak your own feelings — no attacks on others' : '只說自己的感受，請勿攻擊他人'}
+              </Text>
               <View style={[styles.inputRow, { backgroundColor: p.surface, borderColor: p.line }]}>
                 <TextInput
                   value={inputText}
                   onChangeText={setInputText}
-                  placeholder={lang === 'en' ? 'whisper into the room…' : '對房間說一句⋯⋯'}
+                  placeholder={lang === 'en' ? 'whisper into the room…' : '對火盆說一句⋯⋯'}
                   placeholderTextColor={p.muted}
                   style={[styles.input, { color: p.ink }]}
                   editable={!sending}
@@ -388,7 +391,7 @@ export default function RoomScreen({ navigation, route }: Props) {
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center', flex: 1 }}>
                 {lang === 'en'
                   ? `Room full (${ROOM_CAPACITY}/${ROOM_CAPACITY}) — you can read but not send`
-                  : `房間已滿（${ROOM_CAPACITY}/${ROOM_CAPACITY}）— 可以閱讀但無法發言`}
+                  : `火盆已滿（${ROOM_CAPACITY}/${ROOM_CAPACITY}）— 可以閱讀但無法發言`}
               </Text>
             </View>
           )}
@@ -403,7 +406,7 @@ export default function RoomScreen({ navigation, route }: Props) {
               {!roomCreated ? (
                 <>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 18, color: p.ink, fontWeight: '500' }}>
-                    {lang === 'en' ? 'Open a room' : '開設一個房間'}
+                    {lang === 'en' ? 'Open a room' : '開設一個火盆'}
                   </Text>
                   <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: p.muted }}>
                     {lang === 'en' ? 'others see your topic · not your identity' : '別人看到話題，看不到你是誰'}
@@ -412,7 +415,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                     <TextInput
                       value={roomTopic}
                       onChangeText={setRoomTopic}
-                      placeholder={lang === 'en' ? 'What is this room about? (e.g. "can\'t sleep again")' : '這個房間在說什麼？（例如：又睡不著了）'}
+                      placeholder={lang === 'en' ? 'What is this room about? (e.g. "can\'t sleep again")' : '這個火盆在說什麼？（例如：又睡不著了）'}
                       placeholderTextColor={p.muted}
                       multiline
                       numberOfLines={2}
@@ -429,7 +432,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                           lang === 'en' ? 'Not enough wicks' : '燭芯不足',
                           lang === 'en'
                             ? `Opening a room costs ${ROOM_CREATE_COST} wicks. Top up, or go Vigil to open rooms for free.`
-                            : `開房間需要 ${ROOM_CREATE_COST} 燭芯。可購買燭芯，或升級守夜人免費開房。`,
+                            : `開火盆需要 ${ROOM_CREATE_COST} 燭芯。可購買燭芯，或升級守夜人免費開房。`,
                           [
                             { text: lang === 'en' ? 'OK' : '知道了', style: 'cancel' },
                             { text: lang === 'en' ? 'Upgrade' : '升級', onPress: () => navigation.push('Upgrade') },
@@ -448,7 +451,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                     style={[styles.inviteBtn, { backgroundColor: roomTopic.trim().length > 0 ? p.ink : p.line }]}
                   >
                     <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: roomTopic.trim().length > 0 ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
-                      {lang === 'en' ? 'Open the room' : '開啟房間'}
+                      {lang === 'en' ? 'Open the room' : '開啟火盆'}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => setShowCreateRoom(false)} style={styles.cancelBtn}>
@@ -458,10 +461,10 @@ export default function RoomScreen({ navigation, route }: Props) {
               ) : (
                 <View style={{ alignItems: 'center', paddingVertical: 12, gap: 10 }}>
                   <Text style={[styles.waitingText, { color: p.ink }]}>
-                    {lang === 'en' ? 'Room is open ·' : '房間已開啟 ·'} 🕯
+                    {lang === 'en' ? 'Room is open ·' : '火盆已開啟 ·'} 🕯
                   </Text>
                   <Text style={[styles.waitingHint, { color: p.muted }]}>
-                    {lang === 'en' ? 'Others can find your room and whisper in.' : '其他人可以找到你的房間並留言。'}
+                    {lang === 'en' ? 'Others can find your room and whisper in.' : '其他人可以找到你的火盆並留言。'}
                   </Text>
                   <TouchableOpacity onPress={() => { setShowCreateRoom(false); setRoomCreated(false); setRoomTopic(''); }}
                     style={[styles.inviteBtn, { backgroundColor: p.ink, width: '100%' }]}>

@@ -23,7 +23,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   moodPrompt:      { zh: '寫一句關於最近的事。可以是和另一半的，也可以不是。', en: 'A line about what is happening. About a partner, or not.' },
   moodPlaceholder: { zh: '最近和那個人⋯⋯',     en: 'Lately with them…' },
   moodEnter:       { zh: '進入',             en: 'Enter' },
-  moodSkip:        { zh: '不想寫，給我一個房間', en: 'Skip — just find me a room' },
+  moodSkip:        { zh: '不想寫，給我一個火盆', en: 'Skip — just find me a room' },
   moodSuggested:   { zh: '今晚有人在說',     en: 'People are talking about' },
 
   // Rooms
@@ -35,8 +35,8 @@ const COPY: Record<string, { zh: string; en: string }> = {
   room_doubt:      { zh: '不確定還要不要繼續', en: 'unsure whether to stay' },
 
   // Room screen
-  roomPeople:      { zh: '人在這個房間',     en: 'in this room' },
-  roomEphemeral:   { zh: '這個房間之後會關閉', en: 'this room will close later' },
+  roomPeople:      { zh: '人在這個火盆',     en: 'in this room' },
+  roomEphemeral:   { zh: '這個火盆之後會關閉', en: 'this room will close later' },
 
   // Match
   matchHeader:     { zh: '有人想和你說話',   en: 'Someone wants to talk' },
