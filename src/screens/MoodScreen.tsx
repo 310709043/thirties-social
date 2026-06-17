@@ -15,7 +15,7 @@ import {
 import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier } from '../hooks/useAppStore';
+import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, recordMatch, matchCostsWick, MATCH_WICK_COST } from '../hooks/useAppStore';
 import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch } from '../lib/db';
 import { analytics } from '../lib/analytics';
 
@@ -97,6 +97,8 @@ export default function MoodScreen({ navigation }: Props) {
         clearInterval(retryId);
         hapticMedium();
         analytics.matchFound();
+        // Consume a free match or charge a wick (free tier only).
+        recordMatch();
         setWaiting(false);
         navigation.push('Match', {
           fromSeed: entry.matchedSeed,
@@ -128,10 +130,13 @@ export default function MoodScreen({ navigation }: Props) {
       );
       return;
     }
+    // Free user out of free matches and out of wicks.
     if (!canMatch()) {
       Alert.alert(
-        lang === 'en' ? 'Daily limit reached' : '今日對話已達上限',
-        lang === 'en' ? 'Upgrade to Vigil for unlimited.' : '升級守夜人可解除限制。',
+        lang === 'en' ? 'Out of free matches' : '免費配對已用完',
+        lang === 'en'
+          ? `You've used your free matches. Each match now costs ${MATCH_WICK_COST} wick — top up, or go Vigil for unlimited.`
+          : `免費配對已用完，之後每次配對需 ${MATCH_WICK_COST} 燭芯。可購買燭芯，或升級守夜人享無限配對。`,
         [
           { text: lang === 'en' ? 'OK' : '知道了', style: 'cancel' },
           { text: lang === 'en' ? 'Upgrade' : '升級', onPress: () => navigation.push('Upgrade') },
@@ -139,9 +144,12 @@ export default function MoodScreen({ navigation }: Props) {
       );
       return;
     }
+    const costs = matchCostsWick();
     Alert.alert(
       lang === 'en' ? 'Start matching?' : '開始配對？',
-      lang === 'en' ? 'You can cancel before a match is found.' : '配對成功前可以取消。',
+      costs
+        ? (lang === 'en' ? `This match costs ${MATCH_WICK_COST} wick.` : `這次配對將花 ${MATCH_WICK_COST} 燭芯。`)
+        : (lang === 'en' ? 'You can cancel before a match is found.' : '配對成功前可以取消。'),
       [
         { text: lang === 'en' ? 'Cancel' : '取消', style: 'cancel' },
         { text: lang === 'en' ? 'Start' : '開始', onPress: () => startMatching() },

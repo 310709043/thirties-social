@@ -4,7 +4,7 @@ import { getDailySeed } from '../lib/identity';
 import { Direction, DEFAULT_DIRECTION } from '../lib/theme';
 import { Lang } from '../lib/copy';
 import { IdentityKind } from '../lib/identity';
-import { ensureAnonAuth, upsertUser, updateUser, subscribeToUser, claimDailyReward } from '../lib/db';
+import { ensureAnonAuth, upsertUser, updateUser, subscribeToUser, claimDailyReward, spendWicks } from '../lib/db';
 import { isGuest } from '../lib/auth';
 
 let _deviceId: string | null = null;
@@ -48,7 +48,14 @@ interface AppState {
   slowMode: boolean;
   conversationsToday: number;
   peopleTodayCount: number;
+  freeMatchesUsed: number;
 }
+
+/** Free registered users get this many free matches before each costs a wick. */
+export const FREE_MATCH_ALLOWANCE = 10;
+export const MATCH_WICK_COST = 1;
+/** Free users pay this to open a room; Vigil opens rooms for free. */
+export const ROOM_CREATE_COST = 2;
 
 let _state: AppState = {
   deviceId: '', userId: '', seed: 'default', direction: DEFAULT_DIRECTION,
@@ -58,6 +65,7 @@ let _state: AppState = {
   gender: null, ageBracket: null, relationshipStatus: null, seeking: [],
   boundary: null, region: null, quote: null,
   autoFilter: true, slowMode: false, conversationsToday: 0, peopleTodayCount: 0,
+  freeMatchesUsed: 0,
 };
 
 const _listeners = new Set<() => void>();
@@ -66,7 +74,7 @@ function notify() { _listeners.forEach(fn => fn()); }
 export async function initStore() {
   const deviceId = await getDeviceId();
   const seed = getDailySeed(deviceId);
-  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedSeeking, storedBoundary, storedRegion, storedQuote, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind] = await Promise.all([
+  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedSeeking, storedBoundary, storedRegion, storedQuote, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind, storedFreeMatches] = await Promise.all([
     AsyncStorage.getItem('direction') as Promise<Direction | null>,
     AsyncStorage.getItem('onboarding_done'),
     AsyncStorage.getItem('setup_done'),
@@ -85,6 +93,7 @@ export async function initStore() {
     AsyncStorage.getItem('conversationsToday'),
     AsyncStorage.getItem('peopleTodayCount'),
     AsyncStorage.getItem('identityKind') as Promise<IdentityKind | null>,
+    AsyncStorage.getItem('freeMatchesUsed'),
   ]);
   _state = {
     ..._state, deviceId, seed,
@@ -99,6 +108,7 @@ export async function initStore() {
     slowMode: storedSlowMode === '1',
     conversationsToday: storedConvToday ? parseInt(storedConvToday, 10) : 0,
     peopleTodayCount: storedPeopleToday ? parseInt(storedPeopleToday, 10) : 0,
+    freeMatchesUsed: storedFreeMatches ? parseInt(storedFreeMatches, 10) : 0,
   };
   notify();
   _resetDailyCountersIfNeeded();
@@ -124,6 +134,7 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         boundary: dbUser.boundary, region: dbUser.region, quote: dbUser.quote,
         autoFilter: (dbUser as any).autoFilter ?? true,
         slowMode: (dbUser as any).slowMode ?? false,
+        freeMatchesUsed: (dbUser as any).freeMatchesUsed ?? 0,
       };
       await Promise.all([
         AsyncStorage.setItem('wicks', String(dbUser.wicks)),
@@ -157,6 +168,7 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         boundary: updated.boundary, region: updated.region, quote: updated.quote,
         autoFilter: (updated as any).autoFilter ?? true,
         slowMode: (updated as any).slowMode ?? false,
+        freeMatchesUsed: (updated as any).freeMatchesUsed ?? _state.freeMatchesUsed,
       };
       AsyncStorage.setItem('wicks', String(updated.wicks));
       notify();
@@ -303,12 +315,40 @@ export function getTier(): Tier {
   return _state.vigil ? 'vigil' : 'free';
 }
 
-/** Random matching: guests can't; free is capped at 5/day; vigil unlimited. */
+/**
+ * Random matching: guests can't; vigil is unlimited; free gets
+ * FREE_MATCH_ALLOWANCE free matches, then each costs MATCH_WICK_COST wicks.
+ */
 export function canMatch(): boolean {
   const t = getTier();
   if (t === 'guest') return false;
   if (t === 'vigil') return true;
-  return _state.conversationsToday < 5;
+  if (_state.freeMatchesUsed < FREE_MATCH_ALLOWANCE) return true;
+  return _state.wicks >= MATCH_WICK_COST;
+}
+
+/** True once a free user has used up their free matches and must pay wicks. */
+export function matchCostsWick(): boolean {
+  return getTier() === 'free' && _state.freeMatchesUsed >= FREE_MATCH_ALLOWANCE;
+}
+
+/**
+ * Record a successful match for the current user. Free users consume a free
+ * match or pay a wick; vigil/guest are no-ops. Call when a match is confirmed
+ * (not merely attempted), so "no one around" never costs.
+ */
+export async function recordMatch() {
+  if (getTier() !== 'free') return;
+  if (_state.freeMatchesUsed < FREE_MATCH_ALLOWANCE) {
+    const used = _state.freeMatchesUsed + 1;
+    _state = { ..._state, freeMatchesUsed: used };
+    await AsyncStorage.setItem('freeMatchesUsed', String(used));
+    notify();
+    if (_state.userId) updateUser({ freeMatchesUsed: used });
+  } else {
+    // Beyond the free allowance — spend a wick (subscribeToUser syncs balance).
+    await spendWicks(MATCH_WICK_COST, 'match');
+  }
 }
 
 /** The Loft is a Vigil-only space (free & guests cannot enter). */

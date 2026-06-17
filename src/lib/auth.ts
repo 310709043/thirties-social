@@ -68,6 +68,7 @@ export async function register(email: string, password: string): Promise<{
       nightAdjIdx: 0,
       autoFilter: true,
       slowMode: false,
+      freeMatchesUsed: 0,
       createdAt: serverTimestamp(),
       lastActiveAt: serverTimestamp(),
     });

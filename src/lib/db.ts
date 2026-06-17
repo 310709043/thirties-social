@@ -55,6 +55,7 @@ export interface DbUser {
   nightColorIdx: number;
   nightAdjIdx: number;
   autoFilter: boolean;
+  freeMatchesUsed?: number;
   slowMode: boolean;
   createdAt: any;
   lastActiveAt: any;
@@ -95,6 +96,7 @@ export async function upsertUser(params: {
       nightAdjIdx: 0,
       autoFilter: true,
       slowMode: false,
+      freeMatchesUsed: 0,
       createdAt: serverTimestamp(),
       lastActiveAt: serverTimestamp(),
     };

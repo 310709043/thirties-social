@@ -11,8 +11,8 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkeleton } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, canCreateRoom } from '../hooks/useAppStore';
-import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence } from '../lib/db';
+import { useAppStore, canCreateRoom, getTier, ROOM_CREATE_COST } from '../hooks/useAppStore';
+import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence, spendWicks } from '../lib/db';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
 import { filterMessage } from '../lib/filter';
@@ -22,7 +22,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Room'>;
 
 export default function RoomScreen({ navigation, route }: Props) {
   const { roomKey } = route.params;
-  const { seed, direction, lang, identityKind, deviceId } = useAppStore();
+  const { seed, direction, lang, identityKind, deviceId, wicks } = useAppStore();
   const p = DIRECTIONS[direction];
   const [inviting, setInviting] = useState<{senderId: string; seed: string; zh: string; en: string; age: number} | null>(null);
   const [inviteSent, setInviteSent] = useState(false);
@@ -405,12 +405,27 @@ export default function RoomScreen({ navigation, route }: Props) {
                   </GlassCard>
                   <TouchableOpacity
                     onPress={async () => {
-                      if (roomTopic.trim().length > 0) {
-                        const newRoom = await createRoom({ topicZh: roomTopic.trim() });
-                        if (newRoom) {
-                          setRoomId(newRoom.id);
-                          setRoom(newRoom);
-                        }
+                      if (roomTopic.trim().length === 0) return;
+                      const free = getTier() === 'free';
+                      // Free users pay to open a room; Vigil opens for free.
+                      if (free && wicks < ROOM_CREATE_COST) {
+                        Alert.alert(
+                          lang === 'en' ? 'Not enough wicks' : '燭芯不足',
+                          lang === 'en'
+                            ? `Opening a room costs ${ROOM_CREATE_COST} wicks. Top up, or go Vigil to open rooms for free.`
+                            : `開房間需要 ${ROOM_CREATE_COST} 燭芯。可購買燭芯，或升級守夜人免費開房。`,
+                          [
+                            { text: lang === 'en' ? 'OK' : '知道了', style: 'cancel' },
+                            { text: lang === 'en' ? 'Upgrade' : '升級', onPress: () => navigation.push('Upgrade') },
+                          ],
+                        );
+                        return;
+                      }
+                      const newRoom = await createRoom({ topicZh: roomTopic.trim() });
+                      if (newRoom) {
+                        if (free) await spendWicks(ROOM_CREATE_COST, 'open_room');
+                        setRoomId(newRoom.id);
+                        setRoom(newRoom);
                         setRoomCreated(true);
                       }
                     }}
