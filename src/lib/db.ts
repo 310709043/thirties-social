@@ -590,6 +590,55 @@ export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
     .filter(s => !(s as any).leftAt && s.userId !== uid && !myBlocked.includes(s.userId));
 }
 
+// ── Loft Ritual (今夜之題) ────────────────────────────────
+export interface DbRitualResponse {
+  id: string;
+  userId: string;
+  seed: string;
+  name: string;
+  content: string;
+  nightDate: string;
+  createdAt: any;
+}
+
+export async function postRitualResponse(params: {
+  content: string;
+  seed: string;
+  name: string;
+}): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    await addDoc(collection(db, 'loftRitualResponses'), {
+      userId: uid,
+      seed: params.seed,
+      name: params.name,
+      content: params.content,
+      nightDate: localNightDate(),
+      createdAt: serverTimestamp(),
+    });
+    return true;
+  } catch { return false; }
+}
+
+/** Live feed of tonight's ritual responses (the whole Loft answering one prompt). */
+export function subscribeToTonightRitual(
+  onChange: (responses: DbRitualResponse[]) => void,
+): () => void {
+  const tonight = localNightDate();
+  const q = query(
+    collection(db, 'loftRitualResponses'),
+    where('nightDate', '==', tonight),
+    limit(100),
+  );
+  return onSnapshot(q, snap => {
+    const list = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }) as DbRitualResponse)
+      .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
+    onChange(list);
+  });
+}
+
 // ── Loft Conversations ───────────────────────────────────
 export interface DbLoftConversation {
   id: string;

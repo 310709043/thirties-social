@@ -10,7 +10,9 @@ import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
-import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, LOFT_OPEN_HOUR, LOFT_CLOSE_HOUR } from '../lib/db';
+import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, LOFT_OPEN_HOUR, LOFT_CLOSE_HOUR, postRitualResponse, subscribeToTonightRitual, DbRitualResponse } from '../lib/db';
+import { getTonightRitual } from '../lib/rituals';
+import { TextInput } from 'react-native';
 import { getColorAdj } from '../lib/identity';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
 
@@ -223,6 +225,10 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const [sessions, setSessions] = React.useState<DbLoftSession[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [connecting, setConnecting] = React.useState<string | null>(null);
+  const [ritual] = React.useState(() => getTonightRitual());
+  const [responses, setResponses] = React.useState<DbRitualResponse[]>([]);
+  const [ritualText, setRitualText] = React.useState('');
+  const [posting, setPosting] = React.useState(false);
 
   React.useEffect(() => {
     fetchTonightLoftSessions().then(s => {
@@ -230,6 +236,17 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
       setLoading(false);
     });
   }, []);
+
+  React.useEffect(() => subscribeToTonightRitual(setResponses), []);
+
+  const submitRitual = async () => {
+    const c = ritualText.trim();
+    if (!c || posting) return;
+    setPosting(true);
+    const ok = await postRitualResponse({ content: c, seed, name: myName });
+    setPosting(false);
+    if (ok) setRitualText('');
+  };
 
   const handlePickPerson = async (session: DbLoftSession) => {
     if (connecting) return;
@@ -278,6 +295,43 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
               <WickGlyph size={10} color={L.candle} />
               <AnimatedNumber value={wicks} style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: L.candle }} />
             </View>
+          </View>
+
+          {/* 今夜之題 — nightly ritual */}
+          <View style={{ marginTop: 22, padding: 16, borderRadius: 16, backgroundColor: 'rgba(245,226,196,0.04)', borderWidth: 0.5, borderColor: 'rgba(232,165,87,0.18)' }}>
+            <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 3, textTransform: 'uppercase', color: L.candle }}>
+              {lang === 'en' ? "Tonight's question" : '今夜之題'}
+            </Text>
+            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: L.ink, lineHeight: 26, marginTop: 8 }}>
+              {lang === 'en' ? ritual.en : ritual.zh}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }}>
+              <TextInput
+                value={ritualText}
+                onChangeText={setRitualText}
+                placeholder={lang === 'en' ? 'answer softly…' : '輕輕地回答⋯⋯'}
+                placeholderTextColor={L.muted}
+                maxLength={280}
+                style={{ flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: L.ink, backgroundColor: 'rgba(245,226,196,0.05)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }}
+              />
+              <TouchableOpacity onPress={submitRitual} disabled={!ritualText.trim() || posting}
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: ritualText.trim() ? L.candle : 'rgba(245,226,196,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: ritualText.trim() ? '#1a1014' : L.muted, fontSize: 16 }}>↑</Text>
+              </TouchableOpacity>
+            </View>
+            {responses.length > 0 && (
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: L.muted }}>
+                  {lang === 'en' ? `${responses.length} answered tonight` : `今晚 ${responses.length} 人回應`}
+                </Text>
+                {responses.slice(-3).reverse().map(r => (
+                  <View key={r.id}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: L.ink, lineHeight: 20 }}>{r.content}</Text>
+                    <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, marginTop: 1 }}>— {r.name}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
 
           {/* Heading */}
