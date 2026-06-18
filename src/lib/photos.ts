@@ -1,5 +1,6 @@
 // photos.ts — Photo upload and management via Firebase Storage
 import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { doc, setDoc, getDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { storage, db } from './firebase';
@@ -23,6 +24,7 @@ export async function pickImage(): Promise<string | null> {
     allowsEditing: true,
     aspect: [1, 1],
     quality: 0.7,
+    exif: false,
   });
 
   if (result.canceled || !result.assets?.[0]?.uri) return null;
@@ -38,8 +40,13 @@ export async function uploadVeiledPhoto(params: {
   if (!uid) return null;
 
   try {
-    // Read image as blob
-    const response = await fetch(params.uri);
+    // Re-encode to strip all metadata (EXIF/GPS) before upload.
+    const clean = await manipulateAsync(
+      params.uri,
+      [{ resize: { width: 1280 } }],
+      { compress: 0.7, format: SaveFormat.JPEG },
+    );
+    const response = await fetch(clean.uri);
     const blob = await response.blob();
 
     // Upload to Firebase Storage
