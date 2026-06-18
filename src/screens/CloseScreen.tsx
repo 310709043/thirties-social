@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, Animated, Easing } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t } from '../lib/copy';
-import { VaporBackground, SoftButton } from '../components/ui';
+import { VaporBackground, SoftButton, FadeInUp } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Close'>;
@@ -13,12 +13,29 @@ export default function CloseScreen({ navigation }: Props) {
   const { direction, lang } = useAppStore();
   const p = DIRECTIONS[direction];
   const [timeStr, setTimeStr] = useState('');
+  const orbScale = useRef(new Animated.Value(0.2)).current;
+  const orbOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(orbScale, { toValue: 1, tension: 22, friction: 7, useNativeDriver: true }),
+      Animated.timing(orbOpacity, { toValue: 0.5, duration: 700, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+    ]).start(() => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(orbScale, { toValue: 1.06, duration: 4200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(orbScale, { toValue: 1, duration: 4200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ]),
+      ).start();
+    });
+  }, []);
 
   useEffect(() => {
     const tick = () => {
       const now = new Date();
       const reset = new Date(now);
-      reset.setHours(27, 0, 0, 0);
+      reset.setDate(reset.getDate() + 1);
+      reset.setHours(3, 0, 0, 0);
       let diff = (reset.getTime() - now.getTime()) / 1000;
       if (diff < 0) diff += 86400;
       const h = String(Math.floor(diff / 3600)).padStart(2, '0');
@@ -35,10 +52,14 @@ export default function CloseScreen({ navigation }: Props) {
     <VaporBackground p={p} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.container}>
-          {/* Fading orb */}
-          <View style={[styles.orb, { backgroundColor: p.accent + '33' }]} />
+          {/* Animated orb */}
+          <Animated.View style={[styles.orb, {
+            backgroundColor: p.accent + '33',
+            opacity: orbOpacity,
+            transform: [{ scale: orbScale }],
+          }]} />
 
-          <View style={styles.content}>
+          <FadeInUp delay={60} distance={18} style={styles.content}>
             <Text style={[styles.title, { color: p.ink }]}>{t('closeHeader', lang)}</Text>
             <Text style={[styles.titleAlt, { color: p.ink }]}>
               {lang === 'en' ? '今天的窗口關了' : "Today's window is closed"}
@@ -81,14 +102,16 @@ export default function CloseScreen({ navigation }: Props) {
                 {lang === 'en' ? '· No traces remain ·' : '· 不留下任何痕跡 ·'}
               </Text>
             </View>
-          </View>
+          </FadeInUp>
 
-          <SoftButton p={p} variant="ghost" size="lg" full
-            onPress={() => navigation.replace('Mood')}>
-            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.muted }}>
-              {t('closeRest', lang)}
-            </Text>
-          </SoftButton>
+          <FadeInUp delay={320} distance={8}>
+            <SoftButton p={p} variant="ghost" size="lg" full
+              onPress={() => navigation.replace('Mood')}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.muted }}>
+                {t('closeRest', lang)}
+              </Text>
+            </SoftButton>
+          </FadeInUp>
         </View>
       </SafeAreaView>
     </VaporBackground>

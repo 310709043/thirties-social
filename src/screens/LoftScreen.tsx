@@ -7,7 +7,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber } from '../components/ui';
+import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber, FadeInUp } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
 import { enterLoft, fetchTonightLoftSessions, DbLoftSession } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
@@ -250,32 +250,36 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
             {loading ? (
               <ActivityIndicator color={L.candle} style={{ marginTop: 32 }} />
             ) : tonight.length === 0 ? (
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: L.muted, textAlign: 'center', marginTop: 32 }}>
-                今晚還沒有人
-              </Text>
+              <FadeInUp delay={100} distance={12}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: L.muted, textAlign: 'center', marginTop: 32 }}>
+                  今晚還沒有人
+                </Text>
+              </FadeInUp>
             ) : (
-              tonight.map(m => (
-                <TouchableOpacity key={m.seed} onPress={() => onEnter(m.seed)} activeOpacity={0.85}
-                  style={[styles.loftCard, { backgroundColor: 'rgba(245,226,196,0.04)', borderColor: 'rgba(232,165,87,0.18)' }]}>
-                  {/* Veiled portrait */}
-                  <View style={{ width: 60, height: 80, borderRadius: 10, backgroundColor: '#3a2028', overflow: 'hidden', flexShrink: 0 }}>
-                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.45, backgroundColor: '#7a3a4a' }} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: L.ink, lineHeight: 24, letterSpacing: 0.5 }}>
-                      {lang === 'en' ? m.en : m.zh}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                      <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, letterSpacing: 1 }}>
-                        {lang === 'en' ? m.who_en : m.who_zh}
-                      </Text>
-                      <Text style={{ color: L.muted, opacity: 0.4 }}>·</Text>
-                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
-                        ● {lang === 'en' ? 'open' : '門開'}
-                      </Text>
+              tonight.map((m, i) => (
+                <FadeInUp key={m.seed} delay={i * 75} distance={16}>
+                  <TouchableOpacity onPress={() => onEnter(m.seed)} activeOpacity={0.85}
+                    style={[styles.loftCard, { backgroundColor: 'rgba(245,226,196,0.04)', borderColor: 'rgba(232,165,87,0.18)' }]}>
+                    {/* Veiled portrait */}
+                    <View style={{ width: 60, height: 80, borderRadius: 10, backgroundColor: '#3a2028', overflow: 'hidden', flexShrink: 0 }}>
+                      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.45, backgroundColor: '#7a3a4a' }} />
                     </View>
-                  </View>
-                </TouchableOpacity>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: L.ink, lineHeight: 24, letterSpacing: 0.5 }}>
+                        {lang === 'en' ? m.en : m.zh}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                        <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, letterSpacing: 1 }}>
+                          {lang === 'en' ? m.who_en : m.who_zh}
+                        </Text>
+                        <Text style={{ color: L.muted, opacity: 0.4 }}>·</Text>
+                        <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
+                          ● {lang === 'en' ? 'open' : '門開'}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </FadeInUp>
               ))
             )}
           </ScrollView>

@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, ScrollView,
-  StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform,
+  StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { LOFT_PALETTE } from '../lib/theme';
 import { t } from '../lib/copy';
-import { WickGlyph, PhotoVeil, AnimatedNumber } from '../components/ui';
+import { WickGlyph, PhotoVeil, AnimatedNumber, FadeInUp } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
 import { spendWicks } from '../lib/db';
 import { hapticMedium } from '../lib/haptics';
@@ -39,8 +39,45 @@ export default function LoftChatScreen({ navigation, route }: Props) {
   const [localMessages, setLocalMessages] = useState(MESSAGES);
   const [veilLevel, setVeilLevel] = useState(1);
   const [showVeil, setShowVeil] = useState(false);
+  const [sheetMounted, setSheetMounted] = useState(false);
   const [giftSent, setGiftSent] = useState(false);
   const startTimeRef = React.useRef(new Date());
+  const sheetSlide = useRef(new Animated.Value(340)).current;
+  const d0 = useRef(new Animated.Value(0.3)).current;
+  const d1 = useRef(new Animated.Value(0.3)).current;
+  const d2 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const makeLoop = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 360, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.3, duration: 360, useNativeDriver: true }),
+          Animated.delay(Math.max(0, 480 - delay)),
+        ]),
+      );
+    const a0 = makeLoop(d0, 0);
+    const a1 = makeLoop(d1, 160);
+    const a2 = makeLoop(d2, 320);
+    a0.start(); a1.start(); a2.start();
+    return () => { a0.stop(); a1.stop(); a2.stop(); };
+  }, []);
+
+  const openSheet = () => { setSheetMounted(true); setShowVeil(true); };
+  const closeSheet = () => {
+    Animated.timing(sheetSlide, { toValue: 340, duration: 260, useNativeDriver: true }).start(() => {
+      setShowVeil(false);
+      setSheetMounted(false);
+    });
+  };
+
+  useEffect(() => {
+    if (sheetMounted) {
+      sheetSlide.setValue(340);
+      Animated.spring(sheetSlide, { toValue: 0, tension: 62, friction: 13, useNativeDriver: true }).start();
+    }
+  }, [sheetMounted]);
 
   useEffect(() => {
     const id = setInterval(() => setRemaining(r => Math.max(0, r - 1)), 1000);
@@ -111,25 +148,28 @@ export default function LoftChatScreen({ navigation, route }: Props) {
 
             {localMessages.map((m, i) => {
               const isMe = m.from === 'me';
+              const isNew = i >= MESSAGES.length;
               return (
-                <View key={i} style={[styles.bubbleRow, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}>
-                  <View style={[styles.bubble, {
-                    backgroundColor: isMe ? 'rgba(232,165,87,0.25)' : 'rgba(245,226,196,0.06)',
-                    borderColor: isMe ? 'rgba(232,165,87,0.4)' : 'rgba(245,226,196,0.1)',
-                    borderTopRightRadius: isMe ? 6 : 22,
-                    borderTopLeftRadius: isMe ? 22 : 6,
-                  }]}>
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 24, color: L.ink, fontStyle: 'italic' }}>
-                      {lang === 'en' ? m.en : m.zh}
-                    </Text>
+                <FadeInUp key={i} delay={isNew ? 0 : i * 60} distance={isNew ? 8 : 14} duration={isNew ? 180 : 280}>
+                  <View style={[styles.bubbleRow, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}>
+                    <View style={[styles.bubble, {
+                      backgroundColor: isMe ? 'rgba(232,165,87,0.25)' : 'rgba(245,226,196,0.06)',
+                      borderColor: isMe ? 'rgba(232,165,87,0.4)' : 'rgba(245,226,196,0.1)',
+                      borderTopRightRadius: isMe ? 6 : 22,
+                      borderTopLeftRadius: isMe ? 22 : 6,
+                    }]}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 24, color: L.ink, fontStyle: 'italic' }}>
+                        {lang === 'en' ? m.en : m.zh}
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                </FadeInUp>
               );
             })}
 
             {/* Veiled photo */}
             <View style={{ alignItems: 'flex-start', marginTop: 8 }}>
-              <TouchableOpacity onPress={() => setShowVeil(true)}>
+              <TouchableOpacity onPress={openSheet}>
                 <PhotoVeil p={L as any} liftLevel={veilLevel} size={150} lang={lang} />
                 <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, marginTop: 4, paddingLeft: 4 }}>
                   {lang === 'en' ? `tap to lift · ${4 - veilLevel} left` : `輕點揭曉 · 還剩 ${4 - veilLevel} 層`}
@@ -137,12 +177,12 @@ export default function LoftChatScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             </View>
 
-            {/* Typing */}
+            {/* Animated typing dots */}
             <View style={[styles.bubbleRow, { justifyContent: 'flex-start', marginTop: 8 }]}>
               <View style={[styles.bubble, { backgroundColor: 'rgba(245,226,196,0.06)', borderColor: 'rgba(245,226,196,0.1)' }]}>
                 <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
-                  {[0, 1, 2].map(i => (
-                    <View key={i} style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: L.muted, opacity: 0.6 }} />
+                  {([d0, d1, d2] as Animated.Value[]).map((dot, i) => (
+                    <Animated.View key={i} style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: L.muted, opacity: dot }} />
                   ))}
                 </View>
               </View>
@@ -202,11 +242,14 @@ export default function LoftChatScreen({ navigation, route }: Props) {
         </KeyboardAvoidingView>
       </SafeAreaView>
 
-      {/* Veil lift sheet */}
-      {showVeil && (
+      {/* Veil lift sheet — animated slide-up */}
+      {sheetMounted && (
         <View style={styles.sheet}>
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowVeil(false)} />
-          <View style={[styles.sheetInner, { backgroundColor: L.bgSolid, borderColor: L.line }]}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={closeSheet} />
+          <Animated.View style={[styles.sheetInner, {
+            backgroundColor: L.bgSolid, borderColor: L.line,
+            transform: [{ translateY: sheetSlide }],
+          }]}>
             <View style={styles.handle} />
             <View style={{ alignItems: 'center', gap: 14 }}>
               <PhotoVeil p={L as any} liftLevel={veilLevel} size={200} lang={lang} />
@@ -231,13 +274,13 @@ export default function LoftChatScreen({ navigation, route }: Props) {
                   </View>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity onPress={() => setShowVeil(false)}>
+              <TouchableOpacity onPress={closeSheet}>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: L.muted, paddingVertical: 8 }}>
                   {lang === 'en' ? 'close' : '關上'}
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </Animated.View>
         </View>
       )}
     </LinearGradient>

@@ -4,7 +4,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { VaporBackground, GlassCard, SoftButton } from '../components/ui';
+import { VaporBackground, GlassCard, SoftButton, FadeInUp } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
@@ -25,36 +25,38 @@ export default function MatchScreen({ navigation, route }: Props) {
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.container}>
           {/* Header */}
-          <View style={styles.header}>
+          <FadeInUp delay={0} distance={22} style={styles.header}>
             <Text style={[styles.title, { color: p.ink }]}>{t('matchHeader', lang)}</Text>
             <Text style={[styles.titleAlt, { color: p.ink }]}>{tAlt('matchHeader', lang)}</Text>
-          </View>
+          </FadeInUp>
 
           {/* Their identity card */}
-          <GlassCard p={p} padding={28} radius={32} style={styles.card}>
-            <View style={styles.identityBlock}>
-              <Identity kind={identityKind === 'character' ? 'sigil' : identityKind}
-                seed={otherSeed} size={88} palette={p} lang={lang} trust={0.2} />
-              <ColorAdjLabel seed={otherSeed} lang={lang} palette={p} />
-            </View>
+          <FadeInUp delay={90} distance={22} style={styles.card}>
+            <GlassCard p={p} padding={28} radius={32}>
+              <View style={styles.identityBlock}>
+                <Identity kind={identityKind === 'character' ? 'sigil' : identityKind}
+                  seed={otherSeed} size={88} palette={p} lang={lang} trust={0.2} />
+                <ColorAdjLabel seed={otherSeed} lang={lang} palette={p} />
+              </View>
 
-            {/* Their mood text */}
-            <View style={[styles.moodBox, { borderTopColor: p.line }]}>
-              <Text style={[styles.subhead, { color: p.muted }]}>{t('matchSubhead', lang)}</Text>
-              <Text style={[styles.moodText, { color: p.ink }]}>
-                「{lang === 'en' ? DEMO_MOOD.en : DEMO_MOOD.zh}」
-              </Text>
-            </View>
-          </GlassCard>
+              {/* Their mood text */}
+              <View style={[styles.moodBox, { borderTopColor: p.line }]}>
+                <Text style={[styles.subhead, { color: p.muted }]}>{t('matchSubhead', lang)}</Text>
+                <Text style={[styles.moodText, { color: p.ink }]}>
+                  「{lang === 'en' ? DEMO_MOOD.en : DEMO_MOOD.zh}」
+                </Text>
+              </View>
+            </GlassCard>
+          </FadeInUp>
 
           {/* Time / hint */}
-          <View style={styles.hints}>
+          <FadeInUp delay={180} distance={14} style={styles.hints}>
             <Text style={[styles.hint, { color: p.muted }]}>⏱ {t('matchTime', lang)}</Text>
             <Text style={[styles.hint, { color: p.muted }]}>· {t('matchHint', lang)}</Text>
-          </View>
+          </FadeInUp>
 
           {/* Actions */}
-          <View style={styles.actions}>
+          <FadeInUp delay={260} distance={10} style={styles.actions}>
             <SoftButton p={p} variant="primary" size="lg" full
               onPress={() => navigation.replace('Chat', { otherSeed })}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
@@ -67,7 +69,7 @@ export default function MatchScreen({ navigation, route }: Props) {
             >
               <Text style={[styles.declineText, { color: p.muted }]}>{t('matchDecline', lang)}</Text>
             </TouchableOpacity>
-          </View>
+          </FadeInUp>
         </View>
       </SafeAreaView>
     </VaporBackground>

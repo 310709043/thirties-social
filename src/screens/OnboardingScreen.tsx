@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
+  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Animated,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
@@ -24,10 +24,26 @@ export default function OnboardingScreen({ navigation }: Props) {
   const p = DIRECTIONS[direction];
   const [step, setStep] = useState(0);
   const isPreview = step === STEPS.length;
+  const contentOpacity = useRef(new Animated.Value(1)).current;
+  const contentTy = useRef(new Animated.Value(0)).current;
+
+  const goToStep = (next: number) => {
+    Animated.parallel([
+      Animated.timing(contentOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
+      Animated.timing(contentTy, { toValue: -12, duration: 150, useNativeDriver: true }),
+    ]).start(() => {
+      setStep(next);
+      contentTy.setValue(16);
+      Animated.parallel([
+        Animated.timing(contentOpacity, { toValue: 1, duration: 230, useNativeDriver: true }),
+        Animated.spring(contentTy, { toValue: 0, tension: 88, friction: 12, useNativeDriver: true }),
+      ]).start();
+    });
+  };
 
   const handleContinue = async () => {
     if (!isPreview) {
-      setStep(step + 1);
+      goToStep(step + 1);
     } else {
       await setOnboardingDone();
       navigation.replace('Setup');
@@ -60,7 +76,7 @@ export default function OnboardingScreen({ navigation }: Props) {
           </View>
 
           {/* Content */}
-          <View style={styles.content}>
+          <Animated.View style={[styles.content, { opacity: contentOpacity, transform: [{ translateY: contentTy }] }]}>
             {!isPreview ? (
               <>
                 <View style={styles.mark}>
@@ -76,7 +92,7 @@ export default function OnboardingScreen({ navigation }: Props) {
             ) : (
               <IdentityPreview p={p} lang={lang} identityKind={identityKind} seed={seed} />
             )}
-          </View>
+          </Animated.View>
 
           {/* Footer */}
           <View style={styles.footer}>
@@ -86,7 +102,7 @@ export default function OnboardingScreen({ navigation }: Props) {
               </Text>
             </SoftButton>
             {!isPreview && step > 0 && (
-              <TouchableOpacity onPress={() => setStep(step - 1)} style={styles.back}>
+              <TouchableOpacity onPress={() => goToStep(step - 1)} style={styles.back}>
                 <Text style={{ color: p.muted, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 }}>
                   {lang === 'en' ? 'Back' : '上一步'}
                 </Text>

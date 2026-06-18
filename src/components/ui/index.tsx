@@ -1,6 +1,6 @@
 // Shared UI building blocks
 
-import React, { ReactNode, useEffect, useRef } from 'react';
+import React, { ReactNode, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput,
   StyleSheet, ViewStyle, TextStyle, Animated, Easing,
@@ -166,13 +166,26 @@ export function Cap({ children, p, style }: { children: ReactNode; p: Palette; s
 
 // ── BreathDot ─────────────────────────────────────────────────
 export function BreathDot({ p, size = 8 }: { p: Palette; size?: number }) {
+  const pulse = useRef(new Animated.Value(0.45)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => { loop.stop(); pulse.setValue(0.45); };
+  }, []);
+
   return (
-    <View style={{
+    <Animated.View style={{
       width: size, height: size, borderRadius: size,
       backgroundColor: p.accent,
+      opacity: pulse,
       shadowColor: p.accent,
       shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.7,
+      shadowOpacity: 0.8,
       shadowRadius: size * 1.5,
     }} />
   );
@@ -180,11 +193,16 @@ export function BreathDot({ p, size = 8 }: { p: Palette; size?: number }) {
 
 // ── CountdownBar ──────────────────────────────────────────────
 export function CountdownBar({ p, progress }: { p: Palette; progress: number }) {
+  const anim = useRef(new Animated.Value(progress)).current;
+  useEffect(() => {
+    Animated.timing(anim, { toValue: progress, duration: 900, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
+  }, [progress]);
+
   return (
     <View style={{ height: 2, backgroundColor: p.line, borderRadius: 2 }}>
-      <View style={{
+      <Animated.View style={{
         position: 'absolute', left: 0, top: 0, bottom: 0,
-        width: `${progress * 100}%` as any,
+        width: anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
         backgroundColor: p.accent,
         borderRadius: 2,
       }} />
