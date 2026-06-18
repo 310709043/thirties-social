@@ -8,7 +8,8 @@ import {
   Timestamp, getDocs, increment,
 } from 'firebase/firestore';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from './firebase';
+import { ref, deleteObject } from 'firebase/storage';
+import { auth, db, storage } from './firebase';
 import { sendPushToUser } from './notifications';
 
 // ── Auth ──────────────────────────────────────────────────
@@ -1107,10 +1108,18 @@ export async function deleteAccount(): Promise<{ ok: boolean; error?: string }> 
       await deleteDoc(doc(db, 'loftConversations', cid));
     }));
 
-    // 8. Delete veiled photos
-    const vpQ = query(collection(db, 'veiledPhotos'), where('userId', '==', uid));
+    // 8. Delete veiled photos — Storage object + Firestore doc (field is senderId).
+    const vpQ = query(collection(db, 'veiledPhotos'), where('senderId', '==', uid));
     const vpSnap = await getDocs(vpQ);
-    await Promise.all(vpSnap.docs.map(d => deleteDoc(d.ref)));
+    await Promise.all(vpSnap.docs.map(async d => {
+      try { await deleteObject(ref(storage, 'veiled-photos/' + d.id)); } catch {}
+      await deleteDoc(d.ref);
+    }));
+
+    // 8b. Delete 今夜之題 ritual responses.
+    const rrQ = query(collection(db, 'loftRitualResponses'), where('userId', '==', uid));
+    const rrSnap = await getDocs(rrQ);
+    await Promise.all(rrSnap.docs.map(d => deleteDoc(d.ref)));
 
     // 9. Sign out Firebase
     await auth.signOut();
