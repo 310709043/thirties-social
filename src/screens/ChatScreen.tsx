@@ -30,10 +30,11 @@ const TOTAL_SECONDS = 30 * 60;
 export default function ChatScreen({ navigation, route }: Props) {
   const { seed, direction, lang, identityKind, wicks } = useAppStore();
   const p = DIRECTIONS[direction];
-  const otherSeed = route.params?.otherSeed || 'm0od7';
+  const otherSeed = route.params.otherSeed;
   const conversationId = (route.params as any)?.conversationId as string | undefined;
 
-  const [remaining, setRemaining] = useState(28 * 60 + 14);
+  const [remaining, setRemaining] = useState(TOTAL_SECONDS);
+  const startTimeRef = useRef(new Date());
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [realMessages, setRealMessages] = useState<DbConvMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -43,10 +44,11 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const pickVeilPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('', lang === 'en' ? 'Photo library permission is needed' : '需要相簿權限才能選擇照片');
+    if (perm.status === 'denied') {
+      Alert.alert('', lang === 'en' ? 'Photo library access was denied. Please enable it in Settings.' : '相簿存取已被拒絕，請到「設定」中開啟。');
       return;
     }
+    if (!perm.granted) return;
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7,
     });
@@ -61,31 +63,33 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     const id = setInterval(() => {
-      setRemaining(r => {
-        if (r <= 1) {
-          clearInterval(id);
-          (async () => {
-            if (conversationId) await endConversation(conversationId, 'timer_expired');
-            navigation.replace('Close');
-          })();
-          return 0;
-        }
-        return r - 1;
-      });
+      setRemaining(r => Math.max(0, r - 1));
     }, 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Handle timer expiry outside the setRemaining updater
+  useEffect(() => {
+    if (remaining === 0) {
+      (async () => {
+        if (conversationId) await endConversation(conversationId, 'timer_expired');
+        navigation.replace('Close');
+      })();
+    }
+  }, [remaining]);
 
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
   const ss = String(remaining % 60).padStart(2, '0');
   const progress = remaining / TOTAL_SECONDS;
 
   const sendMessage = async () => {
-    if (!inputText.trim()) return;
+    const text = inputText.trim();
+    if (!text) return;
     if (conversationId) {
-      await sendConversationMessage({ conversationId, content: inputText.trim() });
+      const ok = await sendConversationMessage({ conversationId, content: text });
+      if (!ok) return; // keep input on send failure
     } else {
-      setMessages(prev => [...prev, { from: 'me', zh: inputText, en: inputText, age: 0 }]);
+      setMessages(prev => [...prev, { from: 'me', zh: text, en: text, age: 0 }]);
     }
     setInputText('');
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -169,7 +173,12 @@ export default function ChatScreen({ navigation, route }: Props) {
             onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
           >
             <Text style={[styles.openNote, { color: p.muted }]}>
-              {lang === 'en' ? 'opened at 23:47 · ends at 00:17' : '23:47 開啟 · 00:17 結束'}
+              {(() => {
+                const s = startTimeRef.current;
+                const e = new Date(s.getTime() + TOTAL_SECONDS * 1000);
+                const fmt = (d: Date) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                return lang === 'en' ? `opened ${fmt(s)} · ends ${fmt(e)}` : `${fmt(s)} 開啟 · ${fmt(e)} 結束`;
+              })()}
             </Text>
 
             {displayMessages.map((m, i) => (

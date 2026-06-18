@@ -25,11 +25,11 @@ export default function OnboardingScreen({ navigation }: Props) {
   const [step, setStep] = useState(0);
   const isPreview = step === STEPS.length;
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!isPreview) {
       setStep(step + 1);
     } else {
-      setOnboardingDone();
+      await setOnboardingDone();
       navigation.replace('Setup');
     }
   };

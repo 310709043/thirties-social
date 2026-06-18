@@ -54,8 +54,10 @@ export function TutorialOverlay({ p, lang, onDone }: { p: Palette; lang: string;
   const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    const anim = Animated.timing(fade, { toValue: 1, duration: 320, useNativeDriver: true });
     fade.setValue(0);
-    Animated.timing(fade, { toValue: 1, duration: 320, useNativeDriver: true }).start();
+    anim.start();
+    return () => anim.stop();
   }, [step]);
 
   const s = STEPS[step];

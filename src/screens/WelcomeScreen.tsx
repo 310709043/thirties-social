@@ -27,8 +27,8 @@ export default function WelcomeScreen({ navigation }: Props) {
     Animated.timing(fade, { toValue: 1, duration: 900, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
   }, []);
 
-  const handleStart = () => {
-    setWelcomeDone();
+  const handleStart = async () => {
+    await setWelcomeDone();
     navigation.replace('Onboarding');
   };
 

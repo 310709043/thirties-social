@@ -87,7 +87,7 @@ export default function SettingsScreen({ navigation }: Props) {
               <Identity kind={identityKind} seed={seed} size={64} palette={p} lang={lang} trust={0.3} />
               <View style={{ flex: 1 }}>
                 <ColorAdjLabel seed={seed} lang={lang} palette={p} />
-                <Text style={{ fontFamily: lang === 'en' ? 'NotoSerifTC-Regular' : 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 4 }}>
+                <Text style={{ fontFamily: lang === 'en' ? 'EBGaramond-Italic' : 'NotoSerifTC-Regular', fontSize: 11, color: p.muted, marginTop: 4 }}>
                   {t('setIdentitySub', lang)} · {tAlt('setIdentitySub', lang)}
                 </Text>
               </View>

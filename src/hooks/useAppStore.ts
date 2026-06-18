@@ -81,17 +81,19 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
     const dbUser = await upsertUser({ userId, deviceId, seed, lang: _state.lang, direction: _state.direction });
     if (dbUser) {
       const today = new Date().toISOString().slice(0, 10);
-      const lastReward = (dbUser as any).lastRewardDate ?? null;
+      const lastReward = dbUser.lastRewardDate ?? null;
+      const mergedSetupDone = _state.setupDone || dbUser.setupDone;
       _state = {
         ..._state, userId, dbSynced: true, wicks: dbUser.wicks, vigil: dbUser.vigil,
-        setupDone: dbUser.setupDone, isBanned: dbUser.isBanned, banReason: dbUser.banReason,
-        banExpiresAt: (dbUser as any).banExpiresAt?.toMillis?.() ?? null,
+        setupDone: mergedSetupDone,
+        isBanned: dbUser.isBanned, banReason: dbUser.banReason,
+        banExpiresAt: dbUser.banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
       };
       await Promise.all([
         AsyncStorage.setItem('wicks', String(dbUser.wicks)),
         AsyncStorage.setItem('vigil', dbUser.vigil ? '1' : '0'),
-        AsyncStorage.setItem('setup_done', dbUser.setupDone ? '1' : '0'),
+        AsyncStorage.setItem('setup_done', mergedSetupDone ? '1' : '0'),
       ]);
     } else {
       _state = { ..._state, userId, dbSynced: true };
@@ -100,11 +102,11 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
     if (_userUnsubscribe) _userUnsubscribe();
     _userUnsubscribe = subscribeToUser(userId, updated => {
       const today = new Date().toISOString().slice(0, 10);
-      const lastReward = (updated as any).lastRewardDate ?? null;
+      const lastReward = updated.lastRewardDate ?? null;
       _state = {
         ..._state, wicks: updated.wicks, vigil: updated.vigil,
         isBanned: updated.isBanned, banReason: updated.banReason,
-        banExpiresAt: (updated as any).banExpiresAt?.toMillis?.() ?? null,
+        banExpiresAt: updated.banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
       };
       AsyncStorage.setItem('wicks', String(updated.wicks));
@@ -207,6 +209,8 @@ export function useAppStore() {
   useEffect(() => {
     const update = () => setS({ ..._state });
     _listeners.add(update);
+    // Capture any updates that arrived between useState(_state) and this effect
+    setS({ ..._state });
     return () => { _listeners.delete(update); };
   }, []);
   return s;

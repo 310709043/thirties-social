@@ -36,9 +36,11 @@ export default function LoftChatScreen({ navigation, route }: Props) {
   const { lang, wicks } = useAppStore();
   const [remaining, setRemaining] = useState(58 * 60 + 14);
   const [message, setMessage] = useState('');
+  const [localMessages, setLocalMessages] = useState(MESSAGES);
   const [veilLevel, setVeilLevel] = useState(1);
   const [showVeil, setShowVeil] = useState(false);
   const [giftSent, setGiftSent] = useState(false);
+  const startTimeRef = React.useRef(new Date());
 
   useEffect(() => {
     const id = setInterval(() => setRemaining(r => Math.max(0, r - 1)), 1000);
@@ -49,8 +51,16 @@ export default function LoftChatScreen({ navigation, route }: Props) {
   const mm = String(Math.floor((remaining % 3600) / 60)).padStart(2, '0');
 
   const sendPulse = async (_key: string) => {
+    if (wicks < 1) return;
     const result = await spendWicks(1, 'pulse');
     if (result.ok) { hapticMedium(); }
+  };
+
+  const sendMessage = () => {
+    const text = message.trim();
+    if (!text) return;
+    setLocalMessages(prev => [...prev, { from: 'me', zh: text, en: text }]);
+    setMessage('');
   };
 
   return (
@@ -91,10 +101,15 @@ export default function LoftChatScreen({ navigation, route }: Props) {
           {/* Messages */}
           <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.messages}>
             <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, textAlign: 'center', opacity: 0.7, marginBottom: 10 }}>
-              {lang === 'en' ? 'opened at 23:47 · ends at 00:17' : '23:47 開啟 · 00:17 結束'}
+              {(() => {
+              const s = startTimeRef.current;
+              const e = new Date(s.getTime() + (remaining + 1) * 1000);
+              const fmt = (d: Date) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+              return lang === 'en' ? `opened ${fmt(s)} · ends ${fmt(e)}` : `${fmt(s)} 開啟 · ${fmt(e)} 結束`;
+            })()}
             </Text>
 
-            {MESSAGES.map((m, i) => {
+            {localMessages.map((m, i) => {
               const isMe = m.from === 'me';
               return (
                 <View key={i} style={[styles.bubbleRow, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}>
@@ -179,7 +194,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
               />
               <TouchableOpacity
                 style={[styles.sendBtn, { backgroundColor: '#e8a557' }]}
-                onPress={() => setMessage('')}>
+                onPress={sendMessage}>
                 <Text style={{ color: '#1f1014', fontSize: 16 }}>↑</Text>
               </TouchableOpacity>
             </View>

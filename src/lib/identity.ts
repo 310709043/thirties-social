@@ -59,6 +59,8 @@ export function getDailySeed(deviceId: string): string {
   if (date.getHours() < 3) {
     date.setDate(date.getDate() - 1);
   }
-  const dateStr = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const dateStr = `${date.getFullYear()}-${m}-${d}`;
   return `${deviceId}-${dateStr}`;
 }

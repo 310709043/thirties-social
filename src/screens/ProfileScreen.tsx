@@ -79,10 +79,11 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const addPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('', zh ? '需要相簿權限才能加入照片' : 'Photo library permission is needed');
+    if (perm.status === 'denied') {
+      Alert.alert('', zh ? '相簿存取已被拒絕，請到「設定」中開啟。' : 'Photo library access was denied. Please enable it in Settings.');
       return;
     }
+    if (!perm.granted) return;
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -150,7 +151,7 @@ export default function ProfileScreen({ navigation }: Props) {
               <Identity kind={identityKind} seed={seed} size={64} palette={p} lang={lang} trust={0.4} />
               <View style={{ flex: 1 }}>
                 <ColorAdjLabel seed={seed} lang={lang} palette={p} />
-                <Text style={{ fontFamily: zh ? 'EBGaramond-Italic' : 'NotoSerifTC-Regular', fontSize: 11, color: p.muted, marginTop: 4 }}>
+                <Text style={{ fontFamily: zh ? 'NotoSerifTC-Regular' : 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 4 }}>
                   {zh ? '識別每天重新生成' : 'identity regenerates daily'}
                 </Text>
               </View>

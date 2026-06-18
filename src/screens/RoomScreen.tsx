@@ -12,7 +12,6 @@ import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore } from '../hooks/useAppStore';
 import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, joinRoomPresence, subscribeToRoomPresence, DbRoomMessage, DbPresence } from '../lib/db';
-import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Room'>;
@@ -34,6 +33,7 @@ export default function RoomScreen({ navigation, route }: Props) {
   const [inputText, setInputText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [present, setPresent] = useState<DbPresence[]>([]);
+  const [presenceLoaded, setPresenceLoaded] = useState(false);
 
   const reshuffleIdentity = () => {
     setIdentitySeed(Math.random().toString(36).slice(2));
@@ -43,8 +43,8 @@ export default function RoomScreen({ navigation, route }: Props) {
     setRefreshing(true);
     const room = await getOrCreatePresetRoom({
       roomKey,
-      topicZh: getT(roomKey as any, 'zh'),
-      topicEn: getT(roomKey as any, 'en'),
+      topicZh: t(roomKey as any, 'zh'),
+      topicEn: t(roomKey as any, 'en'),
     });
     if (room) setRoomId(room.id);
     setRefreshing(false);
@@ -53,8 +53,8 @@ export default function RoomScreen({ navigation, route }: Props) {
   useEffect(() => {
     getOrCreatePresetRoom({
       roomKey,
-      topicZh: getT(roomKey as any, 'zh'),
-      topicEn: getT(roomKey as any, 'en'),
+      topicZh: t(roomKey as any, 'zh'),
+      topicEn: t(roomKey as any, 'en'),
     }).then(room => {
       if (room) setRoomId(room.id);
     });
@@ -69,20 +69,21 @@ export default function RoomScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!roomId) return;
     const leave = joinRoomPresence(roomId, identitySeed);
-    const unsub = subscribeToRoomPresence(roomId, setPresent);
+    const unsub = subscribeToRoomPresence(roomId, p => { setPresent(p); setPresenceLoaded(true); });
     return () => { leave(); unsub(); };
   }, [roomId, identitySeed]);
 
   // When invite sent, create a real conversation → go to Chat
   useEffect(() => {
-    if (inviteSent) {
-      const id = setTimeout(async () => {
-        const conv = await createConversation({ userBId: 'anon_' + inviting!.seed, roomId: roomId ?? undefined });
-        navigation.push('Chat', { otherSeed: inviting!.seed, conversationId: conv?.id });
-      }, 2400);
-      return () => clearTimeout(id);
-    }
-  }, [inviteSent]);
+    if (!inviteSent || !inviting) return;
+    const capturedInviting = inviting;
+    const capturedRoomId = roomId;
+    const id = setTimeout(async () => {
+      const conv = await createConversation({ userBId: capturedInviting.seed, roomId: capturedRoomId ?? undefined });
+      navigation.push('Chat', { otherSeed: capturedInviting.seed, conversationId: conv?.id });
+    }, 2400);
+    return () => clearTimeout(id);
+  }, [inviteSent, inviting, roomId, navigation]);
 
   const handleSend = async () => {
     if (!inputText.trim() || !roomId) return;
@@ -146,7 +147,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                 </View>
               )}
             </View>
-            <Text style={[styles.liveText, { color: p.muted }]}>{Math.max(present.length, 1)} {t('roomPeople', lang)}</Text>
+            <Text style={[styles.liveText, { color: p.muted }]}>{presenceLoaded ? present.length : '…'} {t('roomPeople', lang)}</Text>
             <Text style={[styles.liveDot, { color: p.muted }]}>·</Text>
             <Text style={[styles.liveText, { color: p.muted }]}>{t('roomEphemeral', lang)}</Text>
           </View>

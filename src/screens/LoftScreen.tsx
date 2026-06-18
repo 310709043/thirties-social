@@ -39,8 +39,9 @@ export default function LoftScreen({ navigation }: Props) {
   const [brokeLine] = useState(() => BROKE_LINES[Math.floor(Math.random() * BROKE_LINES.length)]);
 
   const handleEnter = async () => {
+    if (entering) return;
     const nightName = getColorAdj(seed, lang).label;
-    const result = await enterLoft(nightName);
+    const result = await enterLoft(nightName, seed);
     if (result.ok) {
       hapticMedium();
       setEntering(true);   // plays immersive transition, onDone -> setInside(true)
@@ -203,7 +204,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   }, []);
 
   const tonight = sessions.map(s => ({
-    seed: s.userId,
+    seed: (s as any).seed || s.userId, // use stored sigil seed, fallback to userId for old docs
     zh: `「${s.nightName}」`,
     en: `"${s.nightName}"`,
     who_zh: s.nightName,

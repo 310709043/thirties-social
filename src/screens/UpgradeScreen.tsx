@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,9 +8,7 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, Cap, WickGlyph, AnimatedNumber } from '../components/ui';
-import { useAppStore, setVigil } from '../hooks/useAppStore';
-import { addWicks } from '../lib/db';
-import { hapticSuccess } from '../lib/haptics';
+import { useAppStore } from '../hooks/useAppStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Upgrade'>;
 
@@ -24,19 +22,18 @@ export default function UpgradeScreen({ navigation }: Props) {
   const { direction, lang, wicks, vigil } = useAppStore();
   const p = DIRECTIONS[direction];
 
-  // TODO: gate behind real IAP purchase flow
-  const handleBuyPack = async (amount: number) => {
-    const result = await addWicks(amount, 'purchase', undefined, `購買 ${amount} 燭芯`);
-    if (result.ok) {
-      hapticSuccess();
-    }
+  const handleBuyPack = (_amount: number) => {
+    Alert.alert(
+      lang === 'en' ? 'Coming soon' : '即將推出',
+      lang === 'en' ? 'In-app purchase is not yet available.' : '購買功能尚未開放，敬請期待。',
+    );
   };
 
-  // TODO: gate behind real IAP purchase flow
   const handleVigil = () => {
-    setVigil(true);
-    hapticSuccess();
-    navigation.goBack();
+    Alert.alert(
+      lang === 'en' ? 'Coming soon' : '即將推出',
+      lang === 'en' ? 'Vigil subscription is not yet available.' : '守夜訂閱尚未開放，敬請期待。',
+    );
   };
 
   return (

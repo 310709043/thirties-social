@@ -3,7 +3,7 @@
 // ============================================================
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
-  collection, query, where, orderBy, limit,
+  collection, query, where, orderBy, limit, limitToLast,
   onSnapshot, runTransaction, serverTimestamp,
   Timestamp, getDocs, increment,
 } from 'firebase/firestore';
@@ -42,16 +42,22 @@ export interface DbUser {
   setupDone: boolean;
   isBanned: boolean;
   banReason: string | null;
+  banExpiresAt: any;
   gender: string | null;
   ageBracket: string | null;
   relationshipStatus: string | null;
+  relationshipShape: string | null;
   seeking: string[];
   boundary: string | null;
+  availability: string[];
   region: string | null;
   quote: string | null;
+  tonightLine: string | null;
+  nightCustomAdj: string | null;
   loftVisible: boolean;
   nightColorIdx: number;
   nightAdjIdx: number;
+  lastRewardDate: string | null;
   createdAt: any;
   lastActiveAt: any;
 }
@@ -78,16 +84,22 @@ export async function upsertUser(params: {
       setupDone: false,
       isBanned: false,
       banReason: null,
+      banExpiresAt: null,
       gender: null,
       ageBracket: null,
       relationshipStatus: null,
+      relationshipShape: null,
       seeking: [],
       boundary: null,
+      availability: [],
       region: null,
       quote: null,
+      tonightLine: null,
+      nightCustomAdj: null,
       loftVisible: true,
       nightColorIdx: 0,
       nightAdjIdx: 0,
+      lastRewardDate: null,
       createdAt: serverTimestamp(),
       lastActiveAt: serverTimestamp(),
     };
@@ -114,9 +126,11 @@ export async function updateUser(patch: Partial<DbUser>): Promise<void> {
 }
 
 export function subscribeToUser(userId: string, onChange: (u: DbUser) => void) {
-  return onSnapshot(doc(db, 'users', userId), snap => {
-    if (snap.exists()) onChange({ id: snap.id, ...snap.data() } as DbUser);
-  });
+  return onSnapshot(
+    doc(db, 'users', userId),
+    snap => { if (snap.exists()) onChange({ id: snap.id, ...snap.data() } as DbUser); },
+    err => console.warn('[subscribeToUser]', err),
+  );
 }
 
 // ── Wicks (atomic transactions) ───────────────────────────
@@ -248,7 +262,7 @@ export async function fetchRoomMessages(roomId: string): Promise<DbRoomMessage[]
   const q = query(
     collection(db, 'rooms', roomId, 'messages'),
     orderBy('createdAt', 'asc'),
-    limit(50),
+    limitToLast(50),
   );
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage);
@@ -283,11 +297,13 @@ export function subscribeToRoomMessages(
   const q = query(
     collection(db, 'rooms', roomId, 'messages'),
     orderBy('createdAt', 'asc'),
-    limit(50),
+    limitToLast(50),
   );
-  return onSnapshot(q, snap => {
-    onMessage(snap.docs.map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage));
-  });
+  return onSnapshot(
+    q,
+    snap => { onMessage(snap.docs.map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage)); },
+    err => console.warn('[subscribeToRoomMessages]', err),
+  );
 }
 
 // ── Room Presence ─────────────────────────────────────────
@@ -326,8 +342,8 @@ export function subscribeToRoomPresence(
       .map(d => d.data() as DbPresence)
       .filter(p => {
         const ts = p.lastSeen?.toMillis?.();
-        // Pending serverTimestamp (own fresh write) counts as present
-        return ts === undefined || ts >= cutoff;
+        // null (pending serverTimestamp) and undefined both count as present
+        return ts == null || ts >= cutoff;
       });
     onChange(present);
   });
@@ -371,16 +387,17 @@ export function subscribeToConversationMessages(
   const q = query(
     collection(db, 'conversations', conversationId, 'messages'),
     orderBy('createdAt', 'asc'),
+    limitToLast(200),
   );
-  return onSnapshot(q, snap => {
-    onUpdate(snap.docs.map(d => ({
-      id: d.id, conversationId, ...d.data(),
-    }) as DbConvMessage));
-  });
+  return onSnapshot(
+    q,
+    snap => { onUpdate(snap.docs.map(d => ({ id: d.id, conversationId, ...d.data() }) as DbConvMessage)); },
+    err => console.warn('[subscribeToConversationMessages]', err),
+  );
 }
 
 // ── Loft ─────────────────────────────────────────────────
-export async function enterLoft(nightName: string): Promise<{
+export async function enterLoft(nightName: string, seed?: string): Promise<{
   ok: boolean; sessionId?: string; balance?: number; error?: string;
 }> {
   const uid = getCurrentUid();
@@ -388,11 +405,12 @@ export async function enterLoft(nightName: string): Promise<{
 
   const tonight = new Date().toISOString().slice(0, 10);
 
-  // Check if already entered tonight
+  // Check if already entered tonight (and hasn't left)
   const q = query(
     collection(db, 'loftSessions'),
     where('userId', '==', uid),
     where('nightDate', '==', tonight),
+    where('leftAt', '==', null),
   );
   const existing = await getDocs(q);
   if (!existing.empty) return { ok: false, error: 'already_entered_tonight' };
@@ -403,6 +421,7 @@ export async function enterLoft(nightName: string): Promise<{
 
   const ref = await addDoc(collection(db, 'loftSessions'), {
     userId: uid,
+    seed: seed ?? null,
     nightName,
     nightDate: tonight,
     enteredAt: serverTimestamp(),
@@ -525,7 +544,11 @@ export async function claimDailyReward(): Promise<{
 // ── Subscribe to Active Rooms ─────────────────────────────
 export function subscribeToActiveRooms(onChange: (rooms: DbRoom[]) => void): () => void {
   const q = query(collection(db, 'rooms'), where('isActive', '==', true), orderBy('messageCount', 'desc'), limit(20));
-  return onSnapshot(q, snap => { onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }) as DbRoom)); });
+  return onSnapshot(
+    q,
+    snap => { onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }) as DbRoom)); },
+    err => console.warn('[subscribeToActiveRooms]', err),
+  );
 }
 
 // ── Get or create a preset room ────────────────────────────

@@ -40,7 +40,7 @@ interface NavigationProps {
   initialRoute?: string;
 }
 
-export default function Navigation({ initialRoute = 'Onboarding' }: NavigationProps) {
+export default function Navigation({ initialRoute = 'Welcome' }: NavigationProps) {
   return (
     <NavigationContainer>
       <Stack.Navigator

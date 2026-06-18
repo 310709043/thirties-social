@@ -72,7 +72,7 @@ export default function SetupScreen({ navigation }: Props) {
 
   const ready = !!gender && !!age && !!marriage && seeking.length > 0 && !!boundary;
 
-  const handleDone = () => {
+  const handleDone = async () => {
     if (ready) {
       updateUser({
         gender,
@@ -85,7 +85,7 @@ export default function SetupScreen({ navigation }: Props) {
         region,
         quote: line.trim() || null,
       } as any);
-      setSetupDone();
+      await setSetupDone();
       navigation.replace('Mood');
     }
   };

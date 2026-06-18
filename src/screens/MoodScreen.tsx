@@ -47,7 +47,8 @@ export default function MoodScreen({ navigation }: Props) {
     const tick = () => {
       const now = new Date();
       const reset = new Date(now);
-      reset.setHours(27, 0, 0, 0);
+      reset.setDate(reset.getDate() + 1);
+      reset.setHours(3, 0, 0, 0);
       let diff = (reset.getTime() - now.getTime()) / 1000;
       if (diff < 0) diff += 86400;
       const h = String(Math.floor(diff / 3600)).padStart(2, '0');
@@ -119,6 +120,7 @@ export default function MoodScreen({ navigation }: Props) {
               multiline
               numberOfLines={3}
               style={[styles.textInput, { color: p.ink }]}
+            maxLength={280}
             />
             <View style={styles.inputFooter}>
               <Text style={[styles.inputHint, { color: p.muted }]}>

@@ -27,7 +27,7 @@ function DriftOrb({
       ]),
     );
     loop.start();
-    return () => loop.stop();
+    return () => { loop.stop(); t.setValue(0); };
   }, []);
 
   return (
