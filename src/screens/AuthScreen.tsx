@@ -79,7 +79,8 @@ export default function AuthScreen({ navigation, route }: Props) {
       hapticSuccess();
       navigation.replace(setupDone ? 'Mood' : 'Setup');
     } else if (result.error !== 'cancelled') {
-      setError(lang === 'en' ? 'Google sign-in failed' : 'Google 登入失敗');
+      // Surface the real error for diagnosis (revert to a generic message later).
+      setError((lang === 'en' ? 'Google sign-in failed: ' : 'Google 登入失敗：') + (result.error ?? '?'));
     }
   };
 
