@@ -811,73 +811,25 @@ export function subscribeToMyMatch(
 }
 
 /** Try to find another waiting user and pair them with the current user */
+const BACKEND_BASE = process.env.EXPO_PUBLIC_ADMIN_URL ?? 'https://thirties-admin.vercel.app';
+
+/**
+ * Ask the server to pair us with a waiting candidate. Cross-user matchQueue
+ * reads need the Admin SDK (the rules only allow reading your own entry), so
+ * matching runs server-side. The result arrives via subscribeToMyMatch.
+ */
 export async function tryFindMatch(): Promise<boolean> {
-  const uid = getCurrentUid();
-  if (!uid) return false;
-
+  const user = auth.currentUser;
+  if (!user) return false;
   try {
-    const q = query(
-      collection(db, 'matchQueue'),
-      where('status', '==', 'waiting'),
-      limit(10),
-    );
-    const snap = await getDocs(q);
-    // Never match someone I've blocked.
-    const myUserSnap = await getDoc(doc(db, 'users', uid));
-    const myBlocked: string[] = myUserSnap.exists() ? (myUserSnap.data().blockedUsers ?? []) : [];
-    const candidates = snap.docs
-      .map(d => ({ id: d.id, ...d.data() } as MatchQueueEntry & { id: string }))
-      .filter(e => e.userId !== uid && !myBlocked.includes(e.userId));
-
-    if (candidates.length === 0) return false;
-
-    // Pick a random candidate
-    const other = candidates[Math.floor(Math.random() * candidates.length)];
-
-    // Get my own entry
-    const mySnap = await getDoc(doc(db, 'matchQueue', uid));
-    if (!mySnap.exists() || mySnap.data().status !== 'waiting') return false;
-    const myEntry = mySnap.data() as MatchQueueEntry;
-
-    // Create conversation
-    const conv = await createConversation({ userBId: other.userId });
-    if (!conv) return false;
-
-    // Update both entries atomically
-    await runTransaction(db, async tx => {
-      const myRef = doc(db, 'matchQueue', uid);
-      const otherRef = doc(db, 'matchQueue', other.userId);
-
-      const myCheck = await tx.get(myRef);
-      const otherCheck = await tx.get(otherRef);
-
-      if (!myCheck.exists() || myCheck.data().status !== 'waiting') throw new Error('already_matched');
-      if (!otherCheck.exists() || otherCheck.data().status !== 'waiting') throw new Error('other_already_matched');
-
-      tx.update(myRef, {
-        status: 'matched',
-        matchedWith: other.userId,
-        matchedSeed: other.seed,
-        matchedMoodText: other.moodText,
-        conversationId: conv.id,
-      });
-      tx.update(otherRef, {
-        status: 'matched',
-        matchedWith: uid,
-        matchedSeed: myEntry.seed,
-        matchedMoodText: myEntry.moodText,
-        conversationId: conv.id,
-      });
+    const idToken = await user.getIdToken();
+    const res = await fetch(`${BACKEND_BASE}/api/match/find`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${idToken}` },
     });
-
-    // Send push notification to the other user
-    sendPushToUser(other.userId, {
-      title: '有人想和你說話',
-      body: myEntry.moodText ? `「${myEntry.moodText}」` : '有人想找你聊天',
-      data: { screen: 'Match', conversationId: conv.id, otherSeed: myEntry.seed },
-    }).catch(() => {});
-
-    return true;
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !!data.matched;
   } catch {
     return false;
   }
