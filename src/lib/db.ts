@@ -835,6 +835,23 @@ export async function tryFindMatch(): Promise<boolean> {
   }
 }
 
+/** Server-issued daily wick reward (so wick grants stay off the client). */
+export async function claimDailyRewardServer(): Promise<{ ok: boolean; rewarded: boolean; amount?: number; balance?: number }> {
+  const user = auth.currentUser;
+  if (!user) return { ok: false, rewarded: false };
+  try {
+    const idToken = await user.getIdToken();
+    const res = await fetch(`${BACKEND_BASE}/api/economy/daily-reward`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    if (!res.ok) return { ok: false, rewarded: false };
+    return await res.json();
+  } catch {
+    return { ok: false, rewarded: false };
+  }
+}
+
 // ── Reports ───────────────────────────────────────────────
 export async function fileReport(params: {
   reportedUserId: string;

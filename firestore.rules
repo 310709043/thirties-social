@@ -12,27 +12,20 @@ service cloud.firestore {
     match /users/{userId} {
       allow read:   if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null && request.auth.uid == userId;
+      // Monetization lock: client may only DECREASE wicks (spending stays
+      // client-side). Wick increases, vigil and lastRewardDate are server-only
+      // (RevenueCat webhook + daily-reward endpoint).
       allow update: if request.auth != null && request.auth.uid == userId
-                    // Prevent client from self-modifying wicks (use transactions)
                     && !('isBanned' in request.resource.data.diff(resource.data).affectedKeys())
-                    && !('banReason' in request.resource.data.diff(resource.data).affectedKeys());
+                    && !('banReason' in request.resource.data.diff(resource.data).affectedKeys())
+                    && !('vigil' in request.resource.data.diff(resource.data).affectedKeys())
+                    && !('lastRewardDate' in request.resource.data.diff(resource.data).affectedKeys())
+                    && (!('wicks' in request.resource.data.diff(resource.data).affectedKeys())
+                        || request.resource.data.wicks <= resource.data.wicks)
+                    && (!('freeMatchesUsed' in request.resource.data.diff(resource.data).affectedKeys())
+                        || request.resource.data.freeMatchesUsed >= resource.data.freeMatchesUsed);
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
-
-    // ⚠️ PENDING — monetization lock. Do NOT activate until wick grants are
-    // fully server-side (RevenueCat webhook live + daily reward moved to the
-    // backend). Then REPLACE the users `allow update` above with this:
-    //
-    //   allow update: if request.auth != null && request.auth.uid == userId
-    //                 && !('isBanned' in request.resource.data.diff(resource.data).affectedKeys())
-    //                 && !('banReason' in request.resource.data.diff(resource.data).affectedKeys())
-    //                 && !('vigil' in request.resource.data.diff(resource.data).affectedKeys())
-    //                 && !('lastRewardDate' in request.resource.data.diff(resource.data).affectedKeys())
-    //                 && (!('wicks' in request.resource.data.diff(resource.data).affectedKeys())
-    //                     || request.resource.data.wicks <= resource.data.wicks);
-    //
-    // Effect: client may only DECREASE wicks (spending stays client-side);
-    // wick increases, vigil and lastRewardDate become server-only.
 
     // ── Wicks Transactions ──────────────────────────────
     match /wicksTransactions/{txId} {

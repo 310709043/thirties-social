@@ -4,7 +4,7 @@ import { getDailySeed } from '../lib/identity';
 import { Direction, DEFAULT_DIRECTION } from '../lib/theme';
 import { Lang } from '../lib/copy';
 import { IdentityKind } from '../lib/identity';
-import { ensureAnonAuth, upsertUser, updateUser, subscribeToUser, claimDailyReward, spendWicks } from '../lib/db';
+import { ensureAnonAuth, upsertUser, updateUser, subscribeToUser, claimDailyRewardServer, spendWicks } from '../lib/db';
 import { isGuest } from '../lib/auth';
 
 let _deviceId: string | null = null;
@@ -181,7 +181,7 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
 }
 
 export async function checkAndClaimDailyReward(): Promise<{ rewarded: boolean; amount?: number; balance?: number }> {
-  const result = await claimDailyReward();
+  const result = await claimDailyRewardServer();
   if (result.ok && result.rewarded && result.balance !== undefined) {
     _state = { ..._state, wicks: result.balance, rewardPending: false };
     AsyncStorage.setItem('wicks', String(result.balance));
