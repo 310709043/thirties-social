@@ -2,6 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // True unless the signed-in user is banned. Used to block banned users
+    // from posting (server-side enforcement, not just the client gate).
+    function notBanned() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBanned == false;
+    }
+
     // ── Users ──────────────────────────────────────────
     match /users/{userId} {
       allow read:   if request.auth != null && request.auth.uid == userId;
@@ -52,7 +58,8 @@ service cloud.firestore {
         allow create: if request.auth != null
                       && request.resource.data.senderId == request.auth.uid
                       && request.resource.data.content is string
-                      && request.resource.data.content.size() <= 280;
+                      && request.resource.data.content.size() <= 280
+                      && notBanned();
         // Only resonance reaction counts may be updated (by anyone).
         allow update: if request.auth != null
                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
@@ -174,13 +181,16 @@ service cloud.firestore {
 
     // ── Veiled Photos ───────────────────────────────────
     match /veiledPhotos/{photoId} {
+      // Sender or the other participant of the conversation may read.
       allow read: if request.auth != null
-                  && resource.data.userId == request.auth.uid;
+                  && (resource.data.senderId == request.auth.uid
+                      || get(/databases/$(database)/documents/conversations/$(resource.data.conversationId)).data.userAId == request.auth.uid
+                      || get(/databases/$(database)/documents/conversations/$(resource.data.conversationId)).data.userBId == request.auth.uid);
       allow create: if request.auth != null
-                    && request.resource.data.userId == request.auth.uid;
+                    && request.resource.data.senderId == request.auth.uid;
       allow update: if false;
       allow delete: if request.auth != null
-                    && resource.data.userId == request.auth.uid;
+                    && resource.data.senderId == request.auth.uid;
     }
 
     // ── Admin collections ───────────────────────────────
