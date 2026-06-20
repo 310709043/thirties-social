@@ -153,6 +153,18 @@ const COPY: Record<string, { zh: string; en: string }> = {
   setSafety:        { zh: '安全工具',         en: 'Safety tools' },
   setAbout:         { zh: '為什麼這樣設計',   en: 'Why this exists' },
   setLeave:         { zh: '刪除帳號',         en: 'Delete account' },
+
+  // Tonight mode — state picker before entering match / loft
+  tonightModeTitle:   { zh: '今晚你在哪個位置？', en: 'Where are you tonight?' },
+  tonightModeHint:    { zh: '對方會看到這個，幫你們找到同頻的人', en: 'The other person sees this — so you find someone on the same wavelength' },
+  modeJustHere:       { zh: '只想待著',       en: 'Just here' },
+  modeJustHereDesc:   { zh: '不用說話，存在就好', en: 'No words needed — just being' },
+  modeWantToTalk:     { zh: '想說說話',       en: 'Want to talk' },
+  modeWantToTalkDesc: { zh: '聊聊就好，不往哪裡走', en: 'A good conversation — nothing more' },
+  modeOpenToMore:     { zh: '願意靠近一點',   en: 'Open to more' },
+  modeOpenToMoreDesc: { zh: '想要更深的連結', en: 'Looking for something deeper' },
+  modeConfirm:        { zh: '就這樣',         en: 'That\'s me' },
+  modeOtherIs:        { zh: '對方今晚',       en: 'They\'re' },
 };
 
 export function t(key: string, lang: Lang = 'zh'): string {

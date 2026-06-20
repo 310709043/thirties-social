@@ -18,11 +18,15 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Match'>;
 export default function MatchScreen({ navigation, route }: Props) {
   const { direction, lang, identityKind } = useAppStore();
   const p = DIRECTIONS[direction];
-  const { fromSeed: otherSeed, moodText, conversationId, isOperator, otherGender, otherAge } = route.params;
+  const { fromSeed: otherSeed, moodText, conversationId, isOperator, otherGender, otherAge, otherTonightMode } = route.params;
   const genderLabel = otherGender === 'female' ? (lang === 'en' ? 'Woman' : '女生')
     : otherGender === 'male' ? (lang === 'en' ? 'Man' : '男生')
     : otherGender === 'nonbinary' ? (lang === 'en' ? 'Non-binary' : '多元') : null;
   const aboutLine = [genderLabel, otherAge].filter(Boolean).join(' · ');
+  const modeLabel = otherTonightMode === 'just_here' ? (lang === 'en' ? '🕯 Just here' : '🕯 只想待著')
+    : otherTonightMode === 'want_to_talk' ? (lang === 'en' ? '💬 想說說話' : '💬 Wants to talk')
+    : otherTonightMode === 'open_to_more' ? (lang === 'en' ? '🌊 Open to more' : '🌊 願意靠近一點')
+    : null;
   const cardScale = useRef(new Animated.Value(0.92)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const acceptPulse = useRef(new Animated.Value(1)).current;
@@ -63,6 +67,11 @@ export default function MatchScreen({ navigation, route }: Props) {
                 {aboutLine ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, backgroundColor: p.accentSoft }}>
                     <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>{aboutLine}</Text>
+                  </View>
+                ) : null}
+                {modeLabel ? (
+                  <View style={{ marginTop: 6, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 999, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>{modeLabel}</Text>
                   </View>
                 ) : null}
               </View>

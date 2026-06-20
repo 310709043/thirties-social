@@ -16,7 +16,7 @@ import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, MATCH_WICK_COST } from '../hooks/useAppStore';
-import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch } from '../lib/db';
+import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode } from '../lib/db';
 import { analytics } from '../lib/analytics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -31,6 +31,8 @@ export default function MoodScreen({ navigation }: Props) {
   const [waiting, setWaiting] = useState(false);
   const [waitingDots, setWaitingDots] = useState('');
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [tonightMode, setTonightMode] = useState<TonightMode | null>(null);
+  const [showModePicker, setShowModePicker] = useState(false);
   // First-time guide so new users know what the three spaces are.
   const [showGuide, setShowGuide] = useState(false);
   useEffect(() => { AsyncStorage.getItem('mainGuideSeen').then(v => { if (v !== '1') setShowGuide(true); }); }, []);
@@ -124,6 +126,7 @@ export default function MoodScreen({ navigation }: Props) {
           isOperator: !!(entry as any).isOperator,
           otherGender: (entry as any).matchedGender ?? null,
           otherAge: (entry as any).matchedAge ?? null,
+          otherTonightMode: (entry as any).matchedTonightMode ?? null,
         });
       }
     });
@@ -139,6 +142,8 @@ export default function MoodScreen({ navigation }: Props) {
 
   const handleEnter = async () => {
     if (waiting) return;
+    // Show the tonight-mode picker on first match attempt each session.
+    if (!tonightMode) { setShowModePicker(true); return; }
     // Guests can use rooms but not 1:1 matching.
     if (getTier() === 'guest') {
       Alert.alert(
@@ -183,7 +188,7 @@ export default function MoodScreen({ navigation }: Props) {
   const startMatching = async () => {
     setWaiting(true);
     analytics.matchSearch(text.length);
-    const joined = await joinMatchQueue({ moodText: text || undefined, seed, gender, ageBracket });
+    const joined = await joinMatchQueue({ moodText: text || undefined, seed, gender, ageBracket, tonightMode });
     if (!joined) {
       setWaiting(false);
       Alert.alert(lang === 'en' ? 'Connection issue' : '連線問題', lang === 'en' ? 'Try again.' : '請再試一次。', [{ text: 'OK' }]);
@@ -345,6 +350,36 @@ export default function MoodScreen({ navigation }: Props) {
           )}
         </View>
       </SafeAreaView>
+
+      {showModePicker && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.62)', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 32, paddingHorizontal: 20 }}>
+          <View style={{ backgroundColor: p.surfaceSolid, borderRadius: 24, padding: 24, width: '100%', borderWidth: 0.5, borderColor: p.line }}>
+            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 19, color: p.ink, textAlign: 'center', marginBottom: 4 }}>
+              {t('tonightModeTitle', lang)}
+            </Text>
+            <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12.5, color: p.muted, textAlign: 'center', marginBottom: 20 }}>
+              {t('tonightModeHint', lang)}
+            </Text>
+            {([
+              ['just_here',    '🕯', 'modeJustHere',    'modeJustHereDesc'],
+              ['want_to_talk', '💬', 'modeWantToTalk',  'modeWantToTalkDesc'],
+              ['open_to_more', '🌊', 'modeOpenToMore',  'modeOpenToMoreDesc'],
+            ] as const).map(([mode, icon, titleKey, descKey]) => (
+              <TouchableOpacity key={mode} onPress={() => { setTonightMode(mode); setShowModePicker(false); }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 14, marginBottom: 8, backgroundColor: tonightMode === mode ? p.accentSoft : p.glass, borderWidth: 1, borderColor: tonightMode === mode ? p.accent : p.line }}>
+                <Text style={{ fontSize: 22 }}>{icon}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink }}>{t(titleKey, lang)}</Text>
+                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: p.muted, marginTop: 2 }}>{t(descKey, lang)}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity onPress={() => setShowModePicker(false)} style={{ alignItems: 'center', marginTop: 8 }}>
+              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: p.muted }}>{lang === 'en' ? 'cancel' : '取消'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {showGuide && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.55)', alignItems: 'center', justifyContent: 'center', padding: 28 }}>

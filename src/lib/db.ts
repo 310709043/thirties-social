@@ -815,6 +815,8 @@ export async function endLoftConversation(loftConversationId: string): Promise<v
 }
 
 // ── Match Queue ───────────────────────────────────────────
+export type TonightMode = 'just_here' | 'want_to_talk' | 'open_to_more';
+
 export interface MatchQueueEntry {
   userId: string;
   seed: string;
@@ -822,12 +824,14 @@ export interface MatchQueueEntry {
   roomId: string | null;
   gender: string | null;
   ageBracket: string | null;
+  tonightMode: TonightMode | null;
   status: 'waiting' | 'matched';
   matchedWith: string | null;
   matchedSeed: string | null;
   matchedMoodText: string | null;
   matchedGender: string | null;
   matchedAge: string | null;
+  matchedTonightMode: TonightMode | null;
   conversationId: string | null;
   enteredAt: any;
   expiresAt: any;
@@ -839,6 +843,7 @@ export async function joinMatchQueue(params: {
   roomId?: string;
   gender?: string | null;
   ageBracket?: string | null;
+  tonightMode?: TonightMode | null;
 }): Promise<boolean> {
   const uid = getCurrentUid();
   if (!uid) return false;
@@ -850,12 +855,14 @@ export async function joinMatchQueue(params: {
       roomId: params.roomId ?? null,
       gender: params.gender ?? null,
       ageBracket: params.ageBracket ?? null,
+      tonightMode: params.tonightMode ?? null,
       status: 'waiting',
       matchedWith: null,
       matchedSeed: null,
       matchedMoodText: null,
       matchedGender: null,
       matchedAge: null,
+      matchedTonightMode: null,
       conversationId: null,
       enteredAt: serverTimestamp(),
       expiresAt: Timestamp.fromDate(new Date(Date.now() + 30 * 60 * 1000)),
