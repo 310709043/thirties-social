@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, Image, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -11,6 +11,8 @@ import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setIdentityKind, getAvailableIdentityKinds } from '../hooks/useAppStore';
 import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, IdentityKind, getLoftName } from '../lib/identity';
+import { pickImage, uploadAlbumPhoto } from '../lib/photos';
+import { getAlbum, addAlbumPhoto, removeAlbumPhoto, AlbumPhoto } from '../lib/db';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -56,6 +58,38 @@ export default function ProfileScreen({ navigation }: Props) {
   const [loftVisible, setLoftVisible] = useState(true);
   const [colorIdx, setColorIdx] = useState(0);
   const [adjIdx, setAdjIdx] = useState(0);
+  const [album, setAlbum] = useState<AlbumPhoto[]>([]);
+  const [uploading, setUploading] = useState(false);
+  useEffect(() => { getAlbum().then(setAlbum); }, []);
+
+  const ALBUM_MAX = 6;
+  const addPhoto = async () => {
+    if (uploading || album.length >= ALBUM_MAX) return;
+    const uri = await pickImage();
+    if (!uri) return;
+    setUploading(true);
+    const up = await uploadAlbumPhoto(uri);
+    setUploading(false);
+    if (up && (await addAlbumPhoto(up))) {
+      setAlbum(a => [...a, up]);
+    } else {
+      Alert.alert(lang === 'en' ? 'Upload failed' : '上傳失敗', lang === 'en' ? 'Please try again.' : '請再試一次。');
+    }
+  };
+
+  const removePhoto = (photo: AlbumPhoto) => {
+    Alert.alert(
+      lang === 'en' ? 'Remove this photo?' : '移除這張照片？',
+      lang === 'en' ? 'It will be deleted permanently.' : '會永久刪除。',
+      [
+        { text: lang === 'en' ? 'Cancel' : '取消', style: 'cancel' },
+        { text: lang === 'en' ? 'Remove' : '移除', style: 'destructive', onPress: async () => {
+          setAlbum(a => a.filter(x => x.publicId !== photo.publicId));
+          await removeAlbumPhoto(photo);
+        } },
+      ],
+    );
+  };
 
   const statusLabel = relationshipStatus && STATUS_MAP[relationshipStatus]
     ? (lang === 'en' ? STATUS_MAP[relationshipStatus].en : STATUS_MAP[relationshipStatus].zh)
@@ -199,11 +233,22 @@ export default function ProfileScreen({ navigation }: Props) {
           <FadeInUp delay={400} distance={10}>
             <View style={styles.profileSection}>
             <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Photos · 相簿' : '相簿 · Photos'}</Cap>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {[0, 1, 2].map(i => (
-                <PhotoVeil key={i} p={p} liftLevel={4} size={100} lang={lang} />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {album.map(photo => (
+                <TouchableOpacity key={photo.publicId} onLongPress={() => removePhoto(photo)} activeOpacity={0.85}>
+                  <Image source={{ uri: photo.url }} style={{ width: 100, height: 100, borderRadius: 12, backgroundColor: p.glass }} />
+                </TouchableOpacity>
               ))}
+              {album.length < ALBUM_MAX && (
+                <TouchableOpacity onPress={addPhoto} disabled={uploading}
+                  style={{ width: 100, height: 100, borderRadius: 12, borderWidth: 1, borderColor: p.line, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', backgroundColor: p.glass }}>
+                  {uploading ? <ActivityIndicator color={p.accent} /> : <Text style={{ fontSize: 28, color: p.muted }}>＋</Text>}
+                </TouchableOpacity>
+              )}
             </View>
+            <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 8 }}>
+              {lang === 'en' ? 'Long-press to remove · veiled in the Loft' : '長按可移除 · 在夜閣裡以紗罩呈現'}
+            </Text>
           </View>
           </FadeInUp>
 

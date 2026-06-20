@@ -5,7 +5,7 @@ import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
   collection, query, where, orderBy, limit,
   onSnapshot, runTransaction, serverTimestamp,
-  Timestamp, getDocs, increment,
+  Timestamp, getDocs, increment, arrayUnion, arrayRemove,
 } from 'firebase/firestore';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
@@ -122,6 +122,46 @@ export async function updateUser(patch: Partial<DbUser>): Promise<void> {
   if (!uid) return;
   const { id, ...rest } = patch as any;
   await updateDoc(doc(db, 'users', uid), { ...rest, lastActiveAt: serverTimestamp() });
+}
+
+// ── Profile album ───────────────────────────────────────
+// A small set of personal photos kept on the user doc. Shown to the owner
+// directly; in the Loft they appear veiled until a connection lifts them.
+export interface AlbumPhoto { url: string; publicId: string; }
+
+export async function getAlbum(): Promise<AlbumPhoto[]> {
+  const uid = getCurrentUid();
+  if (!uid) return [];
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    return ((snap.data() as any)?.albumPhotos ?? []) as AlbumPhoto[];
+  } catch { return []; }
+}
+
+export async function addAlbumPhoto(photo: AlbumPhoto): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    await updateDoc(doc(db, 'users', uid), { albumPhotos: arrayUnion(photo) });
+    return true;
+  } catch { return false; }
+}
+
+export async function removeAlbumPhoto(photo: AlbumPhoto): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    await updateDoc(doc(db, 'users', uid), { albumPhotos: arrayRemove(photo) });
+    const idToken = await auth.currentUser?.getIdToken().catch(() => null);
+    if (idToken && photo.publicId) {
+      fetch(`${BACKEND_BASE}/api/photos/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ publicId: photo.publicId }),
+      }).catch(() => {});
+    }
+    return true;
+  } catch { return false; }
 }
 
 export function subscribeToUser(userId: string, onChange: (u: DbUser) => void) {

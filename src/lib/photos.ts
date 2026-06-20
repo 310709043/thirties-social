@@ -98,6 +98,33 @@ export async function uploadVeiledPhoto(params: {
   }
 }
 
+// ── Album Photo (profile) ───────────────────────────────
+// Uploads one photo to Cloudinary for the user's profile album. Returns the
+// URL + public_id to store on the user doc. Metadata (EXIF/GPS) is stripped.
+export async function uploadAlbumPhoto(uri: string): Promise<{ url: string; publicId: string } | null> {
+  if (!CLOUD_NAME || !UPLOAD_PRESET) {
+    console.warn('[photos] Cloudinary not configured');
+    return null;
+  }
+  try {
+    const clean = await manipulateAsync(uri, [{ resize: { width: 1280 } }], {
+      compress: 0.7, format: SaveFormat.JPEG, base64: true,
+    });
+    if (!clean.base64) return null;
+    const form = new FormData();
+    form.append('file', `data:image/jpeg;base64,${clean.base64}`);
+    form.append('upload_preset', UPLOAD_PRESET);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: form });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json.secure_url || !json.public_id) return null;
+    return { url: json.secure_url, publicId: json.public_id };
+  } catch (e) {
+    console.warn('[photos] Album upload failed:', e);
+    return null;
+  }
+}
+
 // ── Get Photo ───────────────────────────────────────────
 export async function getVeiledPhoto(photoId: string): Promise<VeiledPhoto | null> {
   try {
