@@ -820,10 +820,14 @@ export interface MatchQueueEntry {
   seed: string;
   moodText: string | null;
   roomId: string | null;
+  gender: string | null;
+  ageBracket: string | null;
   status: 'waiting' | 'matched';
   matchedWith: string | null;
   matchedSeed: string | null;
   matchedMoodText: string | null;
+  matchedGender: string | null;
+  matchedAge: string | null;
   conversationId: string | null;
   enteredAt: any;
   expiresAt: any;
@@ -833,6 +837,8 @@ export async function joinMatchQueue(params: {
   moodText?: string;
   seed: string;
   roomId?: string;
+  gender?: string | null;
+  ageBracket?: string | null;
 }): Promise<boolean> {
   const uid = getCurrentUid();
   if (!uid) return false;
@@ -842,10 +848,14 @@ export async function joinMatchQueue(params: {
       seed: params.seed,
       moodText: params.moodText ?? null,
       roomId: params.roomId ?? null,
+      gender: params.gender ?? null,
+      ageBracket: params.ageBracket ?? null,
       status: 'waiting',
       matchedWith: null,
       matchedSeed: null,
       matchedMoodText: null,
+      matchedGender: null,
+      matchedAge: null,
       conversationId: null,
       enteredAt: serverTimestamp(),
       expiresAt: Timestamp.fromDate(new Date(Date.now() + 30 * 60 * 1000)),

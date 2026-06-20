@@ -23,7 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
 
 export default function MoodScreen({ navigation }: Props) {
-  const { seed, direction, lang, identityKind, wicks } = useAppStore();
+  const { seed, direction, lang, identityKind, wicks, gender, ageBracket } = useAppStore();
   const p = DIRECTIONS[direction];
   const [text, setText] = useState('');
   const [timeStr, setTimeStr] = useState('');
@@ -120,6 +120,8 @@ export default function MoodScreen({ navigation }: Props) {
           moodText: entry.matchedMoodText ?? '',
           conversationId: entry.conversationId,
           isOperator: !!(entry as any).isOperator,
+          otherGender: (entry as any).matchedGender ?? null,
+          otherAge: (entry as any).matchedAge ?? null,
         });
       }
     });
@@ -179,7 +181,7 @@ export default function MoodScreen({ navigation }: Props) {
   const startMatching = async () => {
     setWaiting(true);
     analytics.matchSearch(text.length);
-    const joined = await joinMatchQueue({ moodText: text || undefined, seed });
+    const joined = await joinMatchQueue({ moodText: text || undefined, seed, gender, ageBracket });
     if (!joined) {
       setWaiting(false);
       Alert.alert(lang === 'en' ? 'Connection issue' : '連線問題', lang === 'en' ? 'Try again.' : '請再試一次。', [{ text: 'OK' }]);

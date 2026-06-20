@@ -18,7 +18,11 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Match'>;
 export default function MatchScreen({ navigation, route }: Props) {
   const { direction, lang, identityKind } = useAppStore();
   const p = DIRECTIONS[direction];
-  const { fromSeed: otherSeed, moodText, conversationId, isOperator } = route.params;
+  const { fromSeed: otherSeed, moodText, conversationId, isOperator, otherGender, otherAge } = route.params;
+  const genderLabel = otherGender === 'female' ? (lang === 'en' ? 'Woman' : '女生')
+    : otherGender === 'male' ? (lang === 'en' ? 'Man' : '男生')
+    : otherGender === 'nonbinary' ? (lang === 'en' ? 'Non-binary' : '多元') : null;
+  const aboutLine = [genderLabel, otherAge].filter(Boolean).join(' · ');
   const cardScale = useRef(new Animated.Value(0.92)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const acceptPulse = useRef(new Animated.Value(1)).current;
@@ -56,6 +60,11 @@ export default function MatchScreen({ navigation, route }: Props) {
                 <Identity kind={identityKind === 'character' ? 'sigil' : identityKind}
                   seed={otherSeed} size={88} palette={p} lang={lang} trust={0.2} />
                 <ColorAdjLabel seed={otherSeed} lang={lang} palette={p} />
+                {aboutLine ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, backgroundColor: p.accentSoft }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>{aboutLine}</Text>
+                  </View>
+                ) : null}
               </View>
 
               <View style={[styles.moodBox, { borderTopColor: p.line }]}>
