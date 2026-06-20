@@ -97,9 +97,11 @@ export default function MoodScreen({ navigation }: Props) {
       setWaiting(false);
       leaveMatchQueue();
       Alert.alert(
-        lang === 'en' ? 'No one around right now' : '目前沒有人在線',
-        lang === 'en' ? 'Try again later.' : '稍後再試。',
-        [{ text: 'OK', style: 'cancel' }],
+        lang === 'en' ? 'No one waiting right now' : '現在沒有人在等配對',
+        lang === 'en'
+          ? 'No wick was used. Sit by a brazier below — there are usually people there.'
+          : '沒有扣任何燭芯。先去下面的火盆待著吧 —— 那裡通常有人。',
+        [{ text: lang === 'en' ? 'OK' : '好', style: 'cancel' }],
       );
     }, 60000);
 

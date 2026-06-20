@@ -12,7 +12,7 @@ import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, Fa
 import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, setWicks as saveWicks, trackConversation } from '../hooks/useAppStore';
+import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch } from '../hooks/useAppStore';
 import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping } from '../lib/db';
 import { filterMessage } from '../lib/filter';
 import { analytics } from '../lib/analytics';
@@ -28,6 +28,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const p = DIRECTIONS[direction];
   const otherSeed = route.params?.otherSeed;
   const conversationId = (route.params as any)?.conversationId as string | undefined;
+  const matchCharge = (route.params as any)?.matchCharge as boolean | undefined;
+  const chargedRef = useRef(false);
 
   // Guard: navigate back if required params are missing
   if (!otherSeed || !conversationId) {
@@ -139,6 +141,12 @@ export default function ChatScreen({ navigation, route }: Props) {
         return;
       }
       analytics.messageSend(conversationId);
+      // A match "counts" only once you actually speak — charge on the first
+      // message you send, never for entering an empty chat.
+      if (matchCharge && !chargedRef.current) {
+        chargedRef.current = true;
+        recordMatch();
+      }
       // Clear typing state after sending
       setTyping(conversationId, false);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);

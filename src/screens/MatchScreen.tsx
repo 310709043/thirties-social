@@ -8,7 +8,7 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, SoftButton, FadeInUp } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, recordMatch, matchCostsWick } from '../hooks/useAppStore';
+import { useAppStore, matchCostsWick } from '../hooks/useAppStore';
 import { trackPerson } from '../hooks/useAppStore';
 import { leaveMatchQueue } from '../lib/db';
 import { analytics } from '../lib/analytics';
@@ -84,10 +84,10 @@ export default function MatchScreen({ navigation, route }: Props) {
             </View>
           </FadeInUp>
 
-          {/* Reassurance — you stay in control; declining never costs */}
+          {/* Reassurance — accepting & leaving are free; a match only counts when you speak */}
           <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12.5, color: p.muted, textAlign: 'center', marginBottom: 12 }}>
             {!isOperator && matchCostsWick()
-              ? (lang === 'en' ? 'Accepting costs 1 wick · leaving is always free' : '接受才花 1 燭芯 · 不喜歡直接離開，不收費')
+              ? (lang === 'en' ? 'Free to enter · a match counts only when you speak (1 wick)' : '進去免費 · 開口說話才算一次配對（1 燭芯）')
               : (lang === 'en' ? "Don't feel it? Just leave — no cost, no pressure." : '沒感覺？直接離開就好 — 不扣任何東西，沒有壓力。')}
           </Text>
 
@@ -99,10 +99,10 @@ export default function MatchScreen({ navigation, route }: Props) {
                   onPress={async () => {
                     await trackPerson();
                     analytics.matchAccept();
-                    // Charge only now, on accept (operator companion chats stay free).
-                    if (!isOperator) await recordMatch();
+                    // Charge moves to the first message sent (so neither side pays
+                    // for an empty chat if the other never shows up).
                     await leaveMatchQueue();
-                    navigation.replace('Chat', { otherSeed, conversationId });
+                    navigation.replace('Chat', { otherSeed, conversationId, matchCharge: !isOperator });
                   }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
                     {t('matchAccept', lang)}
