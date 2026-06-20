@@ -11,20 +11,22 @@ const COPY: Record<string, { zh: string; en: string }> = {
   ob1Body:         { zh: '不用名字、不用照片。你只是一個今晚想被聽見的人。', en: 'No name, no face — just someone who wants to be heard tonight.' },
   ob2Title:        { zh: '說出口，就讓它慢慢熄滅', en: 'Say it — then let it fade' },
   ob2Body:         { zh: '宣洩與對話都會消失，沒有人能回頭翻看。', en: 'What you pour out disappears. No one can scroll back.' },
-  ob3Title:        { zh: '總有人懂你此刻',   en: 'Someone here understands' },
-  ob3Body:         { zh: '在火盆旁取暖，或找一個人說話。你不必一個人撐著。', en: "Warm yourself by the brazier, or find one person to talk to. You don't have to carry it alone." },
+  ob3Title:        { zh: '在這裡，大家都一樣', en: 'Here, everyone is the same' },
+  ob3Body:         { zh: '可以待在火盆旁、找一個人說說話，或只是靜靜看著。不用有事，也可以來。', en: 'Sit by a brazier, find one person to talk to, or just watch quietly. You don\'t need a reason to be here.' },
   obContinue:      { zh: '我準備好了',       en: 'I am ready' },
   obSigil:         { zh: '今晚的識別符',     en: "Tonight's sigil" },
   obSigilHint:     { zh: '這是你今天的樣子。明天它會換掉。', en: 'This is how you appear today. Tomorrow it changes.' },
   obShuffle:       { zh: '換一個',           en: 'Reshuffle' },
 
   // Mood
-  moodHeader:      { zh: '今晚怎麼了？',     en: 'What is it tonight?' },
-  moodPrompt:      { zh: '寫一句關於最近的事。可以是和另一半的，也可以不是。', en: 'A line about what is happening. About a partner, or not.' },
-  moodPlaceholder: { zh: '最近，壓在心裡的是⋯⋯', en: "Lately, what's been weighing on me…" },
+  moodHeader:      { zh: '今晚，你是什麼樣子都可以', en: 'Tonight, you can be however you are' },
+  moodPrompt:      { zh: '不用很難過，也不用假裝沒事。想說再說。', en: "No need to be sad, no need to pretend you're fine. Say it only if you want." },
+  moodPlaceholder: { zh: '想說的、不想說的，都放這裡⋯⋯', en: 'What you want to say, or not — leave it here…' },
   moodEnter:       { zh: '進入',             en: 'Enter' },
-  moodSkip:        { zh: '不想寫，給我一個火盆', en: 'Skip — just find me a room' },
+  moodSkip:        { zh: '什麼都不想說，先待著就好', en: 'Nothing to say — just stay a while' },
   moodSuggested:   { zh: '今晚有人在說',     en: 'People are talking about' },
+  // First-time guidance — answers "what can I do here?"
+  moodGuide:       { zh: '可以寫下此刻、找個火盆待著，或讓我幫你配一個人，靜靜說說話。', en: 'Write how you feel, sit by a brazier, or let me match you with someone to talk quietly.' },
 
   // Rooms
   room_lonely:     { zh: '今晚很孤單',       en: 'lonely tonight' },

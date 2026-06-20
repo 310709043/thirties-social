@@ -125,12 +125,12 @@ export default function SetupScreen({ navigation }: Props) {
         >
           <Cap p={p}>{zh ? '最後一步' : 'Last step'}</Cap>
           <Text style={[styles.title, { color: p.ink }]}>
-            {zh ? '說說你的情況' : 'Tell us where you are'}
+            {zh ? '讓我多認識你一點' : 'Let me know you a little'}
           </Text>
           <Text style={[styles.sub, { color: p.muted }]}>
             {zh
-              ? '這裡的人多半身邊都有一個人。誠實一點，配對才會準。這些資料不會顯示在公園——只有你允許時，夜閣才看得到部分。'
-              : 'Most people here have someone beside them. Be honest — matching depends on it. None of this shows in the Park; only the Loft can see it, and only what you allow.'}
+              ? '這些只是為了幫你遇到懂這種夜晚的人——沒有對錯，也不會公開。只有你允許時，夜閣才看得到一部分。'
+              : 'Just so you can meet people who understand your kind of night — no right or wrong, never public. Only the Loft sees a part, and only what you allow.'}
           </Text>
 
           {/* Gender */}

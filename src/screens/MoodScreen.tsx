@@ -221,8 +221,9 @@ export default function MoodScreen({ navigation }: Props) {
 
         {/* ── Main Content ── */}
         <View style={styles.content}>
-          {/* Heading */}
+          {/* Heading + reassuring subline (type hierarchy + grayscale tone) */}
           <Text style={[styles.heading, { color: p.ink }]}>{t('moodHeader', lang)}</Text>
+          <Text style={[styles.subheading, { color: p.muted }]}>{t('moodPrompt', lang)}</Text>
 
           {/* Mood Input */}
           <View style={[styles.inputWrap, { backgroundColor: p.glass, borderColor: p.line }]}>
@@ -346,6 +347,7 @@ const styles = StyleSheet.create({
 
   content:       { flex: 1, paddingHorizontal: 20, justifyContent: 'center', gap: 20 },
   heading:       { fontFamily: 'NotoSerifTC-Light', fontSize: 28, lineHeight: 36, textAlign: 'center' },
+  subheading:    { fontFamily: 'NotoSerifTC-Regular', fontSize: 14, lineHeight: 22, textAlign: 'center', marginTop: -8, opacity: 0.85 },
   loftBanner:    { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20, gap: 12 },
 
   inputWrap:     { borderRadius: 20, borderWidth: 0.5, padding: 16 },
