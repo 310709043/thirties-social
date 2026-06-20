@@ -244,8 +244,8 @@ export default function UpgradeScreen({ navigation }: Props) {
             <View style={[styles.wickNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.inkSoft, lineHeight: 20 }}>
                 {lang === 'en'
-                  ? 'Wicks are spent on: revealing photo veils (2 wicks each), entering the Loft (5 wicks/night), sending pulse messages (1 wick each), gifting a candle (5 wicks). The other person always consents first.'
-                  : '燭芯用於：揭開照片紗罩（每層 2 芯）、進入夜閣（每晚 5 芯）、傳送脈搏訊息（每則 1 芯）、送出蠟燭（5 芯）。對方永遠需要先同意。'}
+                  ? 'Wicks are spent on: sending a veiled photo (3 wicks), entering the Loft (5 wicks/night), sending pulse messages (1 wick each). The other person always consents first.'
+                  : '燭芯用於：傳送帶紗照片（3 芯）、進入夜閣（每晚 5 芯）、傳送脈搏訊息（每則 1 芯）。對方永遠需要先同意。'}
               </Text>
             </View>
           </FadeInUp>
