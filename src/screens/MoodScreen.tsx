@@ -18,6 +18,7 @@ import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, recordMatch, matchCostsWick, MATCH_WICK_COST } from '../hooks/useAppStore';
 import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch } from '../lib/db';
 import { analytics } from '../lib/analytics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
 
@@ -30,6 +31,10 @@ export default function MoodScreen({ navigation }: Props) {
   const [waiting, setWaiting] = useState(false);
   const [waitingDots, setWaitingDots] = useState('');
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // First-time guide so new users know what the three spaces are.
+  const [showGuide, setShowGuide] = useState(false);
+  useEffect(() => { AsyncStorage.getItem('mainGuideSeen').then(v => { if (v !== '1') setShowGuide(true); }); }, []);
+  const dismissGuide = () => { setShowGuide(false); AsyncStorage.setItem('mainGuideSeen', '1'); };
 
   // Show rooms that have any activity, OR were opened recently (so a freshly
   // created room stays visible even before the first message is sent).
@@ -336,6 +341,37 @@ export default function MoodScreen({ navigation }: Props) {
           )}
         </View>
       </SafeAreaView>
+
+      {showGuide && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.55)', alignItems: 'center', justifyContent: 'center', padding: 28 }}>
+          <View style={{ backgroundColor: p.surfaceSolid, borderRadius: 20, padding: 24, width: '100%', maxWidth: 360, borderWidth: 0.5, borderColor: p.line }}>
+            <Text style={{ fontFamily: 'NotoSerifTC-Light', fontSize: 22, color: p.ink, textAlign: 'center', marginBottom: 4 }}>
+              {lang === 'en' ? 'Three places here' : '這裡有三個地方'}
+            </Text>
+            <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: p.muted, textAlign: 'center', marginBottom: 18 }}>
+              {lang === 'en' ? 'no rush — stay however you like' : '不急，你想怎麼待著都可以'}
+            </Text>
+            {([
+              ['🔥', lang === 'en' ? 'Brazier' : '火盆', lang === 'en' ? 'Sit by a topic, speak softly with others awake' : '圍著一個話題，和也醒著的人輕輕說話'],
+              ['💬', lang === 'en' ? 'Match' : '配對', lang === 'en' ? 'Meet one person — just the two of you' : '隨機遇見一個人，只有你們兩個'],
+              ['🌙', lang === 'en' ? 'The Loft' : '夜閣', lang === 'en' ? 'Opens late, when you want to come closer' : '深夜開放，想更靠近一點的時候'],
+            ] as const).map(([icon, title, desc]) => (
+              <View key={title} style={{ flexDirection: 'row', gap: 12, marginBottom: 14, alignItems: 'flex-start' }}>
+                <Text style={{ fontSize: 20 }}>{icon}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, fontWeight: '500' }}>{title}</Text>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, lineHeight: 20 }}>{desc}</Text>
+                </View>
+              </View>
+            ))}
+            <TouchableOpacity onPress={dismissGuide} style={{ marginTop: 8, height: 48, borderRadius: 999, backgroundColor: p.ink, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.dark ? '#1a1530' : '#fff', fontWeight: '500' }}>
+                {lang === 'en' ? 'Start' : '開始'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </VaporBackground>
   );
 }
