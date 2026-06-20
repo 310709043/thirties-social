@@ -12,7 +12,7 @@ import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkele
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, canCreateRoom, getTier, ROOM_CREATE_COST } from '../hooks/useAppStore';
-import { getOrCreatePresetRoom, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence, spendWicks, reactToRoomMessage } from '../lib/db';
+import { getOrCreatePresetRoom, getRoomById, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence, spendWicks, reactToRoomMessage } from '../lib/db';
 import { RESONANCE_SYMBOLS, resonanceLabel } from '../lib/resonance';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
@@ -22,7 +22,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Room'>;
 
 
 export default function RoomScreen({ navigation, route }: Props) {
-  const { roomKey } = route.params;
+  const { roomKey, roomId: paramRoomId } = route.params;
   const { seed, direction, lang, identityKind, deviceId, wicks } = useAppStore();
   const p = DIRECTIONS[direction];
   const [inviting, setInviting] = useState<{senderId: string; seed: string; zh: string; en: string; age: number} | null>(null);
@@ -105,6 +105,13 @@ export default function RoomScreen({ navigation, route }: Props) {
       openCreateRoom();
       return;
     }
+    // Entering an already-open room: load it directly by id (don't create a
+    // junk "custom"/preset room, which showed wrong titles like "new"/"custom").
+    if (paramRoomId) {
+      setRoomId(paramRoomId);
+      getRoomById(paramRoomId).then(r => { if (r) setRoom(r); });
+      return;
+    }
     getOrCreatePresetRoom({
       roomKey,
       topicZh: getT(roomKey as any, 'zh'),
@@ -112,7 +119,7 @@ export default function RoomScreen({ navigation, route }: Props) {
     }).then(r => {
       if (r) { setRoomId(r.id); setRoom(r); }
     });
-  }, [roomKey]);
+  }, [roomKey, paramRoomId]);
 
   useEffect(() => {
     if (!roomId) return;

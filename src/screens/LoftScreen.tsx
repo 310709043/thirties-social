@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
@@ -10,11 +10,12 @@ import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber } from '../components/ui';
 import { useAppStore, canEnterLoft, recordLoftEntry, loftEntryIsFreeTrial, getTier } from '../hooks/useAppStore';
-import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, LOFT_OPEN_HOUR, LOFT_CLOSE_HOUR, postRitualResponse, subscribeToTonightRitual, DbRitualResponse } from '../lib/db';
+import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, postRitualResponse, subscribeToTonightRitual, DbRitualResponse } from '../lib/db';
 import { getTonightRitual } from '../lib/rituals';
 import { TextInput } from 'react-native';
 import { getLoftName } from '../lib/identity';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
+import { hasLoftPin, verifyLoftPin, setLoftPin, clearLoftPin } from '../lib/loftLock';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Loft'>;
 
@@ -33,6 +34,47 @@ export default function LoftScreen({ navigation }: Props) {
   const [entering, setEntering] = useState(false);
   const [showBroke, setShowBroke] = useState(false);
   const [brokeLine] = useState(() => BROKE_LINES[Math.floor(Math.random() * BROKE_LINES.length)]);
+  // Optional Loft PIN lock.
+  const [pinMode, setPinMode] = useState<'none' | 'enter' | 'set'>('none');
+  const [pinInput, setPinInput] = useState('');
+  const [pinErr, setPinErr] = useState(false);
+  const [hasPin, setHasPin] = useState(false);
+  useEffect(() => { hasLoftPin().then(setHasPin); }, []);
+
+  // The actual entry (free-trial confirm + create the session). Gated by PIN.
+  const runEntry = async () => {
+    if (loftEntryIsFreeTrial()) {
+      const go = await new Promise<boolean>(resolve => {
+        Alert.alert(
+          lang === 'en' ? 'Use your free entry?' : '使用免費體驗？',
+          lang === 'en'
+            ? 'This is your one free taste of the Loft. Entering now uses it up.'
+            : '這是你唯一的一次夜閣免費體驗，進入後就會用掉。確定現在進入嗎？',
+          [
+            { text: lang === 'en' ? 'Not yet' : '再想想', style: 'cancel', onPress: () => resolve(false) },
+            { text: lang === 'en' ? 'Enter' : '進入', onPress: () => resolve(true) },
+          ],
+        );
+      });
+      if (!go) return;
+    }
+    const nightName = getLoftName(seed, lang);
+    const result = await enterLoft(nightName);
+    if (result.ok) {
+      await recordLoftEntry();
+      hapticMedium();
+      setEntering(true);
+    } else if (result.error === 'already_entered_tonight') {
+      setShowBroke(true);
+    } else {
+      hapticWarning();
+      Alert.alert(
+        lang === 'en' ? 'Something went wrong' : '出了點問題',
+        lang === 'en' ? 'Could not enter the Loft. Please try again.' : '無法進入夜閣。請再試一次。',
+        [{ text: 'OK', style: 'cancel' }],
+      );
+    }
+  };
 
   // The Loft is a Vigil space; a free user gets one lifetime free entry.
   const handleEnter = async () => {
@@ -78,40 +120,45 @@ export default function LoftScreen({ navigation }: Props) {
       );
       return;
     }
-    // If this entry would burn the free user's one lifetime taste, confirm first.
-    if (loftEntryIsFreeTrial()) {
-      const go = await new Promise<boolean>(resolve => {
-        Alert.alert(
-          lang === 'en' ? 'Use your free entry?' : '使用免費體驗？',
-          lang === 'en'
-            ? 'This is your one free taste of the Loft. Entering now uses it up.'
-            : '這是你唯一的一次夜閣免費體驗，進入後就會用掉。確定現在進入嗎？',
-          [
-            { text: lang === 'en' ? 'Not yet' : '再想想', style: 'cancel', onPress: () => resolve(false) },
-            { text: lang === 'en' ? 'Enter' : '進入', onPress: () => resolve(true) },
-          ],
-        );
-      });
-      if (!go) return;
-    }
-    const nightName = getLoftName(seed, lang);
-    const result = await enterLoft(nightName);
-    if (result.ok) {
-      // Consumes the free entry for a free user; no-op for Vigil.
-      await recordLoftEntry();
-      hapticMedium();
-      setEntering(true);
-    } else if (result.error === 'already_entered_tonight') {
-      setShowBroke(true);
+    // If a PIN lock is set, ask for it before entering; otherwise enter directly.
+    if (await hasLoftPin()) {
+      setPinInput(''); setPinErr(false); setPinMode('enter');
     } else {
-      hapticWarning();
+      runEntry();
+    }
+  };
+
+  const manageLock = () => {
+    if (hasPin) {
       Alert.alert(
-        lang === 'en' ? 'Something went wrong' : '出了點問題',
-        lang === 'en'
-          ? 'Could not enter the Loft. Please try again.'
-          : '無法進入夜閣。請再試一次。',
-        [{ text: 'OK', style: 'cancel' }],
+        lang === 'en' ? 'Loft lock' : '夜閣密碼鎖',
+        lang === 'en' ? 'A PIN is set for the Loft.' : '夜閣已設定密碼。',
+        [
+          { text: lang === 'en' ? 'Change' : '變更', onPress: () => { setPinInput(''); setPinErr(false); setPinMode('set'); } },
+          { text: lang === 'en' ? 'Remove' : '移除', style: 'destructive', onPress: async () => { await clearLoftPin(); setHasPin(false); } },
+          { text: lang === 'en' ? 'Cancel' : '取消', style: 'cancel' },
+        ],
       );
+    } else {
+      setPinInput(''); setPinErr(false); setPinMode('set');
+    }
+  };
+
+  const submitPin = async () => {
+    if (pinMode === 'set') {
+      if (pinInput.length < 4) { setPinErr(true); return; }
+      await setLoftPin(pinInput);
+      setHasPin(true); setPinMode('none'); setPinInput('');
+      hapticMedium();
+      return;
+    }
+    // enter mode
+    if (await verifyLoftPin(pinInput)) {
+      setPinMode('none'); setPinInput('');
+      runEntry();
+    } else {
+      setPinErr(true); setPinInput('');
+      hapticWarning();
     }
   };
 
@@ -136,12 +183,19 @@ export default function LoftScreen({ navigation }: Props) {
 
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.container}>
-          {/* Back */}
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ alignSelf: 'flex-start', paddingVertical: 4 }}>
-            <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: L.muted, letterSpacing: 1 }}>
-              ← {lang === 'en' ? 'back to the daylight' : '回到白天'}
-            </Text>
-          </TouchableOpacity>
+          {/* Back + Loft lock */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingVertical: 4 }}>
+              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: L.muted, letterSpacing: 1 }}>
+                ← {lang === 'en' ? 'back to the daylight' : '回到白天'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={manageLock} style={{ paddingVertical: 4, paddingHorizontal: 6 }}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: hasPin ? L.candle : L.muted }}>
+                {hasPin ? (lang === 'en' ? '🔒 locked' : '🔒 已上鎖') : (lang === 'en' ? '🔓 set PIN' : '🔓 設定密碼')}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Flame */}
           <View style={{ alignItems: 'center', marginTop: 18 }}>
@@ -245,6 +299,47 @@ export default function LoftScreen({ navigation }: Props) {
         </View>
       )}
 
+      {pinMode !== 'none' && (
+        <View style={styles.brokeOverlay}>
+          <View style={[styles.brokeCard, { gap: 14 }]}>
+            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 18, color: '#f5e2c4', textAlign: 'center' }}>
+              {pinMode === 'set'
+                ? (lang === 'en' ? 'Set a Loft PIN' : '設定夜閣密碼')
+                : (lang === 'en' ? 'Enter your Loft PIN' : '輸入夜閣密碼')}
+            </Text>
+            <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: 'rgba(245,226,196,0.5)', textAlign: 'center' }}>
+              {pinMode === 'set'
+                ? (lang === 'en' ? '4–6 digits. Only you can enter the Loft.' : '4–6 位數字。只有你進得了夜閣。')
+                : (lang === 'en' ? 'So no one else can wander in.' : '別人拿到手機也進不來。')}
+            </Text>
+            <TextInput
+              value={pinInput}
+              onChangeText={(v) => { setPinInput(v.replace(/[^0-9]/g, '').slice(0, 6)); setPinErr(false); }}
+              keyboardType="number-pad"
+              secureTextEntry
+              autoFocus
+              placeholder="••••"
+              placeholderTextColor="rgba(245,226,196,0.3)"
+              style={{ fontFamily: 'Inter-Regular', fontSize: 24, letterSpacing: 8, color: '#f5e2c4', textAlign: 'center', backgroundColor: 'rgba(245,226,196,0.06)', borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: pinErr ? '#c25a3b' : 'rgba(232,165,87,0.2)' }}
+            />
+            {pinErr && (
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: '#e0a0a0', textAlign: 'center' }}>
+                {pinMode === 'set' ? (lang === 'en' ? 'At least 4 digits' : '至少 4 位數') : (lang === 'en' ? 'Wrong PIN' : '密碼錯誤')}
+              </Text>
+            )}
+            <TouchableOpacity onPress={submitPin} style={[styles.buyBtn]}>
+              <LinearGradient colors={['#e8a557', '#c25a3b']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[StyleSheet.absoluteFill, { borderRadius: 999 }]} />
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, fontWeight: '500', letterSpacing: 2, color: '#1f1014', zIndex: 1 }}>
+                {pinMode === 'set' ? (lang === 'en' ? 'Save' : '設定') : (lang === 'en' ? 'Unlock' : '解鎖')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setPinMode('none'); setPinInput(''); setPinErr(false); }} style={{ alignItems: 'center', paddingTop: 4 }}>
+              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: 'rgba(245,226,196,0.5)' }}>{lang === 'en' ? 'cancel' : '取消'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {entering && (
         <LoftTransition lang={lang} onDone={() => { setEntering(false); setInside(true); }} />
       )}
@@ -262,6 +357,9 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const [responses, setResponses] = React.useState<DbRitualResponse[]>([]);
   const [ritualText, setRitualText] = React.useState('');
   const [posting, setPosting] = React.useState(false);
+  // Viewer's own filter — no forced opposite-gender; everyone chooses who to see.
+  const [genderF, setGenderF] = React.useState<'all' | 'female' | 'male' | 'nonbinary'>('all');
+  const [ageF, setAgeF] = React.useState<string>('all');
 
   React.useEffect(() => {
     fetchTonightLoftSessions().then(s => {
@@ -297,7 +395,11 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
     }
   };
 
-  const tonight = sessions.map(s => ({
+  const filteredSessions = sessions.filter(s =>
+    (genderF === 'all' || (s.gender ?? null) === genderF) &&
+    (ageF === 'all' || (s.ageBracket ?? null) === ageF),
+  );
+  const tonight = filteredSessions.map(s => ({
     session: s,
     seed: s.userId,
     zh: `「${s.nightName}」`,
@@ -375,6 +477,34 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
             <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: L.muted, letterSpacing: 1, marginTop: 4 }}>
               {tAlt('loftPeople', lang)}
             </Text>
+          </View>
+
+          {/* Filter — you choose who to see (no forced opposite-gender) */}
+          <View style={{ marginTop: 14, gap: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {([['all', lang === 'en' ? 'Everyone' : '所有人'], ['female', lang === 'en' ? 'Women' : '女生'], ['male', lang === 'en' ? 'Men' : '男生'], ['nonbinary', lang === 'en' ? 'Non-binary' : '多元']] as const).map(([v, label]) => (
+                <TouchableOpacity key={v} onPress={() => setGenderF(v as any)}
+                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 0.5,
+                    backgroundColor: genderF === v ? 'rgba(232,165,87,0.18)' : 'rgba(245,226,196,0.04)',
+                    borderColor: genderF === v ? L.candle : L.line }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: genderF === v ? L.candle : L.muted }}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {['all', '18−24', '25−30', '31−35', '36−40', '41−45', '46+'].map(a => (
+                  <TouchableOpacity key={a} onPress={() => setAgeF(a)}
+                    style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999, borderWidth: 0.5,
+                      backgroundColor: ageF === a ? 'rgba(232,165,87,0.18)' : 'rgba(245,226,196,0.04)',
+                      borderColor: ageF === a ? L.candle : L.line }}>
+                    <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: ageF === a ? L.candle : L.muted }}>
+                      {a === 'all' ? (lang === 'en' ? 'Any age' : '不限年齡') : a}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
           </View>
 
           {/* Listing */}

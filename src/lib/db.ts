@@ -275,6 +275,15 @@ export async function fetchActiveRooms(): Promise<DbRoom[]> {
     .slice(0, 20);
 }
 
+/** Load a specific room by id (for entering an already-open room directly). */
+export async function getRoomById(roomId: string): Promise<DbRoom | null> {
+  try {
+    const snap = await getDoc(doc(db, 'rooms', roomId));
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...snap.data() } as DbRoom;
+  } catch { return null; }
+}
+
 export async function createRoom(params: {
   topicZh: string;
   topicEn?: string;
@@ -560,11 +569,13 @@ export async function enterLoft(nightName: string): Promise<{
   }
 
   const myGender = userSnap.exists() ? ((userSnap.data() as any).gender ?? null) : null;
+  const myAge = userSnap.exists() ? ((userSnap.data() as any).ageBracket ?? null) : null;
   const ref = await addDoc(collection(db, 'loftSessions'), {
     userId: uid,
     nightName,
     nightDate: tonight,
     gender: myGender,
+    ageBracket: myAge,
     enteredAt: serverTimestamp(),
     leftAt: null,
   });
@@ -578,9 +589,14 @@ export interface DbLoftSession {
   userId: string;
   nightName: string;
   nightDate: string;
+  gender?: string | null;
+  ageBracket?: string | null;
   enteredAt: any;
 }
 
+// Returns everyone in the Loft tonight (minus me + blocked). Gender/age are
+// included so the client can filter by the viewer's own chosen preference —
+// no forced opposite-gender restriction.
 export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
   const uid = getCurrentUid();
   const tonight = localNightDate();
@@ -594,14 +610,9 @@ export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
     uid ? getDoc(doc(db, 'users', uid)) : Promise.resolve(null),
   ]);
   const myBlocked: string[] = myUserSnap?.exists() ? (myUserSnap.data().blockedUsers ?? []) : [];
-  const myGender: string | null = myUserSnap?.exists() ? (myUserSnap.data().gender ?? null) : null;
-  // Show the opposite gender only. Male sees female, female sees male.
-  // Non-binary / unknown viewers see everyone (no opposite to compute).
-  const wantOpposite = myGender === 'male' ? 'female' : myGender === 'female' ? 'male' : null;
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }) as DbLoftSession)
-    .filter(s => !(s as any).leftAt && s.userId !== uid && !myBlocked.includes(s.userId))
-    .filter(s => wantOpposite == null || (s as any).gender === wantOpposite);
+    .filter(s => !(s as any).leftAt && s.userId !== uid && !myBlocked.includes(s.userId));
 }
 
 // ── Loft Ritual (今夜之題) ────────────────────────────────

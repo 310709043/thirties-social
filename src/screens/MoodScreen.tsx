@@ -268,7 +268,10 @@ export default function MoodScreen({ navigation }: Props) {
                   >
                     <BreathDot p={p} size={4} />
                     <Text style={[styles.roomTopic, { color: p.ink }]} numberOfLines={1}>
-                      {room.customTopicZh || room.customTopicEn || t((room.roomKey ?? 'room_partner') as any, lang)}
+                      {room.customTopicZh || room.customTopicEn
+                        || (room.roomKey && !['new', 'custom'].includes(room.roomKey)
+                            ? t(room.roomKey as any, lang)
+                            : (lang === 'en' ? 'a quiet brazier' : '一個火盆'))}
                     </Text>
                     <Text style={[styles.roomCount, { color: p.muted }]}>
                       {room.messageCount ?? 0}
