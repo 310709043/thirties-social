@@ -2,10 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // True unless the signed-in user is banned. Used to block banned users
-    // from posting (server-side enforcement, not just the client gate).
+    // True unless the signed-in user is explicitly banned. Used to block banned
+    // users from posting (server-side enforcement, not just the client gate).
+    // Robust to a missing user doc or an absent isBanned field: only an
+    // explicit isBanned == true blocks. A hard get() on a missing doc would
+    // otherwise error and silently deny ALL posting.
     function notBanned() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBanned == false;
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+             || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBanned != true;
     }
 
     // ── Users ──────────────────────────────────────────
@@ -23,7 +27,10 @@ service cloud.firestore {
                     && (!('wicks' in request.resource.data.diff(resource.data).affectedKeys())
                         || request.resource.data.wicks <= resource.data.wicks)
                     && (!('freeMatchesUsed' in request.resource.data.diff(resource.data).affectedKeys())
-                        || request.resource.data.freeMatchesUsed >= resource.data.freeMatchesUsed);
+                        || request.resource.data.freeMatchesUsed >= resource.data.freeMatchesUsed)
+                    && (!('loftFreeUsed' in request.resource.data.diff(resource.data).affectedKeys())
+                        || !('loftFreeUsed' in resource.data)
+                        || request.resource.data.loftFreeUsed >= resource.data.loftFreeUsed);
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 

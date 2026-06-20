@@ -8,8 +8,7 @@ import {
   Timestamp, getDocs, increment,
 } from 'firebase/firestore';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { ref, deleteObject } from 'firebase/storage';
-import { auth, db, storage } from './firebase';
+import { auth, db } from './firebase';
 import { sendPushToUser } from './notifications';
 
 // ── Auth ──────────────────────────────────────────────────
@@ -57,6 +56,7 @@ export interface DbUser {
   nightAdjIdx: number;
   autoFilter: boolean;
   freeMatchesUsed?: number;
+  loftFreeUsed?: number;
   slowMode: boolean;
   createdAt: any;
   lastActiveAt: any;
@@ -98,6 +98,7 @@ export async function upsertUser(params: {
       autoFilter: true,
       slowMode: false,
       freeMatchesUsed: 0,
+      loftFreeUsed: 0,
       createdAt: serverTimestamp(),
       lastActiveAt: serverTimestamp(),
     };
@@ -524,10 +525,13 @@ export const LOFT_CLOSE_HOUR = 5;
  * outside its midnight–05:00 window.
  */
 export function isLoftOpen(now: Date = new Date()): boolean {
-  if (__DEV__) return true;
   if (process.env.EXPO_PUBLIC_LOFT_ALWAYS_OPEN === '1') return true;
+  const day = now.getDay();          // 0 = Sun, 6 = Sat
   const h = now.getHours();
-  return h >= LOFT_OPEN_HOUR && h < LOFT_CLOSE_HOUR;
+  const isWeekend = day === 0 || day === 6;
+  // 假日全天開放；平日 13:00 開到翌日 07:00（即僅 07:00–12:59 關閉）。
+  if (isWeekend) return true;
+  return h >= 13 || h < 7;
 }
 
 export async function enterLoft(nightName: string): Promise<{
@@ -555,10 +559,12 @@ export async function enterLoft(nightName: string): Promise<{
     return { ok: false, error: 'already_entered_tonight' };
   }
 
+  const myGender = userSnap.exists() ? ((userSnap.data() as any).gender ?? null) : null;
   const ref = await addDoc(collection(db, 'loftSessions'), {
     userId: uid,
     nightName,
     nightDate: tonight,
+    gender: myGender,
     enteredAt: serverTimestamp(),
     leftAt: null,
   });
@@ -588,9 +594,14 @@ export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
     uid ? getDoc(doc(db, 'users', uid)) : Promise.resolve(null),
   ]);
   const myBlocked: string[] = myUserSnap?.exists() ? (myUserSnap.data().blockedUsers ?? []) : [];
+  const myGender: string | null = myUserSnap?.exists() ? (myUserSnap.data().gender ?? null) : null;
+  // Show the opposite gender only. Male sees female, female sees male.
+  // Non-binary / unknown viewers see everyone (no opposite to compute).
+  const wantOpposite = myGender === 'male' ? 'female' : myGender === 'female' ? 'male' : null;
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }) as DbLoftSession)
-    .filter(s => !(s as any).leftAt && s.userId !== uid && !myBlocked.includes(s.userId));
+    .filter(s => !(s as any).leftAt && s.userId !== uid && !myBlocked.includes(s.userId))
+    .filter(s => wantOpposite == null || (s as any).gender === wantOpposite);
 }
 
 // ── Loft Ritual (今夜之題) ────────────────────────────────
@@ -1077,11 +1088,21 @@ export async function deleteAccount(): Promise<{ ok: boolean; error?: string }> 
       await deleteDoc(doc(db, 'loftConversations', cid));
     }));
 
-    // 8. Delete veiled photos — Storage object + Firestore doc (field is senderId).
+    // 8. Delete veiled photos — Cloudinary asset (via backend) + Firestore doc.
     const vpQ = query(collection(db, 'veiledPhotos'), where('senderId', '==', uid));
     const vpSnap = await getDocs(vpQ);
+    const photoToken = await auth.currentUser?.getIdToken().catch(() => null);
     await Promise.all(vpSnap.docs.map(async d => {
-      try { await deleteObject(ref(storage, 'veiled-photos/' + d.id)); } catch {}
+      const publicId = (d.data() as any).publicId;
+      if (publicId && photoToken) {
+        try {
+          await fetch(`${BACKEND_BASE}/api/photos/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${photoToken}` },
+            body: JSON.stringify({ publicId }),
+          });
+        } catch {}
+      }
       await deleteDoc(d.ref);
     }));
 

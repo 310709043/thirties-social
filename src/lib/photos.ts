@@ -1,14 +1,21 @@
-// photos.ts — Photo upload and management via Firebase Storage
+// photos.ts — Veiled photo upload via Cloudinary (free tier, no card).
+// The image bytes live on Cloudinary; only metadata (URL + public_id) is kept in
+// Firestore. Deletion goes through the backend (Cloudinary admin API needs the
+// secret), preserving the "photos vanish when the conversation ends" promise.
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { doc, setDoc, getDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { storage, db } from './firebase';
+import { db, auth } from './firebase';
 import { getCurrentUid } from './db';
+
+const CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME ?? '';
+const UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? '';
+const BACKEND_BASE = process.env.EXPO_PUBLIC_ADMIN_URL ?? 'https://thirties-admin.vercel.app';
 
 export interface VeiledPhoto {
   id: string;
   url: string;
+  publicId: string;
   conversationId: string;
   senderId: string;
   createdAt: any;
@@ -38,34 +45,50 @@ export async function uploadVeiledPhoto(params: {
 }): Promise<VeiledPhoto | null> {
   const uid = getCurrentUid();
   if (!uid) return null;
+  if (!CLOUD_NAME || !UPLOAD_PRESET) {
+    console.warn('[photos] Cloudinary not configured');
+    return null;
+  }
 
   try {
-    // Re-encode to strip all metadata (EXIF/GPS) before upload.
+    // Re-encode to strip all metadata (EXIF/GPS) and get base64 in one pass.
     const clean = await manipulateAsync(
       params.uri,
       [{ resize: { width: 1280 } }],
-      { compress: 0.7, format: SaveFormat.JPEG },
+      { compress: 0.7, format: SaveFormat.JPEG, base64: true },
     );
-    const response = await fetch(clean.uri);
-    const blob = await response.blob();
+    if (!clean.base64) {
+      console.warn('[photos] No base64 produced from image');
+      return null;
+    }
 
-    // Upload to Firebase Storage
+    // Unsigned upload to Cloudinary (cloud name + preset are public by design).
+    const form = new FormData();
+    form.append('file', `data:image/jpeg;base64,${clean.base64}`);
+    form.append('upload_preset', UPLOAD_PRESET);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!res.ok) {
+      console.warn('[photos] Cloudinary upload failed:', res.status);
+      return null;
+    }
+    const json = await res.json();
+    const url: string = json.secure_url;
+    const publicId: string = json.public_id;
+    if (!url || !publicId) return null;
+
+    // Save metadata to Firestore.
     const photoId = `${params.conversationId}_${uid}_${Date.now()}`;
-    const storageRef = ref(storage, `veiled-photos/${photoId}`);
-    await uploadBytes(storageRef, blob);
-
-    // Get download URL
-    const url = await getDownloadURL(storageRef);
-
-    // Save metadata to Firestore
     const photoData: VeiledPhoto = {
       id: photoId,
       url,
+      publicId,
       conversationId: params.conversationId,
       senderId: uid,
       createdAt: serverTimestamp(),
     };
-
     await setDoc(doc(db, 'veiledPhotos', photoId), photoData);
 
     return photoData;
@@ -86,16 +109,28 @@ export async function getVeiledPhoto(photoId: string): Promise<VeiledPhoto | nul
   }
 }
 
+// Ask the backend to destroy the Cloudinary asset (the secret lives server-side).
+async function requestCloudinaryDelete(publicId: string): Promise<void> {
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return;
+    await fetch(`${BACKEND_BASE}/api/photos/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({ publicId }),
+    });
+  } catch (e) {
+    console.warn('[photos] Cloudinary delete request failed:', e);
+  }
+}
+
 // ── Delete Photo ────────────────────────────────────────
 export async function deleteVeiledPhoto(photoId: string): Promise<boolean> {
   try {
-    // Delete from Storage
-    const storageRef = ref(storage, `veiled-photos/${photoId}`);
-    await deleteObject(storageRef).catch(() => {});
-
-    // Delete from Firestore
+    const snap = await getDoc(doc(db, 'veiledPhotos', photoId));
+    const publicId = snap.exists() ? (snap.data() as VeiledPhoto).publicId : null;
+    if (publicId) await requestCloudinaryDelete(publicId);
     await deleteDoc(doc(db, 'veiledPhotos', photoId));
-
     return true;
   } catch {
     return false;
@@ -104,7 +139,6 @@ export async function deleteVeiledPhoto(photoId: string): Promise<boolean> {
 
 // ── Delete All Photos for Conversation ──────────────────
 export async function deleteConversationPhotos(conversationId: string): Promise<void> {
-  // This would require querying all photos for the conversation
-  // For now, photos are deleted individually when revealed
-  // Full cleanup can be done via Cloud Functions
+  // Photos are deleted individually when revealed, or on account deletion.
+  // Full per-conversation cleanup runs server-side if needed.
 }

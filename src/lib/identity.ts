@@ -45,6 +45,39 @@ export function getColorAdj(seed: string, lang: 'zh' | 'en' = 'zh'): { color: st
   return { color, colorName, adj, label };
 }
 
+// ── Loft names ───────────────────────────────────────────
+// The Loft (夜閣) gets its own richer, more poetic naming pool than the rest of
+// the app — late-night, vigil-flavoured. Three sentence patterns are mixed for
+// far more variety than colour+noun. Deterministic per seed (same person → same
+// Loft name within a session).
+const LOFT_ADJ_ZH = ['失眠','未眠','獨醒','夜行','沉默','將明','燈下','孤燈','霧裡','潮間','微醺','夜半','星沉','月下','擱淺','漂泊','逆光','晚風','薄霧','深海'];
+const LOFT_ADJ_EN = ['sleepless','unsleeping','awake','night-walking','silent','near-dawn','lamplit','lone-lamp','fog-bound','tidal','tipsy','small-hours','star-fallen','moonlit','stranded','drifting','backlit','evening-wind','thin-mist','deep-sea'];
+const LOFT_NOUN_ZH = ['旅人','燈塔','收音機','月台','海','貓','信號','渡口','長夜','燈火','街角','鯨','碼頭','航班','島','煙火','回聲','候鳥','星圖','渡船'];
+const LOFT_NOUN_EN = ['traveler','lighthouse','radio','platform','sea','cat','signal','ferry-dock','long-night','firelight','street-corner','whale','pier','flight','island','fireworks','echo','wandering-bird','star-map','night-boat'];
+const LOFT_TIME_ZH = ['凌晨三點','末班車','天亮前','午夜','破曉前','深夜','夜半','黎明前','日落後','星期天的夜'];
+const LOFT_TIME_EN = ['3 a.m.','last-train','before-dawn','midnight','pre-daybreak','late-night','small-hours','before-sunrise','after-sunset','sunday-night'];
+const LOFT_ROLE_ZH = ['守夜人','旅人','聽眾','乘客','訪客','夜貓','說書人','擺渡人','點燈人','陌生人','過客','守燈人'];
+const LOFT_ROLE_EN = ['night-watch','traveler','listener','passenger','visitor','night-owl','storyteller','ferryman','lamplighter','stranger','passerby','lamp-keeper'];
+const LOFT_SOLO_ZH = ['還沒睡的城市','睡不著的海','等天亮的人','夜裡的回聲','數羊的人','看月亮的貓','未寄出的信','熄不掉的燈','聽雨的人','迷路的星','深夜便利商店','最後一班船','沒有終點的散步','凌晨的潮聲','一個人的電影院','關不上的窗'];
+const LOFT_SOLO_EN = ['the sleepless city','the restless sea','one who waits for dawn','an echo in the night','counting sheep','a cat watching the moon','an unsent letter','a light that won’t go out','one who hears the rain','a lost star','a midnight store','the last boat','a walk with no end','the dawn tide','a cinema for one','a window that won’t close'];
+
+export function getLoftName(seed: string, lang: 'zh' | 'en' = 'zh'): string {
+  const r = rand(seed, 4);
+  const zh = lang !== 'en';
+  const pick = Math.floor(r[3] * 3);
+  if (pick === 0) {
+    const a = (zh ? LOFT_ADJ_ZH : LOFT_ADJ_EN)[Math.floor(r[0] * LOFT_ADJ_ZH.length)];
+    const n = (zh ? LOFT_NOUN_ZH : LOFT_NOUN_EN)[Math.floor(r[1] * LOFT_NOUN_ZH.length)];
+    return zh ? `${a}的${n}` : `${a} ${n}`;
+  }
+  if (pick === 1) {
+    const tm = (zh ? LOFT_TIME_ZH : LOFT_TIME_EN)[Math.floor(r[0] * LOFT_TIME_ZH.length)];
+    const ro = (zh ? LOFT_ROLE_ZH : LOFT_ROLE_EN)[Math.floor(r[1] * LOFT_ROLE_ZH.length)];
+    return zh ? `${tm}的${ro}` : `${tm} ${ro}`;
+  }
+  return (zh ? LOFT_SOLO_ZH : LOFT_SOLO_EN)[Math.floor(r[0] * LOFT_SOLO_ZH.length)];
+}
+
 export function getCharacter(seed: string): string {
   const r = rand(seed, 1);
   return CHAR_POOL[Math.floor(r[0] * CHAR_POOL.length)];

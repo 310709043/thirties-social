@@ -417,9 +417,9 @@ export default function RoomScreen({ navigation, route }: Props) {
                       onChangeText={setRoomTopic}
                       placeholder={lang === 'en' ? 'What is this room about? (e.g. "can\'t sleep again")' : '這個火盆在說什麼？（例如：又睡不著了）'}
                       placeholderTextColor={p.muted}
-                      multiline
-                      numberOfLines={2}
-                      style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, paddingHorizontal: 14, paddingVertical: 12, lineHeight: 24 }}
+                      maxLength={40}
+                      returnKeyType="done"
+                      style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, paddingHorizontal: 14, paddingVertical: 12 }}
                     />
                   </GlassCard>
                   <TouchableOpacity

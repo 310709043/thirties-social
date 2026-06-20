@@ -17,9 +17,9 @@ import { isGuest } from '../lib/auth';
 type Props = NativeStackScreenProps<RootStackParamList, 'Upgrade'>;
 
 const WICK_PACKS = [
-  { key: 'wick10', amount: 10, price: 'NT$ 35', priceNote: '3.5/芯' },
-  { key: 'wick30', amount: 30, price: 'NT$ 99', priceNote: '3.3/芯', highlight: true },
-  { key: 'wick100', amount: 100, price: 'NT$ 299', priceNote: '3.0/芯' },
+  { key: 'wick10', amount: 10, price: 'NT$ 60', priceNote: '6.0/芯' },
+  { key: 'wick30', amount: 30, price: 'NT$ 150', priceNote: '5.0/芯', highlight: true },
+  { key: 'wick100', amount: 100, price: 'NT$ 390', priceNote: '3.9/芯' },
 ];
 
 export default function UpgradeScreen({ navigation }: Props) {

@@ -274,7 +274,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 {lang === 'en' ? 'send a veiled photo — they reveal it with wicks' : '傳送帶紗照片，對方用燭芯揭開'}
               </Text>
               <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted }}>
-                {lang === 'en' ? '2 wicks' : '2 芯'}
+                {lang === 'en' ? '3 wicks' : '3 芯'}
               </Text>
             </TouchableOpacity>
             <GlassCard p={p} padding={6} radius={28}
@@ -308,8 +308,8 @@ export default function ChatScreen({ navigation, route }: Props) {
                 </Text>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.muted, lineHeight: 20, marginBottom: 14 }}>
                   {lang === 'en'
-                    ? 'Your photo will be hidden under a veil. The other person can lift each layer with 2 wicks. They always agree first.'
-                    : '照片會藏在紗罩下。對方每揭一層需要 2 燭芯，並且需要先同意。'}
+                    ? 'Your photo will be hidden under a veil. The other person can lift each layer with 3 wicks. They always agree first.'
+                    : '照片會藏在紗罩下。對方每揭一層需要 3 燭芯，並且需要先同意。'}
                 </Text>
                 <View style={{ alignItems: 'center', marginBottom: 16 }}>
                   {selectedPhotoUri ? (
@@ -345,8 +345,8 @@ export default function ChatScreen({ navigation, route }: Props) {
                 {!veilSent ? (
                   <TouchableOpacity
                     onPress={async () => {
-                      if (!selectedPhotoUri || !conversationId || wicks < 2) return;
-                      const result = await spendWicks(2, 'photo_veil', conversationId);
+                      if (!selectedPhotoUri || !conversationId || wicks < 3) return;
+                      const result = await spendWicks(3, 'photo_veil', conversationId);
                       if (result.ok) {
                         const photo = await uploadVeiledPhoto({ conversationId, uri: selectedPhotoUri });
                         if (photo) {
@@ -361,7 +361,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                         }
                       }
                     }}
-                    disabled={!selectedPhotoUri || wicks < 2}
+                    disabled={!selectedPhotoUri || wicks < 3}
                     style={[styles.sendVeilBtn, { backgroundColor: (selectedPhotoUri && wicks >= 2) ? p.ink : p.line }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: (selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>

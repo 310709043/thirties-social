@@ -31,7 +31,17 @@ export default function MoodScreen({ navigation }: Props) {
   const [waitingDots, setWaitingDots] = useState('');
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const activeRooms = rooms.filter(r => (r.messageCount ?? 0) > 0);
+  // Show rooms that have any activity, OR were opened recently (so a freshly
+  // created room stays visible even before the first message is sent).
+  const ROOM_FRESH_MS = 60 * 60 * 1000; // 1h grace for empty new rooms
+  const roomAgeMs = (r: DbRoom): number => {
+    const c: any = r.createdAt;
+    const ms = c?.toMillis ? c.toMillis() : (typeof c?.seconds === 'number' ? c.seconds * 1000 : null);
+    return ms == null ? 0 : Date.now() - ms;
+  };
+  const activeRooms = rooms.filter(
+    r => (r.messageCount ?? 0) > 0 || roomAgeMs(r) < ROOM_FRESH_MS,
+  );
 
   useEffect(() => { return subscribeToActiveRooms(setRooms); }, []);
 
@@ -97,8 +107,9 @@ export default function MoodScreen({ navigation }: Props) {
         clearInterval(retryId);
         hapticMedium();
         analytics.matchFound();
-        // Consume a free match or charge a wick (free tier only).
-        recordMatch();
+        // Operator (companion) matches are always free — never charge a wick or
+        // consume a free match. Real matches charge per the free tier rules.
+        if (!(entry as any).isOperator) recordMatch();
         setWaiting(false);
         navigation.push('Match', {
           fromSeed: entry.matchedSeed,
@@ -111,6 +122,9 @@ export default function MoodScreen({ navigation }: Props) {
       if (matchTimeoutRef.current) clearTimeout(matchTimeoutRef.current);
       clearInterval(retryId);
       unsub();
+      // Leaving the screen while still waiting must remove us from the queue,
+      // otherwise others can "ghost-match" with someone no longer waiting.
+      if (!matched) leaveMatchQueue();
     };
   }, [waiting]);
 

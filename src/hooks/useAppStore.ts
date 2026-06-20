@@ -49,6 +49,7 @@ interface AppState {
   conversationsToday: number;
   peopleTodayCount: number;
   freeMatchesUsed: number;
+  loftFreeUsed: number;
 }
 
 /** Free registered users get this many free matches before each costs a wick. */
@@ -56,6 +57,8 @@ export const FREE_MATCH_ALLOWANCE = 10;
 export const MATCH_WICK_COST = 1;
 /** Free users pay this to open a room; Vigil opens rooms for free. */
 export const ROOM_CREATE_COST = 2;
+/** A free user gets this many lifetime free Loft entries, then must go Vigil. */
+export const FREE_LOFT_ALLOWANCE = 1;
 
 let _state: AppState = {
   deviceId: '', userId: '', seed: 'default', direction: DEFAULT_DIRECTION,
@@ -65,7 +68,7 @@ let _state: AppState = {
   gender: null, ageBracket: null, relationshipStatus: null, seeking: [],
   boundary: null, region: null, quote: null,
   autoFilter: true, slowMode: false, conversationsToday: 0, peopleTodayCount: 0,
-  freeMatchesUsed: 0,
+  freeMatchesUsed: 0, loftFreeUsed: 0,
 };
 
 const _listeners = new Set<() => void>();
@@ -74,7 +77,7 @@ function notify() { _listeners.forEach(fn => fn()); }
 export async function initStore() {
   const deviceId = await getDeviceId();
   const seed = getDailySeed(deviceId);
-  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedSeeking, storedBoundary, storedRegion, storedQuote, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind, storedFreeMatches] = await Promise.all([
+  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedSeeking, storedBoundary, storedRegion, storedQuote, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind, storedFreeMatches, storedLoftFree] = await Promise.all([
     AsyncStorage.getItem('direction') as Promise<Direction | null>,
     AsyncStorage.getItem('onboarding_done'),
     AsyncStorage.getItem('setup_done'),
@@ -94,6 +97,7 @@ export async function initStore() {
     AsyncStorage.getItem('peopleTodayCount'),
     AsyncStorage.getItem('identityKind') as Promise<IdentityKind | null>,
     AsyncStorage.getItem('freeMatchesUsed'),
+    AsyncStorage.getItem('loftFreeUsed'),
   ]);
   _state = {
     ..._state, deviceId, seed,
@@ -109,6 +113,7 @@ export async function initStore() {
     conversationsToday: storedConvToday ? parseInt(storedConvToday, 10) : 0,
     peopleTodayCount: storedPeopleToday ? parseInt(storedPeopleToday, 10) : 0,
     freeMatchesUsed: storedFreeMatches ? parseInt(storedFreeMatches, 10) : 0,
+    loftFreeUsed: storedLoftFree ? parseInt(storedLoftFree, 10) : 0,
   };
   notify();
   _resetDailyCountersIfNeeded();
@@ -125,8 +130,11 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
       const today = new Date().toISOString().slice(0, 10);
       const lastReward = (dbUser as any).lastRewardDate ?? null;
       _state = {
-        ..._state, userId, dbSynced: true, wicks: dbUser.wicks, vigil: dbUser.vigil,
-        setupDone: dbUser.setupDone, isBanned: dbUser.isBanned, banReason: dbUser.banReason,
+        // wicks: never let a missing field blank the display (undefined → 0/keep).
+        ..._state, userId, dbSynced: true, wicks: dbUser.wicks ?? _state.wicks ?? 0, vigil: dbUser.vigil,
+        // setupDone is sticky: once finished locally, a fresh/incomplete server
+        // doc must never force the user to fill in their profile again.
+        setupDone: dbUser.setupDone || _state.setupDone, isBanned: dbUser.isBanned, banReason: dbUser.banReason,
         banExpiresAt: (dbUser as any).banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
         gender: dbUser.gender as Gender | null, ageBracket: dbUser.ageBracket,
@@ -135,6 +143,7 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         autoFilter: (dbUser as any).autoFilter ?? true,
         slowMode: (dbUser as any).slowMode ?? false,
         freeMatchesUsed: (dbUser as any).freeMatchesUsed ?? 0,
+        loftFreeUsed: (dbUser as any).loftFreeUsed ?? _state.loftFreeUsed,
       };
       await Promise.all([
         AsyncStorage.setItem('wicks', String(dbUser.wicks)),
@@ -159,7 +168,7 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
       const today = new Date().toISOString().slice(0, 10);
       const lastReward = (updated as any).lastRewardDate ?? null;
       _state = {
-        ..._state, wicks: updated.wicks, vigil: updated.vigil,
+        ..._state, wicks: updated.wicks ?? _state.wicks ?? 0, vigil: updated.vigil,
         isBanned: updated.isBanned, banReason: updated.banReason,
         banExpiresAt: (updated as any).banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
@@ -169,6 +178,7 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         autoFilter: (updated as any).autoFilter ?? true,
         slowMode: (updated as any).slowMode ?? false,
         freeMatchesUsed: (updated as any).freeMatchesUsed ?? _state.freeMatchesUsed,
+        loftFreeUsed: (updated as any).loftFreeUsed ?? _state.loftFreeUsed,
       };
       AsyncStorage.setItem('wicks', String(updated.wicks));
       notify();
@@ -351,9 +361,40 @@ export async function recordMatch() {
   }
 }
 
-/** The Loft is a Vigil-only space (free & guests cannot enter). */
+/**
+ * The Loft is a Vigil space, but a free user gets FREE_LOFT_ALLOWANCE lifetime
+ * free entries to taste it before being asked to upgrade. Guests never enter.
+ */
 export function canEnterLoft(): boolean {
-  return getTier() === 'vigil';
+  const t = getTier();
+  if (t === 'vigil') return true;
+  if (t === 'free') return _state.loftFreeUsed < FREE_LOFT_ALLOWANCE;
+  return false;
+}
+
+/** Remaining free Loft entries for a free user (0 for guest/vigil context). */
+export function loftFreeRemaining(): number {
+  return Math.max(0, FREE_LOFT_ALLOWANCE - _state.loftFreeUsed);
+}
+
+/** True if this Loft entry would consume the free user's free-trial entry. */
+export function loftEntryIsFreeTrial(): boolean {
+  return getTier() === 'free' && _state.loftFreeUsed < FREE_LOFT_ALLOWANCE;
+}
+
+/**
+ * Record an actual Loft entry. Consumes a free user's lifetime free entry
+ * (persisted locally + synced to Firestore). Vigil/guest are no-ops.
+ * Call only once the user truly enters the Loft, not on a blocked attempt.
+ */
+export async function recordLoftEntry() {
+  if (getTier() !== 'free') return;
+  if (_state.loftFreeUsed >= FREE_LOFT_ALLOWANCE) return;
+  const used = _state.loftFreeUsed + 1;
+  _state = { ..._state, loftFreeUsed: used };
+  await AsyncStorage.setItem('loftFreeUsed', String(used));
+  notify();
+  if (_state.userId) updateUser({ loftFreeUsed: used } as any);
 }
 
 /** Opening a room: guests can't; free pays wicks (charged at call site); vigil free. */

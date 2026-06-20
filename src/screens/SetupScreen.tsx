@@ -156,7 +156,7 @@ export default function SetupScreen({ navigation }: Props) {
           </View>
 
           <ChipRow p={p} label={zh ? '年齡' : 'Age'} alt={zh ? 'age' : '年齡'}
-            options={['25−30', '31−35', '36−40', '41−45', '46+']}
+            options={['18−24', '25−30', '31−35', '36−40', '41−45', '46+']}
             value={age} onPick={setAge} />
 
           <ChipRow p={p} label={zh ? '我的感情狀態' : 'My relationship'} alt={zh ? 'status' : '狀態'}

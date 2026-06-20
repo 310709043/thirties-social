@@ -9,11 +9,11 @@ import { RootStackParamList } from '../navigation';
 import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber } from '../components/ui';
-import { useAppStore } from '../hooks/useAppStore';
+import { useAppStore, canEnterLoft, recordLoftEntry, loftEntryIsFreeTrial, getTier } from '../hooks/useAppStore';
 import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, LOFT_OPEN_HOUR, LOFT_CLOSE_HOUR, postRitualResponse, subscribeToTonightRitual, DbRitualResponse } from '../lib/db';
 import { getTonightRitual } from '../lib/rituals';
 import { TextInput } from 'react-native';
-import { getColorAdj } from '../lib/identity';
+import { getLoftName } from '../lib/identity';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Loft'>;
@@ -34,38 +34,71 @@ export default function LoftScreen({ navigation }: Props) {
   const [showBroke, setShowBroke] = useState(false);
   const [brokeLine] = useState(() => BROKE_LINES[Math.floor(Math.random() * BROKE_LINES.length)]);
 
-  // The Loft is a Vigil-only late-night space — free users and guests can't enter.
+  // The Loft is a Vigil space; a free user gets one lifetime free entry.
   const handleEnter = async () => {
-    if (!vigil) {
+    const tier = getTier();
+    // Guests can't enter at all.
+    if (tier === 'guest') {
       hapticWarning();
       Alert.alert(
-        lang === 'en' ? 'The Loft is for Vigil members' : '夜閣是守夜人專屬',
+        lang === 'en' ? 'The Loft is for members' : '夜閣需要帳號',
         lang === 'en'
-          ? 'The Loft is a members-only late-night space. Upgrade to Vigil to enter.'
-          : '夜閣是守夜人專屬的深夜空間，升級守夜人即可進入。',
+          ? 'Create an account to step into the Loft.'
+          : '夜閣是深夜的陪伴空間，註冊帳號即可體驗。',
         [
           { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
-          { text: lang === 'en' ? 'Upgrade' : '升級', onPress: () => navigation.push('Upgrade') },
+          { text: lang === 'en' ? 'Sign up' : '註冊', onPress: () => navigation.push('Upgrade') },
+        ],
+      );
+      return;
+    }
+    // Free user who has spent their lifetime free entry → upgrade prompt.
+    if (!canEnterLoft()) {
+      hapticWarning();
+      Alert.alert(
+        lang === 'en' ? 'Free entry used' : '免費體驗已用完',
+        lang === 'en'
+          ? 'You have used your free taste of the Loft. Go Vigil for unlimited late-night entry.'
+          : '你的夜閣免費體驗已經用過了。升級守夜人即可無限進入深夜空間。',
+        [
+          { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
+          { text: lang === 'en' ? 'Upgrade' : '升級守夜人', onPress: () => navigation.push('Upgrade') },
         ],
       );
       return;
     }
     if (!isLoftOpen()) {
-      const open = String(LOFT_OPEN_HOUR).padStart(2, '0');
-      const close = String(LOFT_CLOSE_HOUR).padStart(2, '0');
       hapticWarning();
       Alert.alert(
         lang === 'en' ? 'The Loft is closed' : '夜閣還沒開',
         lang === 'en'
-          ? `The Loft opens between ${open}:00 and ${close}:00.`
-          : `夜閣只在 ${open}:00–${close}:00 開放。`,
+          ? 'Weekdays: open 13:00–07:00 (next day). Weekends: open all day.'
+          : '平日 13:00 開到翌日 07:00；假日全天開放。',
         [{ text: 'OK', style: 'cancel' }],
       );
       return;
     }
-    const nightName = getColorAdj(seed, lang).label;
+    // If this entry would burn the free user's one lifetime taste, confirm first.
+    if (loftEntryIsFreeTrial()) {
+      const go = await new Promise<boolean>(resolve => {
+        Alert.alert(
+          lang === 'en' ? 'Use your free entry?' : '使用免費體驗？',
+          lang === 'en'
+            ? 'This is your one free taste of the Loft. Entering now uses it up.'
+            : '這是你唯一的一次夜閣免費體驗，進入後就會用掉。確定現在進入嗎？',
+          [
+            { text: lang === 'en' ? 'Not yet' : '再想想', style: 'cancel', onPress: () => resolve(false) },
+            { text: lang === 'en' ? 'Enter' : '進入', onPress: () => resolve(true) },
+          ],
+        );
+      });
+      if (!go) return;
+    }
+    const nightName = getLoftName(seed, lang);
     const result = await enterLoft(nightName);
     if (result.ok) {
+      // Consumes the free entry for a free user; no-op for Vigil.
+      await recordLoftEntry();
       hapticMedium();
       setEntering(true);
     } else if (result.error === 'already_entered_tonight') {
@@ -221,7 +254,7 @@ export default function LoftScreen({ navigation }: Props) {
 
 function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const { seed, identityKind } = useAppStore();
-  const myName = getColorAdj(seed, lang).label;
+  const myName = getLoftName(seed, lang);
   const [sessions, setSessions] = React.useState<DbLoftSession[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [connecting, setConnecting] = React.useState<string | null>(null);

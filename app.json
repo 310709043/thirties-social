@@ -56,6 +56,12 @@
       ],
       "@react-native-google-signin/google-signin"
     ],
-    "owner": "simontang"
+    "owner": "simontang",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d2729381-91aa-41ed-b510-c9549b4c8f39"
+    }
   }
 }

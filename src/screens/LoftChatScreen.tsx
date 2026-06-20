@@ -31,8 +31,11 @@ const PULSES = [
   { key: 'loftPulse4', em: '\u2299' },
 ];
 
+// Lifting a veil costs wicks for everyone, including Vigil (intimacy is paid).
+const VEIL_LIFT_COST = 3;
+
 export default function LoftChatScreen({ navigation, route }: Props) {
-  const { lang, wicks, seed, vigil } = useAppStore();
+  const { lang, wicks, seed } = useAppStore();
   const { otherSeed, loftConversationId, otherName, sessionEnteredAt } = route.params;
   const uid = getCurrentUid();
   ScreenCapture.usePreventScreenCapture();
@@ -50,7 +53,6 @@ export default function LoftChatScreen({ navigation, route }: Props) {
   const [messages, setMessages] = useState<DbLoftMessage[]>([]);
   const [veilLevel, setVeilLevel] = useState(1);
   const [showVeil, setShowVeil] = useState(false);
-  const [giftSent, setGiftSent] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   // Subscribe to real-time messages
@@ -115,14 +117,6 @@ export default function LoftChatScreen({ navigation, route }: Props) {
     }
   };
 
-  const sendGift = async () => {
-    const r = await spendWicks(5, 'gift', loftConversationId);
-    if (r.ok && loftConversationId) {
-      hapticMedium();
-      setGiftSent(true);
-      await sendLoftMessage({ loftConversationId, content: '🕯', messageType: 'gift' });
-    }
-  };
 
   return (
     <LinearGradient colors={L.bg as any} style={{ flex: 1 }}>
@@ -239,25 +233,6 @@ export default function LoftChatScreen({ navigation, route }: Props) {
             ))}
           </View>
 
-          {/* Gift row */}
-          {!giftSent ? (
-            <TouchableOpacity onPress={sendGift} style={styles.giftRow}>
-              <WickGlyph size={12} color={L.candle} />
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: 'rgba(245,226,196,0.8)', flex: 1 }}>
-                {t('loftGift', lang)}
-              </Text>
-              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: 'rgba(232,165,87,0.7)' }}>
-                {t('loftGiftCost', lang)}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={[styles.giftRow, { opacity: 0.5 }]}>
-              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: L.candle }}>
-                {lang === 'en' ? '\u2713 candle sent' : '\u2713 \u71ED\u5DF2\u9001\u51FA'}
-              </Text>
-            </View>
-          )}
-
           {/* Composer */}
           <View style={styles.composer}>
             <View style={[styles.composerInner, { borderColor: 'rgba(232,165,87,0.2)' }]}>
@@ -296,27 +271,23 @@ export default function LoftChatScreen({ navigation, route }: Props) {
               </Text>
               {veilLevel < 4 && (
                 <TouchableOpacity onPress={async () => {
-                  if (vigil) { setVeilLevel(v => v + 1); return; }
-                  if (wicks >= 2) { const r = await spendWicks(2, 'veil_lift', loftConversationId); if (r.ok) { setVeilLevel(v => v + 1); } }
+                  // Lifting a veil always costs wicks — even for Vigil. Membership
+                  // buys reach/efficiency; advancing intimacy is paid by everyone.
+                  if (wicks >= VEIL_LIFT_COST) {
+                    const r = await spendWicks(VEIL_LIFT_COST, 'veil_lift', loftConversationId);
+                    if (r.ok) { setVeilLevel(v => v + 1); }
+                  }
                 }}
-                  disabled={!vigil && wicks < 2}
-                  style={[styles.liftBtn, { backgroundColor: (vigil || wicks >= 2) ? L.ink : L.line }]}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: (vigil || wicks >= 2) ? '#f5e2c4' : L.muted }}>
+                  disabled={wicks < VEIL_LIFT_COST}
+                  style={[styles.liftBtn, { backgroundColor: wicks >= VEIL_LIFT_COST ? L.ink : L.line }]}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: wicks >= VEIL_LIFT_COST ? '#f5e2c4' : L.muted }}>
                     {t(`veilLift${veilLevel + 1}` as any, lang)}
                   </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    {vigil ? (
-                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: '#f5e2c4' }}>
-                        {lang === 'en' ? 'Vigil · free' : '守夜 · 免費'}
-                      </Text>
-                    ) : (
-                      <>
-                        <WickGlyph size={12} color={wicks >= 2 ? '#f5e2c4' : L.muted} />
-                        <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: wicks >= 2 ? '#f5e2c4' : L.muted }}>
-                          {t('veilCost', lang)}
-                        </Text>
-                      </>
-                    )}
+                    <WickGlyph size={12} color={wicks >= VEIL_LIFT_COST ? '#f5e2c4' : L.muted} />
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: wicks >= VEIL_LIFT_COST ? '#f5e2c4' : L.muted }}>
+                      {VEIL_LIFT_COST}
+                    </Text>
                   </View>
                 </TouchableOpacity>
               )}
