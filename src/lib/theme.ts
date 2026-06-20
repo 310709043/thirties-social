@@ -32,23 +32,25 @@ export const DIRECTIONS: Record<Direction, Palette> = {
     key: 'mist',
     nameZh: '霧',
     nameEn: 'Mist',
-    blurb: 'Safe · pale dawn',
+    blurb: 'Safe · warm dusk',
     dark: false,
-    bg: ['#f1ecea', '#e3e4ec', '#ecdfe6', '#e8e8ef'],
+    // Warmed from a cold blue-grey dawn to a candle-lit cream dusk, so daytime
+    // screens feel intimate rather than clinical (deepening the loneliness).
+    bg: ['#f4ece1', '#efe4d6', '#eee2d6', '#e8dac9'],
     bgAngle: 155,
-    bgSolid: '#ece6e4',
-    glow: 'rgba(206,184,200,0.45)',
-    ink: '#26242b',
-    inkSoft: '#4b4750',
-    muted: '#7e7882',
-    faint: 'rgba(40,36,44,0.32)',
-    line: 'rgba(40,36,44,0.08)',
-    surface: 'rgba(255,255,255,0.55)',
-    surfaceSolid: '#ffffff',
-    glass: 'rgba(255,255,255,0.42)',
+    bgSolid: '#efe5d8',
+    glow: 'rgba(224,182,138,0.42)',
+    ink: '#2a2620',
+    inkSoft: '#4d473d',
+    muted: '#867c6e',
+    faint: 'rgba(42,36,28,0.30)',
+    line: 'rgba(42,36,28,0.08)',
+    surface: 'rgba(255,252,246,0.58)',
+    surfaceSolid: '#fffaf2',
+    glass: 'rgba(255,251,244,0.44)',
     glassBlur: 24,
-    accent: '#9d7d96',
-    accentSoft: 'rgba(157,125,150,0.18)',
+    accent: '#b07d6b',
+    accentSoft: 'rgba(176,125,107,0.18)',
     danger: '#b85a4f',
     statusDark: false,
   },
@@ -123,3 +125,14 @@ export const LOFT_PALETTE = {
 };
 
 export const DEFAULT_DIRECTION: Direction = 'mist';
+
+// Type scale — one consistent hierarchy so screens stop using ad-hoc sizes
+// (the "no font hierarchy → visual fatigue" feedback). Pair with palette colours.
+export const TYPE = {
+  display:  { fontFamily: 'NotoSerifTC-Light', fontSize: 30, lineHeight: 40 },
+  title:    { fontFamily: 'NotoSerifTC-Regular', fontSize: 22, lineHeight: 32 },
+  subtitle: { fontFamily: 'NotoSerifTC-Regular', fontSize: 16, lineHeight: 26 },
+  body:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 25 },
+  caption:  { fontFamily: 'NotoSerifTC-Regular', fontSize: 13, lineHeight: 20 },
+  label:    { fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 2 },
+} as const;
