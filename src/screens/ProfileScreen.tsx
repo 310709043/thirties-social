@@ -10,7 +10,7 @@ import { VaporBackground, GlassCard, Cap, WickGlyph, PhotoVeil, FadeInUp } from 
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setIdentityKind, getAvailableIdentityKinds } from '../hooks/useAppStore';
-import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, IdentityKind } from '../lib/identity';
+import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, IdentityKind, getLoftName } from '../lib/identity';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -70,6 +70,9 @@ export default function ProfileScreen({ navigation }: Props) {
   const colors = lang === 'en' ? COLOR_NAMES_EN : COLOR_NAMES_ZH;
   const adjs = lang === 'en' ? ADJ_EN : ADJ_ZH;
   const nightName = lang === 'en' ? `${colors[colorIdx]} ${adjs[adjIdx]}` : `${colors[colorIdx]}的${adjs[adjIdx]}`;
+  // The Loft now shows an auto-generated poetic name (seed-based, changes nightly);
+  // this is the real name others see, so the profile shows it read-only.
+  const loftName = getLoftName(seed, lang);
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
@@ -145,32 +148,15 @@ export default function ProfileScreen({ navigation }: Props) {
                 {lang === 'en' ? 'Night name · Loft only' : '夜名 · 僅夜閣使用'}
               </Text>
               <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: 'rgba(245,226,196,0.55)' }}>
-                {lang === 'en' ? 'composed, never typed' : '只能組合不能輸入'}
+                {lang === 'en' ? 'changes each night' : '每晚自動換新'}
               </Text>
             </View>
-            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 22, color: '#e8a557', letterSpacing: 2, textAlign: 'center', marginTop: 10 }}>
-              {nightName}
+            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 24, color: '#e8a557', letterSpacing: 2, textAlign: 'center', marginTop: 12, marginBottom: 4 }}>
+              {loftName}
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {colors.slice(0, 8).map((c, i) => (
-                  <TouchableOpacity key={c} onPress={() => setColorIdx(i)}
-                    style={{ paddingVertical: 5, paddingHorizontal: 12, borderRadius: 999, backgroundColor: colorIdx === i ? '#e8a557' : 'rgba(245,226,196,0.06)', borderWidth: 0.5, borderColor: 'rgba(232,165,87,0.25)' }}>
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: colorIdx === i ? '#1f1014' : 'rgba(245,226,196,0.7)' }}>{c}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {adjs.slice(0, 8).map((a, i) => (
-                  <TouchableOpacity key={a} onPress={() => setAdjIdx(i)}
-                    style={{ paddingVertical: 5, paddingHorizontal: 12, borderRadius: 999, backgroundColor: adjIdx === i ? '#e8a557' : 'rgba(245,226,196,0.06)', borderWidth: 0.5, borderColor: 'rgba(232,165,87,0.25)' }}>
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: adjIdx === i ? '#1f1014' : 'rgba(245,226,196,0.7)' }}>{a}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+            <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: 'rgba(245,226,196,0.4)', textAlign: 'center' }}>
+              {lang === 'en' ? 'This is how the Loft sees you tonight.' : '這是今晚夜閣裡別人看到的你。'}
+            </Text>
           </View>
           </FadeInUp>
 
