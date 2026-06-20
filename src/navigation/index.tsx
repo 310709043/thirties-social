@@ -24,7 +24,7 @@ export type RootStackParamList = {
   Setup: undefined;
   Mood: undefined;
   Room: { roomKey: string; roomId?: string };
-  Match: { fromSeed: string; moodText: string; conversationId: string };
+  Match: { fromSeed: string; moodText: string; conversationId: string; isOperator?: boolean };
   Chat: { otherSeed: string; conversationId?: string };
   Safety: { reportedUserId?: string; conversationId?: string };
   Close: { conversationsCount?: number; peopleCount?: number } | undefined;

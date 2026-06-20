@@ -8,7 +8,7 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, SoftButton, FadeInUp } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore } from '../hooks/useAppStore';
+import { useAppStore, recordMatch, matchCostsWick } from '../hooks/useAppStore';
 import { trackPerson } from '../hooks/useAppStore';
 import { leaveMatchQueue } from '../lib/db';
 import { analytics } from '../lib/analytics';
@@ -18,7 +18,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Match'>;
 export default function MatchScreen({ navigation, route }: Props) {
   const { direction, lang, identityKind } = useAppStore();
   const p = DIRECTIONS[direction];
-  const { fromSeed: otherSeed, moodText, conversationId } = route.params;
+  const { fromSeed: otherSeed, moodText, conversationId, isOperator } = route.params;
   const cardScale = useRef(new Animated.Value(0.92)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const acceptPulse = useRef(new Animated.Value(1)).current;
@@ -75,6 +75,13 @@ export default function MatchScreen({ navigation, route }: Props) {
             </View>
           </FadeInUp>
 
+          {/* Reassurance — you stay in control; declining never costs */}
+          <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12.5, color: p.muted, textAlign: 'center', marginBottom: 12 }}>
+            {!isOperator && matchCostsWick()
+              ? (lang === 'en' ? 'Accepting costs 1 wick · leaving is always free' : '接受才花 1 燭芯 · 不喜歡直接離開，不收費')
+              : (lang === 'en' ? "Don't feel it? Just leave — no cost, no pressure." : '沒感覺？直接離開就好 — 不扣任何東西，沒有壓力。')}
+          </Text>
+
           {/* Actions */}
           <View style={styles.actions}>
             <FadeInUp delay={400} distance={10}>
@@ -83,6 +90,8 @@ export default function MatchScreen({ navigation, route }: Props) {
                   onPress={async () => {
                     await trackPerson();
                     analytics.matchAccept();
+                    // Charge only now, on accept (operator companion chats stay free).
+                    if (!isOperator) await recordMatch();
                     await leaveMatchQueue();
                     navigation.replace('Chat', { otherSeed, conversationId });
                   }}>

@@ -15,7 +15,7 @@ import {
 import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, recordMatch, matchCostsWick, MATCH_WICK_COST } from '../hooks/useAppStore';
+import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, MATCH_WICK_COST } from '../hooks/useAppStore';
 import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch } from '../lib/db';
 import { analytics } from '../lib/analytics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -112,14 +112,14 @@ export default function MoodScreen({ navigation }: Props) {
         clearInterval(retryId);
         hapticMedium();
         analytics.matchFound();
-        // Operator (companion) matches are always free — never charge a wick or
-        // consume a free match. Real matches charge per the free tier rules.
-        if (!(entry as any).isOperator) recordMatch();
+        // Charge moved to the accept step (MatchScreen) — seeing who it is and
+        // declining must be free, so women keep control before committing.
         setWaiting(false);
         navigation.push('Match', {
           fromSeed: entry.matchedSeed,
           moodText: entry.matchedMoodText ?? '',
           conversationId: entry.conversationId,
+          isOperator: !!(entry as any).isOperator,
         });
       }
     });
