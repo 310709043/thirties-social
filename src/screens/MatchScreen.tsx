@@ -21,10 +21,10 @@ export default function MatchScreen({ navigation, route }: Props) {
   const { fromSeed: otherSeed, moodText, conversationId, isOperator, otherGender, otherAge, otherTonightMode } = route.params;
   const genderLabel = otherGender === 'female' ? (lang === 'en' ? 'Woman' : '女生')
     : otherGender === 'male' ? (lang === 'en' ? 'Man' : '男生')
-    : otherGender === 'nonbinary' ? (lang === 'en' ? 'Non-binary' : '多元') : null;
+    : otherGender === 'nonbinary' ? (lang === 'en' ? 'Non-binary' : '非二元') : null;
   const aboutLine = [genderLabel, otherAge].filter(Boolean).join(' · ');
   const modeLabel = otherTonightMode === 'just_here' ? (lang === 'en' ? '🕯 Just here' : '🕯 只想待著')
-    : otherTonightMode === 'want_to_talk' ? (lang === 'en' ? '💬 想說說話' : '💬 Wants to talk')
+    : otherTonightMode === 'want_to_talk' ? (lang === 'en' ? '💬 Wants to talk' : '💬 想說說話')
     : otherTonightMode === 'open_to_more' ? (lang === 'en' ? '🌊 Open to more' : '🌊 願意靠近一點')
     : null;
   const cardScale = useRef(new Animated.Value(0.92)).current;

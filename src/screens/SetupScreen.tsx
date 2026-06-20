@@ -97,7 +97,8 @@ export default function SetupScreen({ navigation }: Props) {
   const handleDone = async () => {
     if (!ready) return;
     const genderMap: Record<string, Gender> = { f: 'female', m: 'male', x: 'nonbinary' };
-    const resolvedGender = genderMap[gender!] ?? 'nonbinary';
+    // Fallback to null (not nonbinary) so "no answer" is distinct from "chose nonbinary".
+    const resolvedGender = genderMap[gender!] ?? null;
     const resolvedRelationship = toSlug(MARRIAGE_ZH, MARRIAGE_EN, MARRIAGE_SLUGS, marriage);
     const resolvedSeeking = toSlugs(SEEKING_ZH, SEEKING_EN, SEEKING_SLUGS, seeking);
     const resolvedBoundary = toSlug(BOUNDARY_ZH, BOUNDARY_EN, BOUNDARY_SLUGS, boundary);

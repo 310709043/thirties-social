@@ -348,7 +348,7 @@ export default function LoftScreen({ navigation }: Props) {
 }
 
 function LoftInside({ lang, wicks, onBack, onEnter }: any) {
-  const { seed, identityKind } = useAppStore();
+  const { seed, identityKind, gender: myGender } = useAppStore();
   const myName = getLoftName(seed, lang);
   const [sessions, setSessions] = React.useState<DbLoftSession[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -357,8 +357,10 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const [responses, setResponses] = React.useState<DbRitualResponse[]>([]);
   const [ritualText, setRitualText] = React.useState('');
   const [posting, setPosting] = React.useState(false);
-  // Viewer's own filter — no forced opposite-gender; everyone chooses who to see.
-  const [genderF, setGenderF] = React.useState<'all' | 'female' | 'male' | 'nonbinary'>('all');
+  // Non-binary users default to seeing 'nonbinary' so they feel seen immediately;
+  // everyone else starts on 'all'. Any user can still change it freely.
+  const defaultGenderF = myGender === 'nonbinary' ? 'nonbinary' : 'all';
+  const [genderF, setGenderF] = React.useState<'all' | 'female' | 'male' | 'nonbinary'>(defaultGenderF);
   const [ageF, setAgeF] = React.useState<string>('all');
 
   React.useEffect(() => {
@@ -482,7 +484,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
           {/* Filter — you choose who to see (no forced opposite-gender) */}
           <View style={{ marginTop: 14, gap: 8 }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              {([['all', lang === 'en' ? 'Everyone' : '所有人'], ['female', lang === 'en' ? 'Women' : '女生'], ['male', lang === 'en' ? 'Men' : '男生'], ['nonbinary', lang === 'en' ? 'Non-binary' : '多元']] as const).map(([v, label]) => (
+              {([['all', lang === 'en' ? 'Everyone' : '所有人'], ['female', lang === 'en' ? 'Women' : '女生'], ['male', lang === 'en' ? 'Men' : '男生'], ['nonbinary', lang === 'en' ? 'Non-binary' : '非二元']] as const).map(([v, label]) => (
                 <TouchableOpacity key={v} onPress={() => setGenderF(v as any)}
                   style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 0.5,
                     backgroundColor: genderF === v ? 'rgba(232,165,87,0.18)' : 'rgba(245,226,196,0.04)',
