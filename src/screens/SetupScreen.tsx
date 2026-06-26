@@ -7,8 +7,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
-import { VaporBackground, GlassCard, Cap } from '../components/ui';
+import { VaporBackground, GlassCard, Cap, WickGlyph, FadeInUp } from '../components/ui';
 import { useAppStore, setSetupDone, setProfileFields, Gender } from '../hooks/useAppStore';
+
+// A quiet section heading that breaks the long form into a few breaths.
+function SectionTitle({ p, zh, en, lang }: { p: any; zh: string; en: string; lang: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 30, marginBottom: 2 }}>
+      <View style={{ width: 5, height: 5, borderRadius: 5, backgroundColor: p.accent }} />
+      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, letterSpacing: 0.5 }}>
+        {lang === 'en' ? en : zh}
+      </Text>
+      <View style={{ flex: 1, height: 0.5, backgroundColor: p.line }} />
+    </View>
+  );
+}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Setup'>;
 
@@ -70,7 +83,11 @@ export default function SetupScreen({ navigation }: Props) {
   const [region, setRegion] = useState<string | null>(null);
   const [line, setLine] = useState('');
 
-  const ready = !!gender && !!age && !!marriage && seeking.length > 0 && !!boundary;
+  // The five required answers — track completion for a live progress hint.
+  const requiredDone = [!!gender, !!age, !!marriage, seeking.length > 0, !!boundary];
+  const doneCount = requiredDone.filter(Boolean).length;
+  const ready = doneCount === requiredDone.length;
+  const remaining = requiredDone.length - doneCount;
 
   // Canonical slug mappings (same index order as the chip options)
   const MARRIAGE_ZH = ['穩定交往中', '同居', '訂婚', '已婚', '已婚·分居中', '偽單身', '開放關係', '對象是已婚的', '單身但說不清'];
@@ -134,18 +151,34 @@ export default function SetupScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <Cap p={p}>{zh ? '最後一步' : 'Last step'}</Cap>
-          <Text style={[styles.title, { color: p.ink }]}>
-            {zh ? '讓我多認識你一點' : 'Let me know you a little'}
-          </Text>
-          <Text style={[styles.sub, { color: p.muted }]}>
-            {zh
-              ? '這些只是為了幫你遇到懂這種夜晚的人——沒有對錯，也不會公開。只有你允許時，夜閣才看得到一部分。'
-              : 'Just so you can meet people who understand your kind of night — no right or wrong, never public. Only the Loft sees a part, and only what you allow.'}
-          </Text>
+          <FadeInUp delay={0} distance={8}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Cap p={p}>{zh ? '最後一步' : 'Last step'}</Cap>
+              <WickGlyph size={16} color={p.accent} />
+            </View>
+            <Text style={[styles.title, { color: p.ink }]}>
+              {zh ? '讓我多認識你一點' : 'Let me know you a little'}
+            </Text>
+            <Text style={[styles.sub, { color: p.muted }]}>
+              {zh
+                ? '這些只是為了幫你遇到懂這種夜晚的人——沒有對錯，也不會公開。只有你允許時，夜閣才看得到一部分。'
+                : 'Just so you can meet people who understand your kind of night — no right or wrong, never public. Only the Loft sees a part, and only what you allow.'}
+            </Text>
+            {/* Live progress — five soft dots that fill as required answers land */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 16 }}>
+              {requiredDone.map((d, i) => (
+                <View key={i} style={{ width: d ? 22 : 14, height: 4, borderRadius: 4, backgroundColor: d ? p.accent : p.line }} />
+              ))}
+              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: p.muted, marginLeft: 4 }}>
+                {doneCount}/{requiredDone.length}
+              </Text>
+            </View>
+          </FadeInUp>
+
+          <SectionTitle p={p} zh="關於你" en="About you" lang={lang} />
 
           {/* Gender */}
-          <View style={{ marginTop: 24 }}>
+          <View style={{ marginTop: 16 }}>
             <Cap p={p}>{zh ? '我是' : 'I am'}</Cap>
             <View style={{ marginTop: 10, flexDirection: 'row', gap: 8 }}>
               {[
@@ -157,8 +190,9 @@ export default function SetupScreen({ navigation }: Props) {
                   style={[styles.genderCard, {
                     backgroundColor: gender === g.v ? p.accentSoft : p.surface,
                     borderColor: gender === g.v ? p.accent : p.line,
+                    borderWidth: gender === g.v ? 1.2 : 1,
                   }]}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: gender === g.v ? p.accent : p.ink, fontWeight: '500', textAlign: 'center' }}>
                     {zh ? g.zh : g.en}
                   </Text>
                 </TouchableOpacity>
@@ -169,6 +203,8 @@ export default function SetupScreen({ navigation }: Props) {
           <ChipRow p={p} label={zh ? '年齡' : 'Age'} alt={zh ? 'age' : '年齡'}
             options={['18−24', '25−30', '31−35', '36−40', '41−45', '46+']}
             value={age} onPick={setAge} />
+
+          <SectionTitle p={p} zh="你的關係" en="Your relationship" lang={lang} />
 
           <ChipRow p={p} label={zh ? '我的感情狀態' : 'My relationship'} alt={zh ? 'status' : '狀態'}
             options={zh
@@ -181,6 +217,8 @@ export default function SetupScreen({ navigation }: Props) {
               ? ['無性了', '喪偶式', '還有愛但寂寞', '熱戀期過了', '正在想要不要離開', '說不清']
               : ['sexless', 'roommates', 'love remains, lonely', 'past the honeymoon', 'thinking of leaving', 'hard to say']}
             value={shape} onPick={setShape} />
+
+          <SectionTitle p={p} zh="你今晚想要的" en="What you're here for" lang={lang} />
 
           <ChipRow p={p} label={zh ? '我來找' : 'I am here for'} alt={zh ? '可複選' : 'multi'} multi
             options={zh
@@ -223,16 +261,20 @@ export default function SetupScreen({ navigation }: Props) {
 
           <TouchableOpacity
             onPress={handleDone}
+            disabled={!ready}
             activeOpacity={ready ? 0.85 : 1}
             style={[styles.doneBtn, {
-              backgroundColor: ready ? p.ink : p.line,
-              opacity: ready ? 1 : 0.5,
+              backgroundColor: ready ? p.ink : p.surface,
+              borderWidth: ready ? 0 : 0.5,
+              borderColor: p.line,
             }]}>
             <Text style={{
-              fontFamily: 'NotoSerifTC-Regular', fontSize: 16, fontWeight: '500',
+              fontFamily: 'NotoSerifTC-Regular', fontSize: 16, fontWeight: '500', letterSpacing: 1,
               color: ready ? (p.dark ? '#1a1530' : '#fff') : p.muted,
             }}>
-              {zh ? '開始今晚' : 'Begin tonight'}
+              {ready
+                ? (zh ? '開始今晚' : 'Begin tonight')
+                : (zh ? `還差 ${remaining} 項` : `${remaining} more to go`)}
             </Text>
           </TouchableOpacity>
         </ScrollView>
