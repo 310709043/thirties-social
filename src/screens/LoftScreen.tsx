@@ -8,7 +8,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber } from '../components/ui';
+import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber, PressableScale } from '../components/ui';
 import { useAppStore, canEnterLoft, recordLoftEntry, loftEntryIsFreeTrial, getTier } from '../hooks/useAppStore';
 import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, postRitualResponse, subscribeToTonightRitual, DbRitualResponse } from '../lib/db';
 import { getTonightRitual } from '../lib/rituals';
@@ -514,33 +514,47 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
             {loading ? (
               <ActivityIndicator color={L.candle} style={{ marginTop: 32 }} />
             ) : tonight.length === 0 ? (
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: L.muted, textAlign: 'center', marginTop: 32 }}>
-                {lang === 'en' ? 'No one is in the Loft tonight' : '今晚還沒有人'}
-              </Text>
+              <View style={{ alignItems: 'center', marginTop: 40, gap: 14 }}>
+                <Flame size={34} />
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: L.ink, textAlign: 'center', letterSpacing: 1 }}>
+                  {lang === 'en' ? 'No one is here yet tonight' : '今晚還沒有人到'}
+                </Text>
+                <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12.5, color: L.muted, textAlign: 'center', lineHeight: 20, maxWidth: 240 }}>
+                  {lang === 'en' ? 'Stay a while — the room fills as the night deepens.' : '再待一會兒 — 夜越深，這裡的人越多。'}
+                </Text>
+              </View>
             ) : (
               tonight.map(m => (
-                <TouchableOpacity key={m.seed} onPress={() => handlePickPerson(m.session)} activeOpacity={0.85}
-                  disabled={connecting === m.seed}
-                  style={[styles.loftCard, { backgroundColor: 'rgba(245,226,196,0.04)', borderColor: 'rgba(232,165,87,0.18)' }]}>
-                  {/* Veiled portrait */}
-                  <View style={{ width: 60, height: 80, borderRadius: 10, backgroundColor: '#3a2028', overflow: 'hidden', flexShrink: 0 }}>
-                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.45, backgroundColor: '#7a3a4a' }} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: L.ink, lineHeight: 24, letterSpacing: 0.5 }}>
-                      {lang === 'en' ? m.en : m.zh}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                      <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, letterSpacing: 1 }}>
-                        {lang === 'en' ? m.who_en : m.who_zh}
-                      </Text>
-                      <Text style={{ color: L.muted, opacity: 0.4 }}>·</Text>
-                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
-                        ● {lang === 'en' ? 'open' : '門開'}
-                      </Text>
+                <PressableScale key={m.seed} onPress={() => handlePickPerson(m.session)}
+                  disabled={connecting === m.seed}>
+                  <View style={[styles.loftCard, { backgroundColor: 'rgba(245,226,196,0.04)', borderColor: 'rgba(232,165,87,0.18)' }]}>
+                    {/* Veiled portrait — warm candlelit gloom with a faint figure */}
+                    <View style={{ width: 60, height: 80, borderRadius: 12, overflow: 'hidden', flexShrink: 0, borderWidth: 0.5, borderColor: 'rgba(232,165,87,0.2)' }}>
+                      <LinearGradient colors={['#5a2f3a', '#3a1f29', '#241318']} start={{ x: 0.3, y: 0 }} end={{ x: 0.7, y: 1 }}
+                        style={StyleSheet.absoluteFill} />
+                      {/* faint head-and-shoulders silhouette behind the veil */}
+                      <View style={{ position: 'absolute', top: 16, alignSelf: 'center', width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(245,226,196,0.10)' }} />
+                      <View style={{ position: 'absolute', bottom: -6, alignSelf: 'center', width: 44, height: 34, borderRadius: 22, backgroundColor: 'rgba(245,226,196,0.08)' }} />
+                      {/* candle glow at the base */}
+                      <View style={{ position: 'absolute', bottom: 6, alignSelf: 'center', width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(232,165,87,0.28)' }} />
                     </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: L.ink, lineHeight: 24, letterSpacing: 0.5 }}>
+                        {lang === 'en' ? m.en : m.zh}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                        <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, letterSpacing: 1 }}>
+                          {lang === 'en' ? m.who_en : m.who_zh}
+                        </Text>
+                        <Text style={{ color: L.muted, opacity: 0.4 }}>·</Text>
+                        <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
+                          ● {lang === 'en' ? 'open' : '門開'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ color: L.candle, fontSize: 18, opacity: 0.5, alignSelf: 'center' }}>›</Text>
                   </View>
-                </TouchableOpacity>
+                </PressableScale>
               ))
             )}
           </ScrollView>
