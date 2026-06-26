@@ -8,7 +8,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t } from '../lib/copy';
-import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, FadeInUp } from '../components/ui';
+import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, FadeInUp, TypingIndicator } from '../components/ui';
 import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
@@ -198,6 +198,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           {/* COUNTDOWN HEADER */}
           <View style={[styles.header, {
             backgroundColor: p.dark ? 'rgba(13,18,36,0.92)' : 'rgba(255,255,255,0.75)',
+            borderBottomWidth: 0.5, borderBottomColor: p.line,
           }]}>
             {/* Back */}
             <View style={styles.headerRow}>
@@ -229,7 +230,10 @@ export default function ChatScreen({ navigation, route }: Props) {
             {/* Countdown bar */}
             <View style={styles.countdown}>
               <View style={styles.countdownRow}>
-                <Cap p={p}>{t('chatRemaining', lang)}</Cap>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                  <View style={{ width: 5, height: 5, borderRadius: 5, backgroundColor: remaining <= 60 ? p.danger : p.accent }} />
+                  <Cap p={p}>{t('chatRemaining', lang)}</Cap>
+                </View>
                 <Text style={[styles.timer, { color: remaining <= 60 ? p.danger : p.ink }]}>
                   {mm}<Text style={{ opacity: 0.4 }}>:</Text>{ss}
                 </Text>
@@ -270,9 +274,24 @@ export default function ChatScreen({ navigation, route }: Props) {
             </Text>
 
             {displayMessages.length === 0 && (
-              <Text style={[styles.openNote, { color: p.muted, marginTop: 40, textAlign: 'center' }]}>
-                {lang === 'en' ? 'say something first. they can hear you.' : '\u5148\u8AAA\u9EDE\u4EC0\u9EBC\u3002\u5C0D\u65B9\u807D\u5F97\u5230\u3002'}
-              </Text>
+              <FadeInUp delay={120} distance={10}>
+                <View style={styles.emptyState}>
+                  {/* two souls just met \u2014 facing rings */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
+                    <Identity kind={identityKind} seed={seed} size={34} palette={p} lang={lang} trust={0.3} />
+                    <View style={{ width: 26, height: 0.5, backgroundColor: p.line, marginHorizontal: -2 }} />
+                    <Identity kind={identityKind} seed={otherSeed} size={34} palette={p} lang={lang} trust={0.2} />
+                  </View>
+                  <Text style={[styles.emptyTitle, { color: p.ink }]}>
+                    {lang === 'en' ? 'You found each other.' : '\u4F60\u5011\u9047\u898B\u4E86\u5F7C\u6B64\u3002'}
+                  </Text>
+                  <Text style={[styles.emptyBody, { color: p.muted }]}>
+                    {lang === 'en'
+                      ? 'Say something first \u2014 they can hear you. Nothing here is kept.'
+                      : '\u5148\u958B\u53E3\u8AAA\u9EDE\u4EC0\u9EBC\uFF0C\u5C0D\u65B9\u807D\u5F97\u5230\u3002\u9019\u88E1\u7559\u4E0D\u4E0B\u4EFB\u4F55\u6771\u897F\u3002'}
+                  </Text>
+                </View>
+              </FadeInUp>
             )}
 
             {displayMessages.map((m, i) => (
@@ -289,10 +308,8 @@ export default function ChatScreen({ navigation, route }: Props) {
           {otherTyping && (
             <View style={styles.typingRow}>
               <Identity kind={identityKind} seed={otherSeed} size={20} palette={p} lang={lang} trust={0.25} />
-              <View style={[styles.typingBubble, { backgroundColor: p.surface, borderColor: p.line }]}>
-                {[0, 1, 2].map(i => (
-                  <View key={i} style={[styles.typingDot, { backgroundColor: p.muted }]} />
-                ))}
+              <View style={[styles.typingBubble, { backgroundColor: p.surface, borderColor: p.line, borderBottomLeftRadius: 6 }]}>
+                <TypingIndicator color={p.muted} size={5} />
               </View>
             </View>
           )}
@@ -505,8 +522,9 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId }: any) {
     <View style={[
       styles.bubble,
       isMe
-        ? { backgroundColor: p.accent, borderWidth: 0 }
-        : { backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line },
+        ? { backgroundColor: p.accent, borderWidth: 0, borderBottomRightRadius: 7 }
+        : { backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line, borderBottomLeftRadius: 7 },
+      { shadowColor: '#000', shadowOpacity: p.dark ? 0.18 : 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
     ]}>
       <Text style={[
         styles.bubbleText,
@@ -539,12 +557,14 @@ const styles = StyleSheet.create({
   dissolveNote:   { fontFamily: 'EBGaramond-Italic', fontSize: 11, textAlign: 'center', opacity: 0.7 },
   messages:       { flex: 1 },
   openNote:       { fontFamily: 'EBGaramond-Italic', fontSize: 11, textAlign: 'center', opacity: 0.7, marginBottom: 6 },
+  emptyState:     { alignItems: 'center', paddingTop: 64, paddingHorizontal: 20 },
+  emptyTitle:     { fontFamily: 'NotoSerifTC-Light', fontSize: 21, letterSpacing: 1, textAlign: 'center' },
+  emptyBody:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5, lineHeight: 23, textAlign: 'center', marginTop: 10, maxWidth: 260 },
   bubbleRow:      { flexDirection: 'row' },
   bubble:         { maxWidth: '78%', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 22 },
   bubbleText:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 24 },
   typingRow:      { flexDirection: 'row', alignItems: 'flex-end', gap: 6, opacity: 0.7, marginTop: 4 },
-  typingBubble:   { flexDirection: 'row', gap: 4, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16, borderWidth: 0.5 },
-  typingDot:      { width: 5, height: 5, borderRadius: 5 },
+  typingBubble:   { borderRadius: 16, borderWidth: 0.5, overflow: 'hidden' },
   composer:       { padding: 4, paddingHorizontal: 18, paddingBottom: 18, gap: 8 },
   input:          { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 15, paddingHorizontal: 14, paddingVertical: 12 },
   sendBtn:        { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
