@@ -30,12 +30,21 @@ export default function MatchScreen({ navigation, route }: Props) {
   const cardScale = useRef(new Animated.Value(0.92)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const acceptPulse = useRef(new Animated.Value(1)).current;
+  const haloPulse = useRef(new Animated.Value(0.6)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.spring(cardScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
       Animated.timing(cardOpacity, { toValue: 1, duration: 400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
     ]).start();
+
+    // A slow glow behind the stranger's sigil — presence, warmth, "someone is here".
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(haloPulse, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(haloPulse, { toValue: 0.6, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    ).start();
 
     Animated.loop(
       Animated.sequence([
@@ -61,8 +70,15 @@ export default function MatchScreen({ navigation, route }: Props) {
           <Animated.View style={{ transform: [{ scale: cardScale }], opacity: cardOpacity }}>
             <GlassCard p={p} padding={28} radius={32} style={styles.card}>
               <View style={styles.identityBlock}>
-                <Identity kind={identityKind === 'character' ? 'sigil' : identityKind}
-                  seed={otherSeed} size={88} palette={p} lang={lang} trust={0.2} />
+                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                  <Animated.View style={{
+                    position: 'absolute', width: 132, height: 132, borderRadius: 66,
+                    backgroundColor: p.accent, opacity: haloPulse.interpolate({ inputRange: [0.6, 1], outputRange: [0.08, 0.2] }),
+                    transform: [{ scale: haloPulse }],
+                  }} />
+                  <Identity kind={identityKind === 'character' ? 'sigil' : identityKind}
+                    seed={otherSeed} size={88} palette={p} lang={lang} trust={0.2} />
+                </View>
                 <ColorAdjLabel seed={otherSeed} lang={lang} palette={p} />
                 {aboutLine ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, backgroundColor: p.accentSoft }}>
