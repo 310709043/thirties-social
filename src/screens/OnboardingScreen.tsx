@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Circle, Rect, Line } from 'react-native-svg';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
@@ -104,11 +105,11 @@ export default function OnboardingScreen({ navigation }: Props) {
           }]}>
             {!isPreview ? (
               <>
-                <View style={styles.mark}>
+                <BreathingMark style={styles.mark}>
                   {step === 0 && <IntroMark1 color={p.ink} accent={p.accent} />}
-                  {step === 1 && <IntroMark2 color={p.ink} />}
+                  {step === 1 && <IntroMark2 color={p.ink} accent={p.accent} />}
                   {step === 2 && <IntroMark3 color={p.ink} accent={p.accent} />}
-                </View>
+                </BreathingMark>
                 <Text style={[styles.title, { color: p.ink }]}>{t(STEPS[step].title, lang)}</Text>
                 <Text style={[styles.titleAlt, { color: p.ink }]}>{tAlt(STEPS[step].title, lang)}</Text>
                 <Text style={[styles.body, { color: p.inkSoft }]}>{t(STEPS[step].body, lang)}</Text>
@@ -170,34 +171,67 @@ function IdentityPreview({ p, lang, identityKind, seed }: any) {
   );
 }
 
+// A slow, organic breath behind each step's mark — gives the intro stillness
+// and life instead of a static icon.
+function BreathingMark({ children, style }: { children: React.ReactNode; style?: any }) {
+  const breath = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(breath, { toValue: 1, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    ).start();
+  }, []);
+  const scale = breath.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1.03] });
+  const opacity = breath.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] });
+  return <Animated.View style={[style, { transform: [{ scale }], opacity }]}>{children}</Animated.View>;
+}
+
+// Step 1 — a self emerging from anonymity: a quiet ember inside soft rings.
 function IntroMark1({ color, accent }: { color: string; accent: string }) {
   return (
-    <View style={{ width: 80, height: 80, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ width: 80, height: 80, borderRadius: 40, borderWidth: 1, borderColor: color, opacity: 0.15, position: 'absolute' }} />
-      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: accent, opacity: 0.6, position: 'absolute' }} />
-      <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: color, opacity: 0.85 }} />
-    </View>
+    <Svg width={84} height={84} viewBox="0 0 84 84">
+      <Circle cx={42} cy={42} r={38} stroke={color} strokeOpacity={0.1} strokeWidth={1} fill="none" />
+      <Circle cx={42} cy={42} r={27} stroke={color} strokeOpacity={0.16} strokeWidth={1} fill="none" />
+      <Circle cx={42} cy={42} r={16} fill={accent} fillOpacity={0.18} />
+      <Circle cx={42} cy={42} r={7} fill={accent} fillOpacity={0.9} />
+    </Svg>
   );
 }
-function IntroMark2({ color }: { color: string }) {
+
+// Step 2 — say it, then let it fade: lines of words dissolving downward.
+function IntroMark2({ color, accent }: { color: string; accent: string }) {
+  const lines = [
+    { y: 22, w: 52, op: 0.7,  c: accent },
+    { y: 34, w: 60, op: 0.5,  c: color },
+    { y: 46, w: 44, op: 0.32, c: color },
+    { y: 58, w: 54, op: 0.16, c: color },
+    { y: 70, w: 30, op: 0.06, c: color },
+  ];
   return (
-    <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-      {[0.55, 0.43, 0.31, 0.19, 0.07].map((op, i) => (
-        <View key={i} style={{ width: 18, height: 22, borderRadius: 3, backgroundColor: color, opacity: op }} />
+    <Svg width={84} height={84} viewBox="0 0 84 84">
+      {lines.map((l, i) => (
+        <Rect key={i} x={(84 - l.w) / 2} y={l.y} width={l.w} height={3.4} rx={1.7}
+          fill={l.c} fillOpacity={l.op} />
       ))}
-    </View>
+    </Svg>
   );
 }
+
+// Step 3 — everyone is the same: three equal presences side by side.
 function IntroMark3({ color, accent }: { color: string; accent: string }) {
   return (
-    <View style={{ flexDirection: 'row', gap: 24, alignItems: 'center' }}>
-      <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: color, opacity: 0.4, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: color, opacity: 0.7 }} />
-      </View>
-      <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: color, opacity: 0.4, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: accent, opacity: 0.85 }} />
-      </View>
-    </View>
+    <Svg width={96} height={84} viewBox="0 0 96 84">
+      {[20, 48, 76].map((cx, i) => (
+        <Circle key={cx} cx={cx} cy={42} r={13} stroke={color} strokeOpacity={0.35} strokeWidth={1} fill="none" />
+      ))}
+      {[20, 48, 76].map((cx, i) => (
+        <Circle key={`d${cx}`} cx={cx} cy={42} r={5} fill={i === 1 ? accent : color} fillOpacity={i === 1 ? 0.9 : 0.6} />
+      ))}
+      <Line x1={33} y1={42} x2={35} y2={42} stroke={color} strokeOpacity={0.2} strokeWidth={1} />
+      <Line x1={61} y1={42} x2={63} y2={42} stroke={color} strokeOpacity={0.2} strokeWidth={1} />
+    </Svg>
   );
 }
 
