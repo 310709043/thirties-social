@@ -47,8 +47,10 @@ export interface DbUser {
   gender: string | null;
   ageBracket: string | null;
   relationshipStatus: string | null;
+  relationshipShape: string | null;
   seeking: string[];
   boundary: string | null;
+  freeTimes: string[];
   region: string | null;
   quote: string | null;
   loftVisible: boolean;
@@ -88,8 +90,10 @@ export async function upsertUser(params: {
       gender: null,
       ageBracket: null,
       relationshipStatus: null,
+      relationshipShape: null,
       seeking: [],
       boundary: null,
+      freeTimes: [],
       region: null,
       quote: null,
       loftVisible: true,
@@ -610,12 +614,16 @@ export async function enterLoft(nightName: string): Promise<{
 
   const myGender = userSnap.exists() ? ((userSnap.data() as any).gender ?? null) : null;
   const myAge = userSnap.exists() ? ((userSnap.data() as any).ageBracket ?? null) : null;
+  // Respect the user's "show me in the Loft" privacy choice (default visible).
+  // Stamped at entry; an invisible visitor can still browse but isn't listed.
+  const myVisible = userSnap.exists() ? ((userSnap.data() as any).loftVisible !== false) : true;
   const ref = await addDoc(collection(db, 'loftSessions'), {
     userId: uid,
     nightName,
     nightDate: tonight,
     gender: myGender,
     ageBracket: myAge,
+    visible: myVisible,
     enteredAt: serverTimestamp(),
     leftAt: null,
   });
@@ -631,6 +639,7 @@ export interface DbLoftSession {
   nightDate: string;
   gender?: string | null;
   ageBracket?: string | null;
+  visible?: boolean;
   enteredAt: any;
 }
 
@@ -652,7 +661,7 @@ export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
   const myBlocked: string[] = myUserSnap?.exists() ? (myUserSnap.data().blockedUsers ?? []) : [];
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }) as DbLoftSession)
-    .filter(s => !(s as any).leftAt && s.userId !== uid && !myBlocked.includes(s.userId));
+    .filter(s => !(s as any).leftAt && (s as any).visible !== false && s.userId !== uid && !myBlocked.includes(s.userId));
 }
 
 // ── Loft Ritual (今夜之題) ────────────────────────────────

@@ -7,7 +7,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { VaporBackground, GlassCard, Cap, Toggle, Logo, FadeInUp } from '../components/ui';
+import { VaporBackground, GlassCard, Cap, Toggle, Logo, FadeInUp, ScreenHeader } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setLang, setAutoFilter, setSlowMode } from '../hooks/useAppStore';
@@ -28,13 +28,8 @@ export default function SettingsScreen({ navigation }: Props) {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Top bar */}
           <FadeInUp delay={0} distance={6}>
-            <View style={styles.topBar}>
-              <TouchableOpacity onPress={() => navigation.goBack()}
-                style={[styles.backBtn, { backgroundColor: p.surface, borderColor: p.line }]}>
-                <Text style={{ color: p.muted, fontSize: 18 }}>‹</Text>
-              </TouchableOpacity>
-              <Cap p={p}>{t('setTitle', lang)} · {tAlt('setTitle', lang)}</Cap>
-            </View>
+            <ScreenHeader p={p} onBack={() => navigation.goBack()}
+              title={t('setTitle', lang)} subtitle={tAlt('setTitle', lang)} />
           </FadeInUp>
 
           {/* Logo */}
@@ -150,7 +145,7 @@ export default function SettingsScreen({ navigation }: Props) {
                   alt={lang === 'en' ? '\u96B1\u79C1\u6B0A\u653F\u7B56' : 'Privacy Policy'}
                   control={
                     <TouchableOpacity onPress={() => Linking.openURL('https://thirties-landing.vercel.app/privacy')}>
-                      <Text style={{ color: p.muted, fontSize: 18 }}>\u203A</Text>
+                      <Text style={{ color: p.muted, fontSize: 18 }}>›</Text>
                     </TouchableOpacity>
                   }
                 />

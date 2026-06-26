@@ -88,9 +88,9 @@ export default function CloseScreen({ navigation, route }: Props) {
                 </View>
                 <View style={[styles.statDivider, { backgroundColor: p.line }]} />
                 <View style={styles.statCell}>
-                  <Text style={[styles.statNum, { color: p.ink }]}>{vigil ? '+5' : '+2'}</Text>
+                  <Text style={[styles.statNum, { color: p.ink }]}>{wicks}</Text>
                   <Text style={[styles.statLabel, { color: p.muted }]}>
-                    {lang === 'en' ? 'wicks earned' : '獲得燭芯'}
+                    {lang === 'en' ? 'wicks left' : '剩餘燭芯'}
                   </Text>
                 </View>
               </View>

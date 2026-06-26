@@ -6,21 +6,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
-import { VaporBackground, GlassCard, Cap, WickGlyph, PhotoVeil, FadeInUp } from '../components/ui';
+import { VaporBackground, GlassCard, Cap, WickGlyph, PhotoVeil, FadeInUp, ScreenHeader } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, setIdentityKind, getAvailableIdentityKinds } from '../hooks/useAppStore';
+import { useAppStore, setIdentityKind, getAvailableIdentityKinds, setLoftVisible } from '../hooks/useAppStore';
 import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, IdentityKind, getLoftName } from '../lib/identity';
 import { pickImage, uploadAlbumPhoto } from '../lib/photos';
 import { getAlbum, addAlbumPhoto, removeAlbumPhoto, AlbumPhoto } from '../lib/db';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
-
-const DIARY = [
-  { d: 'Mon', zh: '今天沒什麼特別的。', en: 'Nothing special today.' },
-  { d: 'Tue', zh: '又夢到那個地方了。', en: 'Dreamt of that place again.' },
-  { d: 'Wed', zh: '沉默有時候是一種溫柔。', en: 'Silence can be a kind of tenderness.' },
-];
 
 // Reverse-map DB slugs to display labels
 const STATUS_MAP: Record<string, { zh: string; en: string }> = {
@@ -49,15 +43,28 @@ const BOUNDARY_MAP: Record<string, { zh: string; en: string }> = {
   depends:       { zh: '看感覺', en: 'depends' },
 };
 
+const SHAPE_MAP: Record<string, { zh: string; en: string }> = {
+  sexless:               { zh: '無性了',         en: 'sexless' },
+  roommates:             { zh: '喪偶式',         en: 'like roommates' },
+  'love-lonely':         { zh: '還有愛但寂寞',   en: 'love remains, lonely' },
+  'post-honeymoon':      { zh: '熱戀期過了',     en: 'past the honeymoon' },
+  'considering-leaving': { zh: '正在想要不要離開', en: 'thinking of leaving' },
+  unclear:               { zh: '說不清',         en: 'hard to say' },
+};
+
+const FREETIME_MAP: Record<string, { zh: string; en: string }> = {
+  'late-night':   { zh: '深夜',     en: 'late night' },
+  afternoon:      { zh: '午後',     en: 'afternoons' },
+  'office-hours': { zh: '上班時間', en: 'office hours' },
+  'in-between':   { zh: '碎片時間', en: 'in-between' },
+};
+
 export default function ProfileScreen({ navigation }: Props) {
   const {
     direction, lang, identityKind, seed, wicks, vigil,
-    gender, ageBracket, relationshipStatus, seeking, boundary, region, quote,
+    gender, ageBracket, relationshipStatus, relationshipShape, seeking, boundary, freeTimes, region, quote, loftVisible,
   } = useAppStore();
   const p = DIRECTIONS[direction];
-  const [loftVisible, setLoftVisible] = useState(true);
-  const [colorIdx, setColorIdx] = useState(0);
-  const [adjIdx, setAdjIdx] = useState(0);
   const [album, setAlbum] = useState<AlbumPhoto[]>([]);
   const [uploading, setUploading] = useState(false);
   useEffect(() => { getAlbum().then(setAlbum); }, []);
@@ -100,10 +107,13 @@ export default function ProfileScreen({ navigation }: Props) {
   const boundaryLabel = boundary && BOUNDARY_MAP[boundary]
     ? (lang === 'en' ? BOUNDARY_MAP[boundary].en : BOUNDARY_MAP[boundary].zh)
     : null;
+  const shapeLabel = relationshipShape && SHAPE_MAP[relationshipShape]
+    ? (lang === 'en' ? SHAPE_MAP[relationshipShape].en : SHAPE_MAP[relationshipShape].zh)
+    : null;
+  const freeTimeLabels = (freeTimes ?? []).map(f =>
+    FREETIME_MAP[f] ? (lang === 'en' ? FREETIME_MAP[f].en : FREETIME_MAP[f].zh) : f
+  );
 
-  const colors = lang === 'en' ? COLOR_NAMES_EN : COLOR_NAMES_ZH;
-  const adjs = lang === 'en' ? ADJ_EN : ADJ_ZH;
-  const nightName = lang === 'en' ? `${colors[colorIdx]} ${adjs[adjIdx]}` : `${colors[colorIdx]}的${adjs[adjIdx]}`;
   // The Loft now shows an auto-generated poetic name (seed-based, changes nightly);
   // this is the real name others see, so the profile shows it read-only.
   const loftName = getLoftName(seed, lang);
@@ -114,17 +124,15 @@ export default function ProfileScreen({ navigation }: Props) {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Top bar */}
           <FadeInUp delay={0} distance={6}>
-            <View style={styles.topBar}>
-              <TouchableOpacity onPress={() => navigation.goBack()}
-                style={[styles.backBtn, { backgroundColor: p.surface, borderColor: p.line }]}>
-                <Text style={{ color: p.muted, fontSize: 18 }}>‹</Text>
-              </TouchableOpacity>
-              <Cap p={p}>{lang === 'en' ? 'My page' : '我的頁面'}</Cap>
-              <TouchableOpacity onPress={() => navigation.push('Settings')}
-                style={[styles.backBtn, { backgroundColor: p.surface, borderColor: p.line }]}>
-                <Text style={{ color: p.muted, fontSize: 14 }}>⚙</Text>
-              </TouchableOpacity>
-            </View>
+            <ScreenHeader p={p} onBack={() => navigation.goBack()}
+              title={lang === 'en' ? 'My page' : '我的頁面'}
+              right={
+                <TouchableOpacity onPress={() => navigation.push('Settings')}
+                  style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: p.muted, fontSize: 15 }}>⚙</Text>
+                </TouchableOpacity>
+              }
+            />
           </FadeInUp>
 
           {/* Identity + wicks card */}
@@ -206,7 +214,8 @@ export default function ProfileScreen({ navigation }: Props) {
               </Text>
             </View>
             <TouchableOpacity onPress={() => setLoftVisible(!loftVisible)}
-              style={{ width: 40, height: 24, borderRadius: 24, backgroundColor: loftVisible ? '#e8a557' : 'rgba(245,226,196,0.2)', justifyContent: 'center' }}>
+              style={{ width: 40, height: 24, borderRadius: 24, backgroundColor: loftVisible ? '#e8a557' : 'rgba(245,226,196,0.2)', justifyContent: 'center' }}
+              activeOpacity={0.8}>
               <View style={{ position: 'absolute', left: loftVisible ? 18 : 2, top: 2, width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' }} />
             </TouchableOpacity>
           </View>
@@ -216,15 +225,12 @@ export default function ProfileScreen({ navigation }: Props) {
           <FadeInUp delay={320} distance={10}>
             <View style={styles.profileSection}>
             <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Diary · 日記' : '日記 · Diary'}</Cap>
-            <GlassCard p={p} padding={0} radius={18}>
-              {DIARY.map((d, i) => (
-                <View key={i} style={[styles.diaryRow, i > 0 && { borderTopWidth: 0.5, borderTopColor: p.line }]}>
-                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, flexShrink: 0 }}>{d.d}</Text>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, lineHeight: 22, flex: 1 }}>
-                    {lang === 'en' ? d.en : d.zh}
-                  </Text>
-                </View>
-              ))}
+            <GlassCard p={p} padding={20} radius={18}>
+              <Text style={{ fontFamily: lang === 'en' ? 'EBGaramond-Italic' : 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center', lineHeight: 22 }}>
+                {lang === 'en'
+                  ? 'Your late-night notes will live here. Coming soon.'
+                  : '你深夜的隻字片語會留在這裡。即將開放。'}
+              </Text>
             </GlassCard>
           </View>
           </FadeInUp>
@@ -276,6 +282,11 @@ export default function ProfileScreen({ navigation }: Props) {
                   {statusLabel}
                 </Text>
               </View>
+              {shapeLabel && (
+                <View style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.accentSoft, borderWidth: 0.5, borderColor: p.accent + '40' }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>{shapeLabel}</Text>
+                </View>
+              )}
               {boundaryLabel && (
                 <View style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.accentSoft, borderWidth: 0.5, borderColor: p.accent + '40' }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>{boundaryLabel}</Text>
@@ -287,6 +298,20 @@ export default function ProfileScreen({ navigation }: Props) {
                 </View>
               ))}
             </View>
+            {freeTimeLabels.length > 0 && (
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: p.muted, marginBottom: 8 }}>
+                  {lang === 'en' ? 'Usually free' : '通常有空'}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {freeTimeLabels.map(it => (
+                    <View key={it} style={{ paddingVertical: 7, paddingHorizontal: 13, borderRadius: 999, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line }}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, color: p.ink }}>{it}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
           </View>
           </FadeInUp>
 

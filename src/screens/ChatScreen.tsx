@@ -24,7 +24,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 const TOTAL_SECONDS = 30 * 60;
 
 export default function ChatScreen({ navigation, route }: Props) {
-  const { seed, direction, lang, identityKind, wicks } = useAppStore();
+  const { seed, direction, lang, identityKind, wicks, autoFilter, slowMode } = useAppStore();
   const p = DIRECTIONS[direction];
   const otherSeed = route.params?.otherSeed;
   const conversationId = (route.params as any)?.conversationId as string | undefined;
@@ -58,6 +58,9 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [veilSent, setVeilSent] = useState(false);
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [otherTyping, setOtherTyping] = useState(false);
+  const [pausing, setPausing] = useState(false);
+  const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pauseReadyRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -121,9 +124,28 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
   };
 
+  // Slow mode (opt-in): between 22:00-05:00 hold each message a few seconds
+  // before it goes out — a small pause to reconsider late-night words.
+  const isNightSlow = () => {
+    if (!slowMode) return false;
+    const h = new Date().getHours();
+    return h >= 22 || h < 5;
+  };
+
   const sendMessage = async () => {
+    if (pausing) return;
     if (!inputText.trim()) return;
-    const check = filterMessage(inputText.trim());
+    if (isNightSlow() && !pauseReadyRef.current) {
+      setPausing(true);
+      pauseTimerRef.current = setTimeout(() => {
+        pauseReadyRef.current = true;
+        setPausing(false);
+        sendMessage();
+      }, 3000);
+      return;
+    }
+    pauseReadyRef.current = false;
+    const check = autoFilter ? filterMessage(inputText.trim()) : { blocked: false };
     if (check.blocked) {
       Alert.alert(
         lang === 'en' ? 'Message blocked' : '\u8A0A\u606F\u5DF2\u88AB\u904E\u6FFE',
@@ -154,6 +176,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     setInputText('');
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
+
+  // Clear the slow-mode timer if the chat unmounts mid-pause.
+  useEffect(() => () => { if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current); }, []);
 
   const displayMessages = realMessages.map(msg => ({
     from: msg.senderId === getCurrentUid() ? 'me' : 'other',
@@ -274,6 +299,14 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           {/* COMPOSER */}
           <View style={styles.composer}>
+            {/* Slow-mode buffer note */}
+            {pausing && (
+              <View style={[styles.veilBar, { backgroundColor: p.surface, borderColor: p.line }]}>
+                <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: p.muted, flex: 1, textAlign: 'center' }}>
+                  {lang === 'en' ? 'breathe — your message sends in a moment' : '深呼吸⋯訊息稍候送出'}
+                </Text>
+              </View>
+            )}
             {/* Photo veil bar */}
             <TouchableOpacity onPress={() => setShowVeilSheet(true)}
               style={[styles.veilBar, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
@@ -298,9 +331,10 @@ export default function ChatScreen({ navigation, route }: Props) {
               />
               <TouchableOpacity
                 onPress={sendMessage}
-                style={[styles.sendBtn, { backgroundColor: p.ink }]}
+                disabled={pausing}
+                style={[styles.sendBtn, { backgroundColor: p.ink, opacity: pausing ? 0.4 : 1 }]}
               >
-                <Text style={{ color: p.dark ? '#1a1530' : '#fff', fontSize: 16 }}>↑</Text>
+                <Text style={{ color: p.dark ? '#1a1530' : '#fff', fontSize: 16 }}>{pausing ? '⋯' : '↑'}</Text>
               </TouchableOpacity>
             </GlassCard>
           </View>

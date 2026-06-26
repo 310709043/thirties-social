@@ -8,7 +8,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { VaporBackground, GlassCard, Cap, WickGlyph, AnimatedNumber, FadeInUp, PressableScale } from '../components/ui';
+import { VaporBackground, GlassCard, Cap, WickGlyph, AnimatedNumber, FadeInUp, PressableScale, ScreenHeader } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
 import { hapticSuccess } from '../lib/haptics';
 import { buyWickPack, buyVigilSubscription, restorePurchases, IAP_PRODUCT_IDS } from '../lib/purchases';
@@ -115,11 +115,8 @@ export default function UpgradeScreen({ navigation }: Props) {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Top bar */}
           <FadeInUp delay={0} distance={6}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-              <Text style={{ color: p.muted, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 }}>
-                ‹ {lang === 'en' ? 'back' : '返回'}
-              </Text>
-            </TouchableOpacity>
+            <ScreenHeader p={p} onBack={() => navigation.goBack()}
+              title={lang === 'en' ? 'Wicks & Vigil' : '燭芯與守夜'} />
           </FadeInUp>
 
           {/* Current wicks */}
@@ -244,8 +241,8 @@ export default function UpgradeScreen({ navigation }: Props) {
             <View style={[styles.wickNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.inkSoft, lineHeight: 20 }}>
                 {lang === 'en'
-                  ? 'Wicks are spent on: sending a veiled photo (3 wicks), entering the Loft (5 wicks/night), sending pulse messages (1 wick each). The other person always consents first.'
-                  : '燭芯用於：傳送帶紗照片（3 芯）、進入夜閣（每晚 5 芯）、傳送脈搏訊息（每則 1 芯）。對方永遠需要先同意。'}
+                  ? 'Wicks are spent on: sending a veiled photo (3 wicks), revealing a veiled photo someone sent you (3 wicks), and each new match once your free matches run out (1 wick). Conversations and rooms are free.'
+                  : '燭芯用於：傳送帶紗照片（3 芯）、揭開對方傳來的帶紗照片（3 芯）、免費配對用完後每次新配對（1 芯）。對話與火盆都是免費的。'}
               </Text>
             </View>
           </FadeInUp>

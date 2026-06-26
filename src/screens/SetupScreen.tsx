@@ -76,6 +76,12 @@ export default function SetupScreen({ navigation }: Props) {
   const MARRIAGE_ZH = ['穩定交往中', '同居', '訂婚', '已婚', '已婚·分居中', '偽單身', '開放關係', '對象是已婚的', '單身但說不清'];
   const MARRIAGE_EN = ['in a relationship', 'cohabiting', 'engaged', 'married', 'married · separated', 'single-passing', 'open', 'seeing someone married', 'single-ish'];
   const MARRIAGE_SLUGS = ['dating', 'cohabiting', 'engaged', 'married', 'separated', 'single-passing', 'open', 'seeing-married', 'single-ish'];
+  const SHAPE_ZH = ['無性了', '喪偶式', '還有愛但寂寞', '熱戀期過了', '正在想要不要離開', '說不清'];
+  const SHAPE_EN = ['sexless', 'roommates', 'love remains, lonely', 'past the honeymoon', 'thinking of leaving', 'hard to say'];
+  const SHAPE_SLUGS = ['sexless', 'roommates', 'love-lonely', 'post-honeymoon', 'considering-leaving', 'unclear'];
+  const WHEN_ZH = ['深夜', '午後', '上班時間', '碎片時間'];
+  const WHEN_EN = ['late night', 'afternoons', 'office hours', 'in-between'];
+  const WHEN_SLUGS = ['late-night', 'afternoon', 'office-hours', 'in-between'];
   const SEEKING_ZH = ['一個樹洞', '情感陪伴', '曖昧', '線上親密', '不設限'];
   const SEEKING_EN = ['someone to listen', 'companionship', 'flirtation', 'online intimacy', 'no limits'];
   const SEEKING_SLUGS = ['listener', 'companion', 'flirt', 'online-intimacy', 'no-limits'];
@@ -103,12 +109,16 @@ export default function SetupScreen({ navigation }: Props) {
     const resolvedSeeking = toSlugs(SEEKING_ZH, SEEKING_EN, SEEKING_SLUGS, seeking);
     const resolvedBoundary = toSlug(BOUNDARY_ZH, BOUNDARY_EN, BOUNDARY_SLUGS, boundary);
     const resolvedRegion = toSlug(REGION_ZH, REGION_EN, REGION_SLUGS, region);
+    const resolvedShape = toSlug(SHAPE_ZH, SHAPE_EN, SHAPE_SLUGS, shape);
+    const resolvedFreeTimes = toSlugs(WHEN_ZH, WHEN_EN, WHEN_SLUGS, when);
     await setProfileFields({
       gender: resolvedGender,
       ageBracket: age!,
       relationshipStatus: resolvedRelationship ?? marriage!,
+      relationshipShape: resolvedShape,
       seeking: resolvedSeeking,
       boundary: resolvedBoundary ?? boundary!,
+      freeTimes: resolvedFreeTimes,
       region: resolvedRegion,
       quote: line.trim() || null,
     });

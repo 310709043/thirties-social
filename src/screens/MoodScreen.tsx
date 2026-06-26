@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert,
+  StyleSheet, Alert, Animated, Easing,
 } from 'react-native';
+import Svg, { Path, Circle, Line, Defs, RadialGradient as SvgRadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
-import { DIRECTIONS } from '../lib/theme';
+import { DIRECTIONS, Palette } from '../lib/theme';
 import { t } from '../lib/copy';
 import {
-  VaporBackground, SoftButton, BreathDot, WickGlyph, AnimatedNumber,
+  VaporBackground, SoftButton, BreathDot, WickGlyph, AnimatedNumber, FadeInUp, PressableScale,
 } from '../components/ui';
 import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
@@ -274,29 +275,38 @@ export default function MoodScreen({ navigation }: Props) {
             {activeRooms.length > 0 ? (
               <View style={styles.roomsList}>
                 {activeRooms.slice(0, 3).map((room) => (
-                  <TouchableOpacity
+                  <PressableScale
                     key={room.id}
                     onPress={() => navigation.push('Room', { roomKey: room.roomKey ?? 'custom', roomId: room.id })}
-                    style={[styles.roomItem, { backgroundColor: p.glass, borderColor: p.line }]}
-                    activeOpacity={0.7}
                   >
-                    <BreathDot p={p} size={4} />
-                    <Text style={[styles.roomTopic, { color: p.ink }]} numberOfLines={1}>
-                      {room.customTopicZh || room.customTopicEn
-                        || (room.roomKey && !['new', 'custom'].includes(room.roomKey)
-                            ? t(room.roomKey as any, lang)
-                            : (lang === 'en' ? 'a quiet brazier' : '一個火盆'))}
-                    </Text>
-                    <Text style={[styles.roomCount, { color: p.muted }]}>
-                      {room.messageCount ?? 0}
-                    </Text>
-                  </TouchableOpacity>
+                    <View style={[styles.roomItem, { backgroundColor: p.glass, borderColor: p.line }]}>
+                      <BreathDot p={p} size={4} />
+                      <Text style={[styles.roomTopic, { color: p.ink }]} numberOfLines={1}>
+                        {room.customTopicZh || room.customTopicEn
+                          || (room.roomKey && !['new', 'custom'].includes(room.roomKey)
+                              ? t(room.roomKey as any, lang)
+                              : (lang === 'en' ? 'a quiet brazier' : '一個火盆'))}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Text style={[styles.roomCount, { color: p.muted }]}>
+                          {room.messageCount ?? 0}
+                        </Text>
+                        <Text style={{ color: p.muted, fontSize: 15, opacity: 0.5, marginTop: -1 }}>›</Text>
+                      </View>
+                    </View>
+                  </PressableScale>
                 ))}
               </View>
             ) : (
-              <Text style={[styles.noRooms, { color: p.muted }]}>
-                {lang === 'en' ? 'No rooms yet — start one?' : '還沒有火盆——開一個？'}
-              </Text>
+              <PressableScale onPress={() => navigation.push('Room', { roomKey: 'new' })}>
+                <View style={[styles.noRoomsCta, { borderColor: p.line, backgroundColor: p.glass }]}>
+                  <BreathDot p={p} size={5} />
+                  <Text style={[styles.noRoomsText, { color: p.muted }]}>
+                    {lang === 'en' ? 'No braziers lit yet — start one' : '還沒有人生火 — 開一個火盆'}
+                  </Text>
+                  <Text style={{ color: p.accent, fontSize: 16, marginTop: -1 }}>＋</Text>
+                </View>
+              </PressableScale>
             )}
           </View>
 
@@ -381,37 +391,136 @@ export default function MoodScreen({ navigation }: Props) {
         </View>
       )}
 
-      {showGuide && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.55)', alignItems: 'center', justifyContent: 'center', padding: 28 }}>
-          <View style={{ backgroundColor: p.surfaceSolid, borderRadius: 20, padding: 24, width: '100%', maxWidth: 360, borderWidth: 0.5, borderColor: p.line }}>
-            <Text style={{ fontFamily: 'NotoSerifTC-Light', fontSize: 22, color: p.ink, textAlign: 'center', marginBottom: 4 }}>
+      {showGuide && <FirstTimeGuide p={p} lang={lang} onDismiss={dismissGuide} />}
+    </VaporBackground>
+  );
+}
+
+// ── First-time guide — a refined welcome that introduces the three spaces ──
+// Hand-drawn-feeling glyphs (not emoji), a warm halo, and a staggered entrance
+// so the very first thing a new user sees feels considered, not stock.
+
+function BrazierGlyph({ c, accent }: { c: string; accent: string }) {
+  // A low bowl cradling a small flame — the "sit by a topic" space.
+  return (
+    <Svg width={30} height={30} viewBox="0 0 32 32">
+      <Path d="M16 7 C 18.4 10.2, 19.6 12, 19.6 14.4 C 19.6 16.7, 18 18.3, 16 18.3 C 14 18.3, 12.4 16.7, 12.4 14.4 C 12.4 12, 13.6 10.2, 16 7 Z"
+        fill={accent} fillOpacity={0.9} />
+      <Path d="M6 21 L 26 21 L 23.5 26.5 C 23.2 27.2, 22.5 27.6, 21.8 27.6 L 10.2 27.6 C 9.5 27.6, 8.8 27.2, 8.5 26.5 Z"
+        fill="none" stroke={c} strokeWidth={1.4} strokeLinejoin="round" />
+      <Line x1={9} y1={21} x2={23} y2={21} stroke={c} strokeWidth={1.4} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function MatchGlyph({ c, accent }: { c: string; accent: string }) {
+  // Two souls drawing close — just the two of you.
+  return (
+    <Svg width={30} height={30} viewBox="0 0 32 32">
+      <Circle cx={12} cy={16} r={6.4} fill="none" stroke={c} strokeWidth={1.4} />
+      <Circle cx={20} cy={16} r={6.4} fill="none" stroke={accent} strokeWidth={1.4} />
+      <Circle cx={16} cy={16} r={1.6} fill={accent} />
+    </Svg>
+  );
+}
+
+function LoftGlyph({ c, accent }: { c: string; accent: string }) {
+  // A crescent over a single ember — the late-night room.
+  return (
+    <Svg width={30} height={30} viewBox="0 0 32 32">
+      <Path d="M22 6 C 17 6.5, 13 10.8, 13 16 C 13 21.2, 17 25.5, 22 26 C 18 24, 15.4 20.3, 15.4 16 C 15.4 11.7, 18 8 22 6 Z"
+        fill={c} fillOpacity={0.85} />
+      <Circle cx={23} cy={22} r={2.2} fill={accent} />
+      <Circle cx={23} cy={22} r={4.4} fill={accent} fillOpacity={0.18} />
+    </Svg>
+  );
+}
+
+function FirstTimeGuide({ p, lang, onDismiss }: { p: Palette; lang: string; onDismiss: () => void }) {
+  const scale = useRef(new Animated.Value(0.92)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 1, tension: 60, friction: 9, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const rows = [
+    { Glyph: BrazierGlyph, title: lang === 'en' ? 'Brazier' : '火盆', alt: lang === 'en' ? '火盆' : 'Brazier',
+      desc: lang === 'en' ? 'Sit by a topic, speak softly with others awake' : '圍著一個話題，和也醒著的人輕輕說話' },
+    { Glyph: MatchGlyph, title: lang === 'en' ? 'Match' : '配對', alt: lang === 'en' ? '配對' : 'Match',
+      desc: lang === 'en' ? 'Meet one person — just the two of you' : '隨機遇見一個人，只有你們兩個' },
+    { Glyph: LoftGlyph, title: lang === 'en' ? 'The Loft' : '夜閣', alt: lang === 'en' ? '夜閣' : 'The Loft',
+      desc: lang === 'en' ? 'Opens late, when you want to come closer' : '深夜開放，想更靠近一點的時候' },
+  ];
+
+  return (
+    <Animated.View style={[styles.guideScrim, { opacity }]}>
+      {/* warm radial halo behind the card */}
+      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <SvgRadialGradient id="guideHalo" cx="50%" cy="42%" r="55%">
+            <Stop offset="0%" stopColor={p.accent} stopOpacity={p.dark ? 0.22 : 0.16} />
+            <Stop offset="100%" stopColor={p.accent} stopOpacity={0} />
+          </SvgRadialGradient>
+        </Defs>
+        <Path d="M0 0 H1000 V1000 H0 Z" fill="url(#guideHalo)" />
+      </Svg>
+
+      <Animated.View style={{ width: '100%', maxWidth: 360, transform: [{ scale }] }}>
+        <View style={[styles.guideCard, { backgroundColor: p.surfaceSolid, borderColor: p.accent + '33' }]}>
+          {/* top accent hairline */}
+          <View style={[styles.guideTopAccent, { backgroundColor: p.accent }]} />
+
+          <FadeInUp delay={80} distance={8}>
+            <View style={{ alignItems: 'center', marginBottom: 4 }}>
+              <WickGlyph size={18} color={p.accent} />
+            </View>
+          </FadeInUp>
+
+          <FadeInUp delay={140} distance={8}>
+            <Text style={[styles.guideTitle, { color: p.ink }]}>
               {lang === 'en' ? 'Three places here' : '這裡有三個地方'}
             </Text>
-            <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: p.muted, textAlign: 'center', marginBottom: 18 }}>
+          </FadeInUp>
+          <FadeInUp delay={200} distance={8}>
+            <Text style={[styles.guideSub, { color: p.muted }]}>
               {lang === 'en' ? 'no rush — stay however you like' : '不急，你想怎麼待著都可以'}
             </Text>
-            {([
-              ['🔥', lang === 'en' ? 'Brazier' : '火盆', lang === 'en' ? 'Sit by a topic, speak softly with others awake' : '圍著一個話題，和也醒著的人輕輕說話'],
-              ['💬', lang === 'en' ? 'Match' : '配對', lang === 'en' ? 'Meet one person — just the two of you' : '隨機遇見一個人，只有你們兩個'],
-              ['🌙', lang === 'en' ? 'The Loft' : '夜閣', lang === 'en' ? 'Opens late, when you want to come closer' : '深夜開放，想更靠近一點的時候'],
-            ] as const).map(([icon, title, desc]) => (
-              <View key={title} style={{ flexDirection: 'row', gap: 12, marginBottom: 14, alignItems: 'flex-start' }}>
-                <Text style={{ fontSize: 20 }}>{icon}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, fontWeight: '500' }}>{title}</Text>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, lineHeight: 20 }}>{desc}</Text>
+          </FadeInUp>
+
+          <View style={{ marginTop: 22 }}>
+            {rows.map((r, i) => (
+              <FadeInUp key={r.title} delay={280 + i * 90} distance={10}>
+                <View style={[styles.guideRow, i > 0 && { borderTopWidth: 0.5, borderTopColor: p.line }]}>
+                  <View style={[styles.guideIconWrap, { backgroundColor: p.accentSoft, borderColor: p.accent + '2a' }]}>
+                    <r.Glyph c={p.ink} accent={p.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 7 }}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.ink, fontWeight: '500' }}>{r.title}</Text>
+                      <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, opacity: 0.55 }}>{r.alt}</Text>
+                    </View>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, lineHeight: 20, marginTop: 2 }}>{r.desc}</Text>
+                  </View>
                 </View>
-              </View>
+              </FadeInUp>
             ))}
-            <TouchableOpacity onPress={dismissGuide} style={{ marginTop: 8, height: 48, borderRadius: 999, backgroundColor: p.ink, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.dark ? '#1a1530' : '#fff', fontWeight: '500' }}>
-                {lang === 'en' ? 'Start' : '開始'}
+          </View>
+
+          <FadeInUp delay={560} distance={10}>
+            <TouchableOpacity onPress={onDismiss} activeOpacity={0.88}
+              style={[styles.guideBtn, { backgroundColor: p.ink }]}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, letterSpacing: 2, color: p.dark ? '#1a1530' : '#fff', fontWeight: '500' }}>
+                {lang === 'en' ? 'Step in' : '走進來'}
               </Text>
             </TouchableOpacity>
-          </View>
+          </FadeInUp>
         </View>
-      )}
-    </VaporBackground>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -441,8 +550,20 @@ const styles = StyleSheet.create({
   roomTopic:     { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
   roomCount:     { fontFamily: 'Inter-Regular', fontSize: 11, fontWeight: '500' },
   noRooms:       { fontFamily: 'NotoSerifTC-Regular', fontSize: 12, textAlign: 'center', paddingVertical: 8 },
+  noRoomsCta:    { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 14, borderRadius: 14, borderWidth: 0.5, borderStyle: 'dashed' },
+  noRoomsText:   { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
 
   bottom:        { paddingHorizontal: 20, paddingBottom: 16 },
   waitingBox:    { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, borderWidth: 0.5 },
   cancelBtn:     { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 0.5 },
+
+  guideScrim:    { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.62)', alignItems: 'center', justifyContent: 'center', padding: 28 },
+  guideCard:     { borderRadius: 26, paddingTop: 30, paddingBottom: 22, paddingHorizontal: 24, width: '100%', borderWidth: 0.5, overflow: 'hidden',
+                   shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 30, shadowOffset: { width: 0, height: 16 }, elevation: 14 },
+  guideTopAccent:{ position: 'absolute', top: 0, alignSelf: 'center', width: 44, height: 3, borderRadius: 3, opacity: 0.7 },
+  guideTitle:    { fontFamily: 'NotoSerifTC-Light', fontSize: 24, letterSpacing: 1, textAlign: 'center', marginTop: 10 },
+  guideSub:      { fontFamily: 'EBGaramond-Italic', fontSize: 13, textAlign: 'center', marginTop: 6 },
+  guideRow:      { flexDirection: 'row', gap: 16, alignItems: 'center', paddingVertical: 16 },
+  guideIconWrap: { width: 50, height: 50, borderRadius: 16, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+  guideBtn:      { marginTop: 24, height: 52, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
 });

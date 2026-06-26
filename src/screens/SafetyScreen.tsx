@@ -5,7 +5,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t } from '../lib/copy';
-import { VaporBackground, GlassCard, SoftButton, FadeInUp } from '../components/ui';
+import { VaporBackground, GlassCard, SoftButton, FadeInUp, ScreenHeader } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
 import { fileReport, endConversation, blockUser } from '../lib/db';
 import { analytics } from '../lib/analytics';
@@ -84,11 +84,7 @@ export default function SafetyScreen({ navigation, route }: Props) {
         <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
           {/* Back */}
           <FadeInUp delay={0} distance={6}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-              <Text style={[styles.backText, { color: p.muted }]}>
-                {lang === 'en' ? '\u2190 back' : '\u2190 \u8FD4\u56DE'}
-              </Text>
-            </TouchableOpacity>
+            <ScreenHeader p={p} onBack={() => navigation.goBack()} />
           </FadeInUp>
 
           {/* Title */}

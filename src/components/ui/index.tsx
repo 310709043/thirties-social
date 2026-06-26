@@ -298,6 +298,37 @@ export function PhotoVeil({
   );
 }
 
+// ── ScreenHeader ──────────────────────────────────────────────
+// One consistent top bar for every secondary screen: a circular back button,
+// an optional centered title (with quiet bilingual subtitle), and a right slot.
+// Replaces the ad-hoc mix of "‹ back" text links and bespoke round buttons.
+export function ScreenHeader({
+  p, onBack, title, subtitle, right, style,
+}: {
+  p: Palette; onBack: () => void;
+  title?: string; subtitle?: string; right?: ReactNode; style?: ViewStyle;
+}) {
+  return (
+    <View style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 20, minHeight: 40 }, style]}>
+      <TouchableOpacity onPress={onBack} activeOpacity={0.7}
+        style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: p.muted, fontSize: 19, marginTop: -2 }}>‹</Text>
+      </TouchableOpacity>
+      {title ? (
+        <View style={{ flex: 1, alignItems: 'center', gap: 1 }}>
+          <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, letterSpacing: 1 }}>{title}</Text>
+          {subtitle ? (
+            <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, opacity: 0.65 }}>{subtitle}</Text>
+          ) : null}
+        </View>
+      ) : <View style={{ flex: 1 }} />}
+      <View style={{ width: 38, height: 38, alignItems: 'flex-end', justifyContent: 'center' }}>
+        {right}
+      </View>
+    </View>
+  );
+}
+
 // ── Animation & feedback components ─────────────────────────
 export { Flame, Candle } from './Flame';
 export { AnimatedNumber } from './AnimatedNumber';

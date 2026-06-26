@@ -283,7 +283,7 @@ export default function RoomScreen({ navigation, route }: Props) {
           }}
           scrollEventThrottle={400}
         >
-          {roomId === null ? (
+          {roomId === null && roomKey !== 'new' ? (
             <>
               <MessageSkeleton color={p.muted + '60'} />
               <MessageSkeleton color={p.muted + '60'} />
