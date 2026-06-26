@@ -82,6 +82,7 @@ export default function SetupScreen({ navigation }: Props) {
   const [when, setWhen] = useState<string[]>([]);
   const [region, setRegion] = useState<string | null>(null);
   const [line, setLine] = useState('');
+  const [lineFocused, setLineFocused] = useState(false);
 
   // The five required answers — track completion for a live progress hint.
   const requiredDone = [!!gender, !!age, !!marriage, seeking.length > 0, !!boundary];
@@ -244,9 +245,11 @@ export default function SetupScreen({ navigation }: Props) {
             <TextInput
               value={line}
               onChangeText={setLine}
+              onFocus={() => setLineFocused(true)}
+              onBlur={() => setLineFocused(false)}
               placeholder={zh ? '例：「婚姻是兩個人輪流孤獨。」' : 'e.g. "Marriage is two people taking turns being lonely."'}
               placeholderTextColor={p.muted}
-              style={[styles.lineInput, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]}
+              style={[styles.lineInput, { backgroundColor: p.surface, borderColor: lineFocused ? p.accent : p.line, borderWidth: lineFocused ? 1 : 0.5, color: p.ink }]}
             />
           </View>
 

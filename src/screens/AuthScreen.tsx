@@ -29,6 +29,7 @@ export default function AuthScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [focused, setFocused] = useState<'email' | 'password' | null>(null);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -149,11 +150,13 @@ export default function AuthScreen({ navigation, route }: Props) {
                   <TextInput
                     value={email}
                     onChangeText={setEmail}
+                    onFocus={() => setFocused('email')}
+                    onBlur={() => setFocused(null)}
                     placeholder="email@example.com"
                     placeholderTextColor={p.muted}
                     autoCapitalize="none"
                     keyboardType="email-address"
-                    style={[styles.input, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]}
+                    style={[styles.input, { backgroundColor: p.surface, borderColor: focused === 'email' ? p.accent : p.line, borderWidth: focused === 'email' ? 1 : 0.5, color: p.ink }]}
                   />
                 </View>
 
@@ -166,10 +169,12 @@ export default function AuthScreen({ navigation, route }: Props) {
                     <TextInput
                       value={password}
                       onChangeText={setPassword}
+                      onFocus={() => setFocused('password')}
+                      onBlur={() => setFocused(null)}
                       placeholder="••••••••"
                       placeholderTextColor={p.muted}
                       secureTextEntry
-                      style={[styles.input, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]}
+                      style={[styles.input, { backgroundColor: p.surface, borderColor: focused === 'password' ? p.accent : p.line, borderWidth: focused === 'password' ? 1 : 0.5, color: p.ink }]}
                     />
                   </View>
                 )}
