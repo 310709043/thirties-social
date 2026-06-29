@@ -20,7 +20,7 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_LOFT_ALWAYS_OPEN": "0"
+        "EXPO_PUBLIC_LOFT_ALWAYS_OPEN": "1"
       },
       "ios": {
         "autoIncrement": true

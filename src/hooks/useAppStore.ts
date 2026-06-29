@@ -51,13 +51,27 @@ interface AppState {
   slowMode: boolean;
   conversationsToday: number;
   peopleTodayCount: number;
+  /** Free connections used today (random matches + room invites), resets daily. */
+  connectionsToday: number;
+  /** Free rooms (火盆) opened today, resets daily. */
+  roomsToday: number;
   freeMatchesUsed: number;
   loftFreeUsed: number;
+  /** Week bucket (weeks-since-epoch) when the free user last used their weekly free Loft entry. */
+  loftFreeWeek: number | null;
 }
 
-/** Free registered users get this many free matches before each costs a wick. */
-export const FREE_MATCH_ALLOWANCE = 10;
+/**
+ * Free registered users get this many free "connections" PER DAY, shared across
+ * random matches AND room invites (tapping someone in a brazier to chat). Beyond
+ * the daily quota, each connection costs MATCH_WICK_COST. Tracked locally per day
+ * (resets at local midnight via _resetDailyCountersIfNeeded) so it doesn't fight
+ * the increase-only Firestore rule that the old lifetime counter needed.
+ */
+export const FREE_DAILY_CONNECTIONS = 10;
 export const MATCH_WICK_COST = 1;
+/** Free users get this many free room-opens (火盆) per day; beyond that costs wicks. */
+export const FREE_DAILY_ROOMS = 1;
 /** Free users pay this to open a room; Vigil opens rooms for free. */
 export const ROOM_CREATE_COST = 2;
 /** A free user gets this many lifetime free Loft entries, then must go Vigil. */
@@ -71,7 +85,7 @@ let _state: AppState = {
   gender: null, ageBracket: null, relationshipStatus: null, relationshipShape: null, seeking: [],
   boundary: null, freeTimes: [], region: null, quote: null, loftVisible: true,
   autoFilter: true, slowMode: false, conversationsToday: 0, peopleTodayCount: 0,
-  freeMatchesUsed: 0, loftFreeUsed: 0,
+  connectionsToday: 0, roomsToday: 0, freeMatchesUsed: 0, loftFreeUsed: 0, loftFreeWeek: null,
 };
 
 const _listeners = new Set<() => void>();
@@ -80,7 +94,7 @@ function notify() { _listeners.forEach(fn => fn()); }
 export async function initStore() {
   const deviceId = await getDeviceId();
   const seed = getDailySeed(deviceId);
-  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedShape, storedSeeking, storedBoundary, storedFreeTimes, storedRegion, storedQuote, storedLoftVisible, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind, storedFreeMatches, storedLoftFree] = await Promise.all([
+  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedShape, storedSeeking, storedBoundary, storedFreeTimes, storedRegion, storedQuote, storedLoftVisible, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind, storedFreeMatches, storedLoftFree, storedConnToday, storedRoomsToday, storedLoftFreeWeek] = await Promise.all([
     AsyncStorage.getItem('direction') as Promise<Direction | null>,
     AsyncStorage.getItem('onboarding_done'),
     AsyncStorage.getItem('setup_done'),
@@ -104,6 +118,9 @@ export async function initStore() {
     AsyncStorage.getItem('identityKind') as Promise<IdentityKind | null>,
     AsyncStorage.getItem('freeMatchesUsed'),
     AsyncStorage.getItem('loftFreeUsed'),
+    AsyncStorage.getItem('connectionsToday'),
+    AsyncStorage.getItem('roomsToday'),
+    AsyncStorage.getItem('loftFreeWeek'),
   ]);
   _state = {
     ..._state, deviceId, seed,
@@ -122,8 +139,11 @@ export async function initStore() {
     slowMode: storedSlowMode === '1',
     conversationsToday: storedConvToday ? parseInt(storedConvToday, 10) : 0,
     peopleTodayCount: storedPeopleToday ? parseInt(storedPeopleToday, 10) : 0,
+    connectionsToday: storedConnToday ? parseInt(storedConnToday, 10) : 0,
+    roomsToday: storedRoomsToday ? parseInt(storedRoomsToday, 10) : 0,
     freeMatchesUsed: storedFreeMatches ? parseInt(storedFreeMatches, 10) : 0,
     loftFreeUsed: storedLoftFree ? parseInt(storedLoftFree, 10) : 0,
+    loftFreeWeek: storedLoftFreeWeek ? parseInt(storedLoftFreeWeek, 10) : null,
   };
   notify();
   _resetDailyCountersIfNeeded();
@@ -358,80 +378,118 @@ export function getTier(): Tier {
 }
 
 /**
- * Random matching: guests can't; vigil is unlimited; free gets
- * FREE_MATCH_ALLOWANCE free matches, then each costs MATCH_WICK_COST wicks.
+ * A "connection" = starting a 1:1 chat, whether via random match or a room
+ * invite. Guests can't; vigil is unlimited; free users get FREE_DAILY_CONNECTIONS
+ * per day, then each costs MATCH_WICK_COST wicks.
  */
 export function canMatch(): boolean {
   const t = getTier();
   if (t === 'guest') return false;
   if (t === 'vigil') return true;
-  if (_state.freeMatchesUsed < FREE_MATCH_ALLOWANCE) return true;
+  if (_state.connectionsToday < FREE_DAILY_CONNECTIONS) return true;
   return _state.wicks >= MATCH_WICK_COST;
 }
 
-/** True once a free user has used up their free matches and must pay wicks. */
+/** True once a free user has used today's free connections and must pay wicks. */
 export function matchCostsWick(): boolean {
-  return getTier() === 'free' && _state.freeMatchesUsed >= FREE_MATCH_ALLOWANCE;
+  return getTier() === 'free' && _state.connectionsToday >= FREE_DAILY_CONNECTIONS;
+}
+
+/** Remaining free connections (matches + room invites) for a free user today. */
+export function freeConnectionsRemaining(): number {
+  if (getTier() !== 'free') return 0;
+  return Math.max(0, FREE_DAILY_CONNECTIONS - _state.connectionsToday);
 }
 
 /**
- * Record a successful match for the current user. Free users consume a free
- * match or pay a wick; vigil/guest are no-ops. Call when a match is confirmed
- * (not merely attempted), so "no one around" never costs.
+ * Record a confirmed connection (random match OR room invite) for the current
+ * user. Free users consume one of today's free connections or pay a wick;
+ * vigil/guest are no-ops. Call when the chat actually starts (e.g. first message
+ * sent), so entering an empty chat never costs.
+ *
+ * Returns true once settled (no charge needed, a free connection was consumed,
+ * or a wick was successfully spent); false if a required wick charge failed, so
+ * the caller can avoid marking the connection as already charged.
  */
-export async function recordMatch() {
-  if (getTier() !== 'free') return;
-  if (_state.freeMatchesUsed < FREE_MATCH_ALLOWANCE) {
-    const used = _state.freeMatchesUsed + 1;
-    _state = { ..._state, freeMatchesUsed: used };
-    await AsyncStorage.setItem('freeMatchesUsed', String(used));
+export async function recordMatch(): Promise<boolean> {
+  if (getTier() !== 'free') return true;
+  await _resetDailyCountersIfNeeded();
+  if (_state.connectionsToday < FREE_DAILY_CONNECTIONS) {
+    const used = _state.connectionsToday + 1;
+    const today = new Date().toISOString().slice(0, 10);
+    _state = { ..._state, connectionsToday: used };
+    await AsyncStorage.setItem('connectionsToday', String(used));
+    await AsyncStorage.setItem('countersDate', today);
     notify();
-    if (_state.userId) updateUser({ freeMatchesUsed: used });
-  } else {
-    // Beyond the free allowance — spend a wick (subscribeToUser syncs balance).
-    await spendWicks(MATCH_WICK_COST, 'match');
+    return true;
   }
+  // Beyond today's free quota — spend a wick (subscribeToUser syncs balance).
+  const result = await spendWicks(MATCH_WICK_COST, 'match');
+  return result.ok;
+}
+
+/** Weeks since epoch — used for the weekly free Loft entry. */
+function currentWeek(): number {
+  return Math.floor(Date.now() / (7 * 86400 * 1000));
 }
 
 /**
- * The Loft is a Vigil space, but a free user gets FREE_LOFT_ALLOWANCE lifetime
- * free entries to taste it before being asked to upgrade. Guests never enter.
+ * The Loft is a Vigil space, but a free user gets ONE free entry PER WEEK to
+ * taste it before being asked to upgrade. Guests never enter. Tracked locally by
+ * week bucket (loftFreeWeek) so it resets weekly without fighting Firestore rules.
  */
 export function canEnterLoft(): boolean {
   const t = getTier();
   if (t === 'vigil') return true;
-  if (t === 'free') return _state.loftFreeUsed < FREE_LOFT_ALLOWANCE;
+  if (t === 'free') return _state.loftFreeWeek !== currentWeek();
   return false;
 }
 
-/** Remaining free Loft entries for a free user (0 for guest/vigil context). */
+/** Remaining free Loft entries this week for a free user (1 or 0). */
 export function loftFreeRemaining(): number {
-  return Math.max(0, FREE_LOFT_ALLOWANCE - _state.loftFreeUsed);
+  if (getTier() !== 'free') return 0;
+  return _state.loftFreeWeek === currentWeek() ? 0 : 1;
 }
 
-/** True if this Loft entry would consume the free user's free-trial entry. */
+/** True if this Loft entry would consume the free user's weekly free entry. */
 export function loftEntryIsFreeTrial(): boolean {
-  return getTier() === 'free' && _state.loftFreeUsed < FREE_LOFT_ALLOWANCE;
+  return getTier() === 'free' && _state.loftFreeWeek !== currentWeek();
 }
 
 /**
- * Record an actual Loft entry. Consumes a free user's lifetime free entry
- * (persisted locally + synced to Firestore). Vigil/guest are no-ops.
- * Call only once the user truly enters the Loft, not on a blocked attempt.
+ * Record an actual Loft entry. Consumes a free user's weekly free entry (local).
+ * Vigil/guest are no-ops. Call only once the user truly enters, not on a blocked
+ * attempt.
  */
 export async function recordLoftEntry() {
   if (getTier() !== 'free') return;
-  if (_state.loftFreeUsed >= FREE_LOFT_ALLOWANCE) return;
-  const used = _state.loftFreeUsed + 1;
-  _state = { ..._state, loftFreeUsed: used };
-  await AsyncStorage.setItem('loftFreeUsed', String(used));
+  const week = currentWeek();
+  if (_state.loftFreeWeek === week) return;
+  _state = { ..._state, loftFreeWeek: week };
+  await AsyncStorage.setItem('loftFreeWeek', String(week));
   notify();
-  if (_state.userId) updateUser({ loftFreeUsed: used } as any);
 }
 
-/** Opening a room: guests can't; free pays wicks (charged at call site); vigil free. */
+/** Opening a room: guests can't; free gets FREE_DAILY_ROOMS/day then pays wicks; vigil free. */
 export function canCreateRoom(): boolean {
   return getTier() !== 'guest';
+}
+
+/** True if opening a room now would cost wicks (free user who used today's free room). */
+export function roomCreateCostsWick(): boolean {
+  return getTier() === 'free' && _state.roomsToday >= FREE_DAILY_ROOMS;
+}
+
+/** Record using the daily FREE room-open. Call after a free room is created. */
+export async function recordRoomCreated() {
+  if (getTier() !== 'free') return;
+  await _resetDailyCountersIfNeeded();
+  const used = _state.roomsToday + 1;
+  const today = new Date().toISOString().slice(0, 10);
+  _state = { ..._state, roomsToday: used };
+  await AsyncStorage.setItem('roomsToday', String(used));
+  await AsyncStorage.setItem('countersDate', today);
+  notify();
 }
 
 const FREE_IDENTITY_KINDS: IdentityKind[] = ['sigil', 'color+adj', 'text'];
@@ -445,9 +503,11 @@ async function _resetDailyCountersIfNeeded() {
   const stored = await AsyncStorage.getItem('countersDate');
   const today = new Date().toISOString().slice(0, 10);
   if (stored !== today) {
-    _state = { ..._state, conversationsToday: 0, peopleTodayCount: 0 };
+    _state = { ..._state, conversationsToday: 0, peopleTodayCount: 0, connectionsToday: 0, roomsToday: 0 };
     await AsyncStorage.setItem('conversationsToday', '0');
     await AsyncStorage.setItem('peopleTodayCount', '0');
+    await AsyncStorage.setItem('connectionsToday', '0');
+    await AsyncStorage.setItem('roomsToday', '0');
     await AsyncStorage.setItem('countersDate', today);
     notify();
   }

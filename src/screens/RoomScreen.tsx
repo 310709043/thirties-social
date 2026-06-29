@@ -11,7 +11,7 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkeleton } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, canCreateRoom, getTier, ROOM_CREATE_COST } from '../hooks/useAppStore';
+import { useAppStore, canCreateRoom, getTier, ROOM_CREATE_COST, canMatch, MATCH_WICK_COST, roomCreateCostsWick, recordRoomCreated } from '../hooks/useAppStore';
 import { getOrCreatePresetRoom, getRoomById, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence, spendWicks, reactToRoomMessage } from '../lib/db';
 import { RESONANCE_SYMBOLS, resonanceLabel } from '../lib/resonance';
 import { t as getT } from '../lib/copy';
@@ -162,7 +162,9 @@ export default function RoomScreen({ navigation, route }: Props) {
     if (inviteSent) {
       const id = setTimeout(async () => {
         const conv = await createConversation({ userBId: inviting!.senderId, roomId: roomId ?? undefined });
-        navigation.push('Chat', { otherSeed: inviting!.seed, conversationId: conv?.id });
+        // Room invites draw from the same daily free-connection quota as random
+        // matches; charge on first message sent (matchCharge).
+        navigation.push('Chat', { otherSeed: inviting!.seed, conversationId: conv?.id, matchCharge: true });
       }, 2400);
       return () => clearTimeout(id);
     }
@@ -433,13 +435,14 @@ export default function RoomScreen({ navigation, route }: Props) {
                     onPress={async () => {
                       if (roomTopic.trim().length === 0) return;
                       const free = getTier() === 'free';
-                      // Free users pay to open a room; Vigil opens for free.
-                      if (free && wicks < ROOM_CREATE_COST) {
+                      // Free users get 1 free room/day; beyond that it costs wicks. Vigil free.
+                      const mustPay = roomCreateCostsWick();
+                      if (mustPay && wicks < ROOM_CREATE_COST) {
                         Alert.alert(
                           lang === 'en' ? 'Not enough wicks' : '燭芯不足',
                           lang === 'en'
-                            ? `Opening a room costs ${ROOM_CREATE_COST} wicks. Top up, or go Vigil to open rooms for free.`
-                            : `開火盆需要 ${ROOM_CREATE_COST} 燭芯。可購買燭芯，或升級守夜人免費開房。`,
+                            ? `You've opened today's free room. Another costs ${ROOM_CREATE_COST} wicks. Top up, or go Vigil for free rooms.`
+                            : `今天的免費火盆已用過，再開需 ${ROOM_CREATE_COST} 燭芯。可購買燭芯，或升級守夜人免費開房。`,
                           [
                             { text: lang === 'en' ? 'OK' : '知道了', style: 'cancel' },
                             { text: lang === 'en' ? 'Upgrade' : '升級', onPress: () => navigation.push('Upgrade') },
@@ -449,7 +452,8 @@ export default function RoomScreen({ navigation, route }: Props) {
                       }
                       const newRoom = await createRoom({ topicZh: roomTopic.trim() });
                       if (newRoom) {
-                        if (free) await spendWicks(ROOM_CREATE_COST, 'open_room');
+                        if (mustPay) await spendWicks(ROOM_CREATE_COST, 'open_room');
+                        else if (free) await recordRoomCreated();
                         setRoomId(newRoom.id);
                         setRoom(newRoom);
                         setRoomCreated(true);
@@ -514,7 +518,23 @@ export default function RoomScreen({ navigation, route }: Props) {
                       : '對方只會看到你的識別與今晚寫的那句話。同意後開啟 30 分鐘窗口。'}
                   </Text>
                   <TouchableOpacity
-                    onPress={() => setInviteSent(true)}
+                    onPress={() => {
+                      // Same daily free-connection quota as random matching.
+                      if (!canMatch()) {
+                        Alert.alert(
+                          lang === 'en' ? 'Out of free connections' : '今日免費配對已用完',
+                          lang === 'en'
+                            ? `You've used today's free connections. Each now costs ${MATCH_WICK_COST} wick — top up, or go Vigil for unlimited.`
+                            : `今日免費配對已用完，之後每次需 ${MATCH_WICK_COST} 燭芯。可購買燭芯，或升級守夜人享無限。`,
+                          [
+                            { text: lang === 'en' ? 'OK' : '知道了', style: 'cancel' },
+                            { text: lang === 'en' ? 'Upgrade' : '升級', onPress: () => navigation.push('Upgrade') },
+                          ],
+                        );
+                        return;
+                      }
+                      setInviteSent(true);
+                    }}
                     style={[styles.inviteBtn, { backgroundColor: p.ink }]}
                   >
                     <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.dark ? '#1a1530' : '#fff', fontWeight: '500' }}>

@@ -22,6 +22,8 @@ import * as ScreenCapture from 'expo-screen-capture';
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
 const TOTAL_SECONDS = 30 * 60;
+/** Minimum messages exchanged before a veiled photo can be lifted (anti photo-grab). */
+const VEIL_MIN_MESSAGES = 10;
 
 export default function ChatScreen({ navigation, route }: Props) {
   const { seed, direction, lang, identityKind, wicks, autoFilter, slowMode } = useAppStore();
@@ -167,7 +169,10 @@ export default function ChatScreen({ navigation, route }: Props) {
       // message you send, never for entering an empty chat.
       if (matchCharge && !chargedRef.current) {
         chargedRef.current = true;
-        recordMatch();
+        // Await so a paid match actually settles (and a failed charge doesn't
+        // silently let the match go free); only mark charged once it succeeds.
+        const charged = await recordMatch();
+        if (!charged) chargedRef.current = false;
       }
       // Clear typing state after sending
       setTyping(conversationId, false);
@@ -297,6 +302,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             {displayMessages.map((m, i) => (
               <FadeInUp key={i} distance={10} duration={260} delay={Math.min(i * 25, 150)}>
                 <ChatBubble p={p} m={m} lang={lang} wicks={wicks} conversationId={conversationId}
+                  canRevealVeil={displayMessages.length >= VEIL_MIN_MESSAGES}
                   onReport={m.from !== 'me' ? () => navigation.push('Safety', { reportedUserId: otherSeed, conversationId }) : undefined} />
               </FadeInUp>
             ))}
@@ -453,7 +459,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   );
 }
 
-function ChatBubble({ p, m, lang, onReport, wicks, conversationId }: any) {
+function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil }: any) {
   const isMe = m.from === 'me';
   const isPhoto = m.messageType === 'photo';
   const [revealedUrl, setRevealedUrl] = React.useState<string | null>(null);
@@ -461,6 +467,16 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId }: any) {
 
   const revealPhoto = async () => {
     if (revealing || revealedUrl || !m.photoId) return;
+    // Must build some conversation first — no grabbing the photo and bailing.
+    if (!canRevealVeil) {
+      Alert.alert(
+        lang === 'en' ? 'Keep talking first' : '再多聊一點',
+        lang === 'en'
+          ? `Exchange at least ${VEIL_MIN_MESSAGES} messages before lifting the veil.`
+          : `聊滿 ${VEIL_MIN_MESSAGES} 則訊息後，才能掀開面紗。`,
+      );
+      return;
+    }
     if (wicks < 3) {
       Alert.alert(
         lang === 'en' ? 'Not enough wicks' : '燭芯不足',
