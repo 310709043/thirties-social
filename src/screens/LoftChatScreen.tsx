@@ -33,6 +33,8 @@ const PULSES = [
 
 // Lifting a veil costs wicks for everyone, including Vigil (intimacy is paid).
 const VEIL_LIFT_COST = 3;
+// Minimum messages exchanged before a veiled photo can be lifted (anti photo-grab).
+const VEIL_MIN_MESSAGES = 10;
 
 export default function LoftChatScreen({ navigation, route }: Props) {
   const { lang, wicks, seed } = useAppStore();
@@ -269,7 +271,14 @@ export default function LoftChatScreen({ navigation, route }: Props) {
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: L.muted, textAlign: 'center' }}>
                 {t('veilOnlyHere', lang)}
               </Text>
-              {veilLevel < 4 && (
+              {veilLevel < 4 && messages.length < VEIL_MIN_MESSAGES && (
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: L.muted, textAlign: 'center', paddingHorizontal: 12 }}>
+                  {lang === 'en'
+                    ? `Exchange at least ${VEIL_MIN_MESSAGES} messages before lifting the veil.`
+                    : `聊滿 ${VEIL_MIN_MESSAGES} 則訊息後，才能掀開面紗。`}
+                </Text>
+              )}
+              {veilLevel < 4 && messages.length >= VEIL_MIN_MESSAGES && (
                 <TouchableOpacity onPress={async () => {
                   // Lifting a veil always costs wicks — even for Vigil. Membership
                   // buys reach/efficiency; advancing intimacy is paid by everyone.
