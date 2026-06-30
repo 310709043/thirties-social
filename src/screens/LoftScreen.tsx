@@ -347,6 +347,15 @@ export default function LoftScreen({ navigation }: Props) {
   );
 }
 
+/** Soft relative time for ritual answers — "剛剛 / N 分鐘前 / N 小時前". */
+function ritualAgo(ms: number, lang: string): string {
+  const min = Math.floor((Date.now() - ms) / 60000);
+  if (min < 1) return lang === 'en' ? 'just now' : '剛剛';
+  if (min < 60) return lang === 'en' ? `${min}m ago` : `${min} 分鐘前`;
+  const hr = Math.floor(min / 60);
+  return lang === 'en' ? `${hr}h ago` : `${hr} 小時前`;
+}
+
 function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const { seed, identityKind, gender: myGender } = useAppStore();
   const myName = getLoftName(seed, lang);
@@ -401,6 +410,18 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
     (genderF === 'all' || (s.gender ?? null) === genderF) &&
     (ageF === 'all' || (s.ageBracket ?? null) === ageF),
   );
+  // Latest tonight-ritual answer per person, so a card can show their own words
+  // (a far stronger invitation to tap than a bare name) — no extra query, both
+  // sessions and responses are already subscribed.
+  const answerByUser = React.useMemo(() => {
+    const m = new Map<string, DbRitualResponse>();
+    for (const r of responses) {
+      const prev = m.get(r.userId);
+      if (!prev || (r.createdAt?.toMillis?.() ?? 0) > (prev.createdAt?.toMillis?.() ?? 0)) m.set(r.userId, r);
+    }
+    return m;
+  }, [responses]);
+
   const tonight = filteredSessions.map(s => ({
     session: s,
     seed: s.userId,
@@ -408,6 +429,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
     en: `"${s.nightName}"`,
     who_zh: s.nightName,
     who_en: s.nightName,
+    answer: answerByUser.get(s.userId) ?? null,
   }));
 
   return (
@@ -485,11 +507,19 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
           <View style={{ marginTop: 14, gap: 8 }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {([['all', lang === 'en' ? 'Everyone' : '所有人'], ['female', lang === 'en' ? 'Women' : '女生'], ['male', lang === 'en' ? 'Men' : '男生'], ['nonbinary', lang === 'en' ? 'Non-binary' : '非二元']] as const).map(([v, label]) => (
-                <TouchableOpacity key={v} onPress={() => setGenderF(v as any)}
-                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 0.5,
-                    backgroundColor: genderF === v ? 'rgba(232,165,87,0.18)' : 'rgba(245,226,196,0.04)',
-                    borderColor: genderF === v ? L.candle : L.line }}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: genderF === v ? L.candle : L.muted }}>{label}</Text>
+                <TouchableOpacity key={v} onPress={() => setGenderF(v as any)} activeOpacity={0.8}
+                  style={{ paddingHorizontal: 13, paddingVertical: 6, borderRadius: 999,
+                    borderWidth: genderF === v ? 1 : 0.5,
+                    backgroundColor: genderF === v ? 'rgba(232,165,87,0.22)' : 'rgba(245,226,196,0.04)',
+                    borderColor: genderF === v ? L.candle : L.line,
+                    // selected chip lifts forward with a soft candle glow
+                    transform: [{ scale: genderF === v ? 1.07 : 1 }],
+                    shadowColor: L.candle, shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: genderF === v ? 0.55 : 0, shadowRadius: genderF === v ? 9 : 0,
+                    elevation: genderF === v ? 6 : 0 }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13,
+                    fontWeight: genderF === v ? '500' : '400',
+                    color: genderF === v ? L.candle : L.muted }}>{label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -542,14 +572,24 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
                       <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: L.ink, lineHeight: 24, letterSpacing: 0.5 }}>
                         {lang === 'en' ? m.en : m.zh}
                       </Text>
+                      {/* Their own words from tonight's question — a softer, on-brand
+                          invitation to tap than a status badge. Only shown if they answered. */}
+                      {m.answer?.content ? (
+                        <Text numberOfLines={1} style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: L.ink, opacity: 0.78, letterSpacing: 0.3, marginTop: 3 }}>
+                          “{m.answer.content}”
+                        </Text>
+                      ) : null}
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                        <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.muted, letterSpacing: 1 }}>
-                          {lang === 'en' ? m.who_en : m.who_zh}
-                        </Text>
-                        <Text style={{ color: L.muted, opacity: 0.4 }}>·</Text>
-                        <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
-                          ● {lang === 'en' ? 'open' : '門開'}
-                        </Text>
+                        {m.answer ? (
+                          <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
+                            {ritualAgo(m.answer.createdAt?.toMillis?.() ?? Date.now(), lang)}
+                            {lang === 'en' ? ' · answered tonight' : ' 回答今夜之題'}
+                          </Text>
+                        ) : (
+                          <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
+                            ● {lang === 'en' ? 'open' : '門開'}
+                          </Text>
+                        )}
                       </View>
                     </View>
                     <Text style={{ color: L.candle, fontSize: 18, opacity: 0.5, alignSelf: 'center' }}>›</Text>
