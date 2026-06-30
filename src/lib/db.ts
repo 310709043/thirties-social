@@ -798,6 +798,7 @@ export async function sendLoftMessage(params: {
     await updateDoc(doc(db, 'loftConversations', params.loftConversationId), {
       messageCount: increment(1),
     });
+    void notifyOtherParty({ loftConversationId: params.loftConversationId });
     return true;
   } catch { return false; }
 }
@@ -900,6 +901,24 @@ export function subscribeToMyMatch(
 
 /** Try to find another waiting user and pair them with the current user */
 const BACKEND_BASE = process.env.EXPO_PUBLIC_ADMIN_URL ?? 'https://thirties-admin.vercel.app';
+
+/**
+ * Ask the backend to push a (content-free) nudge to the OTHER party of a
+ * conversation after we send a message, so they return even when the app is
+ * closed. Must go server-side: the rules forbid reading another user's
+ * pushToken. Fire-and-forget — never blocks or fails the send.
+ */
+async function notifyOtherParty(body: { conversationId?: string; loftConversationId?: string }): Promise<void> {
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return;
+    await fetch(`${BACKEND_BASE}/api/notify/message`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch { /* notifications are best-effort */ }
+}
 
 /**
  * Ask the server to pair us with a waiting candidate. Cross-user matchQueue
@@ -1093,6 +1112,7 @@ export async function sendConversationMessage(params: {
     await updateDoc(doc(db, 'conversations', params.conversationId), {
       messageCount: increment(1),
     });
+    void notifyOtherParty({ conversationId: params.conversationId });
     return true;
   } catch { return false; }
 }
