@@ -162,10 +162,10 @@ export default function MoodScreen({ navigation }: Props) {
     // Free user out of free matches and out of wicks.
     if (!canMatch()) {
       Alert.alert(
-        lang === 'en' ? 'Out of free matches' : '今日免費配對已用完',
+        lang === 'en' ? 'That\'s enough for tonight' : '今晚先到這裡',
         lang === 'en'
-          ? `You've used today's free matches. Each match now costs ${MATCH_WICK_COST} wick — top up, or go Vigil for unlimited.`
-          : `今日免費配對已用完，之後每次配對需 ${MATCH_WICK_COST} 燭芯。可購買燭芯，或升級守夜人享無限配對。`,
+          ? `You've used today's free connections. Log in tomorrow for 2 more wicks — or top up / go Vigil for unlimited tonight.`
+          : `今天的免費配對用完了。明天登入會再得 2 燭芯，今晚想繼續可以購買燭芯，或升級守夜人享無限配對。`,
         [
           { text: lang === 'en' ? 'OK' : '知道了', style: 'cancel' },
           { text: lang === 'en' ? 'Upgrade' : '升級', onPress: () => navigation.push('Upgrade') },
