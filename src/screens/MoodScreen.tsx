@@ -510,7 +510,26 @@ function FirstTimeGuide({ p, lang, onDismiss }: { p: Palette; lang: string; onDi
             ))}
           </View>
 
-          <FadeInUp delay={560} distance={10}>
+          {/* 燭芯 — deliberately a quieter footnote, not a fourth "place": it's the
+              currency, and naming it here (with the reassurance that talking and
+              braziers are free) heads off a confusing first paywall later. */}
+          <FadeInUp delay={555} distance={10}>
+            <View style={{ marginTop: 18, paddingTop: 16, borderTopWidth: 0.5, borderTopColor: p.line, flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+              <View style={{ marginTop: 2 }}><WickGlyph size={15} color={p.accent} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
+                  {lang === 'en' ? 'Wicks' : '燭芯'}
+                </Text>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, color: p.muted, lineHeight: 19, marginTop: 3 }}>
+                  {lang === 'en'
+                    ? 'A few arrive each day you log in — spent on speaking up, veiled photos, the closer moments. Talking and braziers are always free.'
+                    : '每天登入會得幾枚，用在開口說話、帶紗照片這些更靠近的時刻。對話和火盆，一直都是免費的。'}
+                </Text>
+              </View>
+            </View>
+          </FadeInUp>
+
+          <FadeInUp delay={640} distance={10}>
             <TouchableOpacity onPress={onDismiss} activeOpacity={0.88}
               style={[styles.guideBtn, { backgroundColor: p.ink }]}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, letterSpacing: 2, color: p.dark ? '#1a1530' : '#fff', fontWeight: '500' }}>
