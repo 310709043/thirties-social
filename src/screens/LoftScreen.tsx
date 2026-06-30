@@ -16,6 +16,7 @@ import { TextInput } from 'react-native';
 import { getLoftName } from '../lib/identity';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
 import { hasLoftPin, verifyLoftPin, setLoftPin, clearLoftPin } from '../lib/loftLock';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Loft'>;
 
@@ -372,6 +373,12 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const [genderF, setGenderF] = React.useState<'all' | 'female' | 'male' | 'nonbinary'>(defaultGenderF);
   const [ageF, setAgeF] = React.useState<string>('all');
 
+  // First time inside the Loft: a one-time, quiet guide to the few mechanics the
+  // entry/consent screen doesn't teach (the ritual, picking someone, paid closeness).
+  const [showLoftGuide, setShowLoftGuide] = React.useState(false);
+  React.useEffect(() => { AsyncStorage.getItem('loftGuideSeen').then(v => { if (v !== '1') setShowLoftGuide(true); }); }, []);
+  const dismissLoftGuide = () => { setShowLoftGuide(false); AsyncStorage.setItem('loftGuideSeen', '1'); };
+
   React.useEffect(() => {
     fetchTonightLoftSessions().then(s => {
       setSessions(s);
@@ -604,11 +611,79 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
           </Text>
         </View>
       </SafeAreaView>
+      {showLoftGuide && <LoftGuide lang={lang} onDismiss={dismissLoftGuide} />}
     </LinearGradient>
   );
 }
 
+/**
+ * One-time first-entry guide for the Loft. The entry screen sets mood + consent;
+ * this names the three things a newcomer actually needs to act — kept short and
+ * candlelit so it doesn't break the Loft's "no reason needed" stillness.
+ */
+function LoftGuide({ lang, onDismiss }: { lang: string; onDismiss: () => void }) {
+  const G = LOFT_PALETTE;
+  const rows = [
+    {
+      title: lang === 'en' ? "Tonight's question" : '今夜之題',
+      desc: lang === 'en'
+        ? 'Answer softly. Your words may be how someone sees you tonight.'
+        : '輕輕回答一句。你的話，可能成為別人今晚看到的你。',
+    },
+    {
+      title: lang === 'en' ? 'Choose one candle' : '挑一盞燭火',
+      desc: lang === 'en'
+        ? 'Tap someone to start talking. By morning, the conversation fades on its own.'
+        : '點一個人開始說話。天亮前，這段對話會自己熄滅。',
+    },
+    {
+      title: lang === 'en' ? 'Coming closer' : '想更靠近',
+      desc: lang === 'en'
+        ? 'Veiled photos and lifting a veil cost wicks — and only by mutual consent.'
+        : '帶紗照片、掀面紗需要燭芯，而且雙方同意才會發生。',
+    },
+  ];
+  return (
+    <View style={styles.guideScrim}>
+      <View style={[styles.guideCard, { backgroundColor: G.bgSolid, borderColor: G.candle + '40' }]}>
+        <View style={{ alignItems: 'center', marginBottom: 6 }}>
+          <WickGlyph size={18} color={G.candle} />
+        </View>
+        <Text style={{ fontFamily: 'NotoSerifTC-Light', fontSize: 22, letterSpacing: 2, textAlign: 'center', color: G.ink }}>
+          {lang === 'en' ? 'Inside the Loft' : '進來之前'}
+        </Text>
+        <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: G.muted, textAlign: 'center', marginTop: 6 }}>
+          {lang === 'en' ? 'three quiet things' : '先知道三件小事'}
+        </Text>
+        <View style={{ marginTop: 20 }}>
+          {rows.map((r, i) => (
+            <View key={r.title} style={[styles.guideRow, i > 0 && { borderTopWidth: 0.5, borderTopColor: G.line }]}>
+              <View style={[styles.guideDot, { borderColor: G.candle + '55' }]}>
+                <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: G.candle, opacity: 0.85 }} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: G.ink, fontWeight: '500' }}>{r.title}</Text>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, color: G.muted, lineHeight: 19, marginTop: 3 }}>{r.desc}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+        <TouchableOpacity onPress={onDismiss} activeOpacity={0.88} style={[styles.guideEnter, { backgroundColor: G.candle }]}>
+          <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, letterSpacing: 3, color: '#1a1014', fontWeight: '500' }}>
+            {lang === 'en' ? 'Step into the night' : '走進夜色'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  guideScrim:   { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(8,4,6,0.88)', alignItems: 'center', justifyContent: 'center', padding: 30 },
+  guideCard:    { width: '100%', maxWidth: 360, borderRadius: 24, borderWidth: 0.5, paddingTop: 26, paddingBottom: 22, paddingHorizontal: 24 },
+  guideRow:     { flexDirection: 'row', gap: 13, alignItems: 'flex-start', paddingVertical: 13 },
+  guideDot:     { width: 32, height: 32, borderRadius: 16, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  guideEnter:   { height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 20 },
   container:    { flex: 1, padding: 28, paddingBottom: 32 },
   consentBox:   { padding: 14, borderRadius: 12, borderWidth: 0.5, marginBottom: 18 },
   enterBtn:     { height: 60, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, overflow: 'hidden' },
