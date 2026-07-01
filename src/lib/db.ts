@@ -703,7 +703,9 @@ export function subscribeToTonightRitual(
   const q = query(
     collection(db, 'loftRitualResponses'),
     where('nightDate', '==', tonight),
-    limit(100),
+    // The Loft only surfaces the latest few answers + a count, so a small window
+    // is plenty — this caps reads per Loft entry (each viewer subscribes to this).
+    limit(40),
   );
   return onSnapshot(q, snap => {
     const list = snap.docs
@@ -810,6 +812,7 @@ export function subscribeToLoftMessages(
   const q = query(
     collection(db, 'loftConversations', loftConversationId, 'messages'),
     orderBy('createdAt', 'asc'),
+    limit(200),
   );
   return onSnapshot(q, snap => {
     onUpdate(snap.docs.map(d => ({
@@ -1124,6 +1127,7 @@ export function subscribeToConversationMessages(
   const q = query(
     collection(db, 'conversations', conversationId, 'messages'),
     orderBy('createdAt', 'asc'),
+    limit(200),
   );
   return onSnapshot(q, snap => {
     onUpdate(snap.docs.map(d => ({

@@ -139,7 +139,9 @@ export default function RoomScreen({ navigation, route }: Props) {
       if (others >= ROOM_CAPACITY) { setReadOnly(true); return; }
       await joinRoomPresence(roomId, identitySeed);
       if (!active) { leaveRoomPresence(roomId); return; }
-      hbId = setInterval(() => heartbeatRoomPresence(roomId), 20000);
+      // 30s heartbeat (presence stays "online" within a 45s window) — a third
+      // fewer presence writes, which also cuts the fan-out to every room member.
+      hbId = setInterval(() => heartbeatRoomPresence(roomId), 30000);
     })();
     const unsub = subscribeToRoomPresence(roomId, setPresence);
     return () => {
