@@ -1102,6 +1102,22 @@ export async function endConversation(conversationId: string, reason: string): P
   } catch {}
 }
 
+/**
+ * Fires when the conversation is ended (the other party left) or removed, so the
+ * screen can tell the user instead of leaving them talking to no one. onEnded
+ * gets the reason string once ended, or null while still active.
+ */
+export function subscribeToConversationEnded(
+  conversationId: string,
+  onEnded: (reason: string | null) => void,
+): () => void {
+  return onSnapshot(doc(db, 'conversations', conversationId), snap => {
+    if (!snap.exists()) { onEnded('gone'); return; }
+    const data = snap.data();
+    onEnded(data.endedAt ? (data.endedReason ?? 'ended') : null);
+  });
+}
+
 // ── Conversation Messages ─────────────────────────────────
 export interface DbConvMessage {
   id: string;

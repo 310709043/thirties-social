@@ -13,7 +13,7 @@ import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch } from '../hooks/useAppStore';
-import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping } from '../lib/db';
+import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationEnded } from '../lib/db';
 import { filterMessage } from '../lib/filter';
 import { analytics } from '../lib/analytics';
 import { pickImage, uploadVeiledPhoto, getVeiledPhoto } from '../lib/photos';
@@ -60,6 +60,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [veilSent, setVeilSent] = useState(false);
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [otherTyping, setOtherTyping] = useState(false);
+  const [otherLeft, setOtherLeft] = useState(false);
+  const iLeftRef = useRef(false);
   const [pausing, setPausing] = useState(false);
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pauseReadyRef = useRef(false);
@@ -81,11 +83,21 @@ export default function ChatScreen({ navigation, route }: Props) {
     return subscribeToTyping(conversationId, uid, setOtherTyping);
   }, [conversationId]);
 
+  // Tell the user when the other person leaves (or the chat is gone), instead of
+  // letting them keep talking to no one. Ignore our own leave (iLeftRef).
+  useEffect(() => {
+    if (!conversationId) return;
+    return subscribeToConversationEnded(conversationId, reason => {
+      if (reason && !iLeftRef.current) setOtherLeft(true);
+    });
+  }, [conversationId]);
+
   useEffect(() => {
     const id = setInterval(() => {
       setRemaining(r => {
         if (r <= 1) {
           clearInterval(id);
+          iLeftRef.current = true;
           (async () => {
             if (conversationId) {
               await endConversation(conversationId, 'timer_expired');
@@ -209,6 +221,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             <View style={styles.headerRow}>
               <TouchableOpacity
                 onPress={() => {
+                  iLeftRef.current = true;
                   if (conversationId) {
                     endConversation(conversationId, 'user_ended');
                     analytics.conversationEnd(conversationId, 'user_ended');
@@ -322,6 +335,21 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           {/* COMPOSER */}
           <View style={styles.composer}>
+            {otherLeft ? (
+              // The other person left — say so, and offer a clean exit instead of
+              // letting the user keep typing into a conversation with no one there.
+              <View style={[styles.veilBar, { backgroundColor: p.surface, borderColor: p.line, justifyContent: 'space-between' }]}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, flex: 1 }}>
+                  {lang === 'en' ? 'The other person has left this conversation.' : '對方已離開這段對話。'}
+                </Text>
+                <TouchableOpacity onPress={() => { iLeftRef.current = true; navigation.replace('Close'); }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>
+                    {lang === 'en' ? 'Leave' : '離開'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+            <>
             {/* Slow-mode buffer note */}
             {pausing && (
               <View style={[styles.veilBar, { backgroundColor: p.surface, borderColor: p.line }]}>
@@ -360,6 +388,8 @@ export default function ChatScreen({ navigation, route }: Props) {
                 <Text style={{ color: p.dark ? '#1a1530' : '#fff', fontSize: 16 }}>{pausing ? '⋯' : '↑'}</Text>
               </TouchableOpacity>
             </GlassCard>
+            </>
+            )}
           </View>
 
           {/* PHOTO VEIL SHEET */}
