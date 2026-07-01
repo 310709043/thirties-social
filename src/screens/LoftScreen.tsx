@@ -512,7 +512,8 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
 
           {/* Filter — you choose who to see (no forced opposite-gender) */}
           <View style={{ marginTop: 14, gap: 8 }}>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            {/* wrap so the four chips never overflow / get clipped on narrow screens */}
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
               {([['all', lang === 'en' ? 'Everyone' : '所有人'], ['female', lang === 'en' ? 'Women' : '女生'], ['male', lang === 'en' ? 'Men' : '男生'], ['nonbinary', lang === 'en' ? 'Non-binary' : '非二元']] as const).map(([v, label]) => (
                 <TouchableOpacity key={v} onPress={() => setGenderF(v as any)} activeOpacity={0.8}
                   style={{ paddingHorizontal: 13, paddingVertical: 6, borderRadius: 999,
