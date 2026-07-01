@@ -1028,15 +1028,29 @@ export async function claimDailyReward(): Promise<{
 }
 
 // ── Subscribe to Active Rooms ─────────────────────────────
+// Polls instead of holding a live listener. The lobby list doesn't need to be
+// instant, and a live subscription re-reads a room doc for EVERY viewer on every
+// room message (messageCount churn) — a read fan-out that explodes at scale
+// (500 viewers → 500 reads per single room message). Polling makes each viewer's
+// cost fixed (~50 reads / 25s) regardless of chat volume. Same signature, so
+// callers are unchanged.
 export function subscribeToActiveRooms(onChange: (rooms: DbRoom[]) => void): () => void {
   const q = query(collection(db, 'rooms'), where('isActive', '==', true), limit(50));
-  return onSnapshot(q, snap => {
-    const rooms = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }) as DbRoom)
-      .sort((a, b) => (b.messageCount ?? 0) - (a.messageCount ?? 0))
-      .slice(0, 20);
-    onChange(rooms);
-  });
+  let cancelled = false;
+  const fetchOnce = async () => {
+    try {
+      const snap = await getDocs(q);
+      if (cancelled) return;
+      const rooms = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as DbRoom)
+        .sort((a, b) => (b.messageCount ?? 0) - (a.messageCount ?? 0))
+        .slice(0, 20);
+      onChange(rooms);
+    } catch { /* keep the last list on a transient error */ }
+  };
+  fetchOnce();
+  const id = setInterval(fetchOnce, 25000);
+  return () => { cancelled = true; clearInterval(id); };
 }
 
 // ── Get or create a preset room ────────────────────────────
