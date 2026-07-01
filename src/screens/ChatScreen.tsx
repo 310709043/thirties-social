@@ -403,8 +403,8 @@ export default function ChatScreen({ navigation, route }: Props) {
                 </Text>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.muted, lineHeight: 20, marginBottom: 14 }}>
                   {lang === 'en'
-                    ? 'Your photo will be hidden under a veil. The other person can lift each layer with 3 wicks. They always agree first.'
-                    : '照片會藏在紗罩下。對方每揭一層需要 3 燭芯，並且需要先同意。'}
+                    ? 'Your photo stays under a veil. They lift it layer by layer — the first layer is free, the next two cost 1 wick each.'
+                    : '照片會藏在紗罩下，對方一層一層揭開——第一層免費，之後每層 1 燭芯。'}
                 </Text>
                 <View style={{ alignItems: 'center', marginBottom: 16 }}>
                   {selectedPhotoUri ? (
@@ -417,7 +417,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     <>
                       <PhotoVeil p={p} liftLevel={0} size={160} lang={lang} />
                       <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 8 }}>
-                        {lang === 'en' ? 'preview — 4 layers of veil' : '預覽 — 四層紗罩'}
+                        {lang === 'en' ? 'preview — 3 layers of veil' : '預覽 — 三層紗罩'}
                       </Text>
                     </>
                   )}
@@ -492,12 +492,20 @@ export default function ChatScreen({ navigation, route }: Props) {
 function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil }: any) {
   const isMe = m.from === 'me';
   const isPhoto = m.messageType === 'photo';
-  const [revealedUrl, setRevealedUrl] = React.useState<string | null>(null);
-  const [revealing, setRevealing] = React.useState(false);
+  // Veil lifts in 3 steps: 0 = fully veiled · 1 = first layer (free) · 2 · 3 = full.
+  const [veilStep, setVeilStep] = React.useState(0);
+  const [photoUrl, setPhotoUrl] = React.useState<string | null>(null);
+  const [working, setWorking] = React.useState(false);
+  const revealed = veilStep >= 3;
 
-  const revealPhoto = async () => {
-    if (revealing || revealedUrl || !m.photoId) return;
-    // Must build some conversation first — no grabbing the photo and bailing.
+  // Cloudinary server-side blur so the earlier layers show only a blurred image,
+  // not the original file — the raw photo URL is only used on the final layer.
+  const blurred = (url: string, amount: number) =>
+    url.includes('/image/upload/') ? url.replace('/image/upload/', `/image/upload/e_blur:${amount},q_auto/`) : url;
+
+  const liftVeil = async () => {
+    if (working || isMe || revealed || !m.photoId) return;
+    // Anti photo-grab: build some conversation before any layer lifts.
     if (!canRevealVeil) {
       Alert.alert(
         lang === 'en' ? 'Keep talking first' : '再多聊一點',
@@ -507,27 +515,33 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
       );
       return;
     }
-    if (wicks < 3) {
+    if (veilStep === 0) {
+      // First layer is free — fetch the photo (kept blurred until fully lifted).
+      setWorking(true);
+      const photo = await getVeiledPhoto(m.photoId);
+      setWorking(false);
+      if (photo?.url) { setPhotoUrl(photo.url); setVeilStep(1); }
+      return;
+    }
+    // Layers 2 and 3 cost 1 wick each.
+    if (wicks < 1) {
       Alert.alert(
         lang === 'en' ? 'Not enough wicks' : '燭芯不足',
-        lang === 'en' ? 'You need 3 wicks to lift the veil.' : '需要 3 芯才能揭開紗罩。',
+        lang === 'en' ? 'You need 1 wick to lift the next layer.' : '再揭一層需要 1 燭芯。',
       );
       return;
     }
-    setRevealing(true);
-    const result = await spendWicks(3, 'veil_reveal', conversationId);
-    if (result.ok) {
-      const photo = await getVeiledPhoto(m.photoId);
-      if (photo?.url) setRevealedUrl(photo.url);
-    }
-    setRevealing(false);
+    setWorking(true);
+    const result = await spendWicks(1, 'veil_reveal', conversationId);
+    setWorking(false);
+    if (result.ok) setVeilStep(s => s + 1);
   };
 
   const bubble = isPhoto ? (
     <TouchableOpacity
-      onPress={!isMe ? revealPhoto : undefined}
+      onPress={!isMe ? liftVeil : undefined}
       activeOpacity={isMe ? 1 : 0.85}
-      disabled={isMe || !!revealedUrl}
+      disabled={isMe || revealed}
     >
       <View style={[
         styles.bubble,
@@ -536,31 +550,43 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
           ? { backgroundColor: p.accent, borderWidth: 0 }
           : { backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line },
       ]}>
-        {revealedUrl ? (
-          <Image source={{ uri: revealedUrl }} style={{ width: 160, height: 160, borderRadius: 14 }} resizeMode="cover" />
+        {veilStep === 0 || !photoUrl ? (
+          <PhotoVeil p={p} liftLevel={0} size={120} lang={lang} />
         ) : (
-          <>
-            <PhotoVeil p={p} liftLevel={0} size={120} lang={lang} />
-            {!isMe && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                <WickGlyph size={10} color={wicks >= 3 ? p.accent : p.muted} />
-                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: wicks >= 3 ? p.accent : p.muted }}>
-                  {revealing ? '…' : '3'}
+          <Image
+            source={{ uri: revealed ? photoUrl : blurred(photoUrl, veilStep === 1 ? 1500 : 500) }}
+            style={{ width: 160, height: 160, borderRadius: 14 }}
+            resizeMode="cover"
+          />
+        )}
+        {!isMe && !revealed && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+            {veilStep === 0 ? (
+              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.accent }}>
+                {working ? '…' : (lang === 'en' ? 'free' : '免費')}
+              </Text>
+            ) : (
+              <>
+                <WickGlyph size={10} color={wicks >= 1 ? p.accent : p.muted} />
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: wicks >= 1 ? p.accent : p.muted }}>
+                  {working ? '…' : '1'}
                 </Text>
-              </View>
+              </>
             )}
-          </>
+          </View>
         )}
         <Text style={{
           fontFamily: 'EBGaramond-Italic', fontSize: 10,
           color: isMe ? 'rgba(255,255,255,0.7)' : p.muted,
           textAlign: 'center', marginTop: 4,
         }}>
-          {revealedUrl
+          {revealed
             ? (lang === 'en' ? 'revealed' : '已揭開')
             : isMe
             ? (lang === 'en' ? 'veiled photo sent' : '帶紗照片已送出')
-            : (lang === 'en' ? 'tap to reveal · 3 wicks' : '點擊揭開 · 3 芯')}
+            : veilStep === 0
+            ? (lang === 'en' ? 'tap to lift · free' : '點擊揭開第一層 · 免費')
+            : (lang === 'en' ? 'lift another layer · 1 wick' : '再揭一層 · 1 芯')}
         </Text>
       </View>
     </TouchableOpacity>
