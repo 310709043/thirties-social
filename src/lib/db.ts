@@ -911,6 +911,23 @@ const BACKEND_BASE = process.env.EXPO_PUBLIC_ADMIN_URL ?? 'https://thirties-admi
  * closed. Must go server-side: the rules forbid reading another user's
  * pushToken. Fire-and-forget — never blocks or fails the send.
  */
+/**
+ * Ask the backend to delete every veiled photo of a conversation (Cloudinary
+ * asset + metadata) when the chat ends. Server-side because deletion needs the
+ * Cloudinary secret. Fire-and-forget — never blocks ending the chat.
+ */
+export async function purgeConversationPhotos(conversationId: string): Promise<void> {
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return;
+    await fetch(`${BACKEND_BASE}/api/photos/purge-conversation`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversationId }),
+    });
+  } catch { /* best-effort cleanup */ }
+}
+
 async function notifyOtherParty(body: { conversationId?: string; loftConversationId?: string }): Promise<void> {
   try {
     const idToken = await auth.currentUser?.getIdToken();
@@ -1100,6 +1117,9 @@ export async function endConversation(conversationId: string, reason: string): P
   try {
     await updateDoc(doc(db, 'conversations', conversationId), { endedAt: serverTimestamp(), endedReason: reason });
   } catch {}
+  // The chat is over — wipe any veiled photos it held so nothing lingers on our
+  // storage (honors "photos vanish after the conversation"). Fire-and-forget.
+  void purgeConversationPhotos(conversationId);
 }
 
 /**
