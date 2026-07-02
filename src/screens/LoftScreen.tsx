@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,7 +16,12 @@ import { TextInput } from 'react-native';
 import { getLoftName } from '../lib/identity';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
 import { hasLoftPin, verifyLoftPin, setLoftPin, clearLoftPin } from '../lib/loftLock';
+import { pickImage, uploadAlbumPhoto } from '../lib/photos';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// A heavy Cloudinary blur — the Loft only ever shows a fogged hint of a face.
+const loftBlur = (url: string) =>
+  url.includes('/image/upload/') ? url.replace('/image/upload/', '/image/upload/e_blur:2000,q_auto/') : url;
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Loft'>;
 
@@ -35,6 +40,10 @@ export default function LoftScreen({ navigation }: Props) {
   const [entering, setEntering] = useState(false);
   const [showBroke, setShowBroke] = useState(false);
   const [brokeLine] = useState(() => BROKE_LINES[Math.floor(Math.random() * BROKE_LINES.length)]);
+  // Optional photo brought into the Loft for the night (others see it blurred).
+  const [loftPhotoUri, setLoftPhotoUri] = useState<string | null>(null);
+  const [loftPhoto, setLoftPhoto] = useState<{ url: string; publicId: string } | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   // Optional Loft PIN lock.
   const [pinMode, setPinMode] = useState<'none' | 'enter' | 'set'>('none');
   const [pinInput, setPinInput] = useState('');
@@ -60,7 +69,7 @@ export default function LoftScreen({ navigation }: Props) {
       if (!go) return;
     }
     const nightName = getLoftName(seed, lang);
-    const result = await enterLoft(nightName);
+    const result = await enterLoft(nightName, loftPhoto);
     if (result.ok) {
       await recordLoftEntry();
       hapticMedium();
@@ -72,6 +81,30 @@ export default function LoftScreen({ navigation }: Props) {
       Alert.alert(
         lang === 'en' ? 'Something went wrong' : '出了點問題',
         lang === 'en' ? 'Could not enter the Loft. Please try again.' : '無法進入夜閣。請再試一次。',
+        [{ text: 'OK', style: 'cancel' }],
+      );
+    }
+  };
+
+  // Bring a photo into the Loft. It's uploaded now (so entry is instant) and
+  // others only ever see a heavily blurred version; it's purged after the night.
+  const pickLoftPhoto = async () => {
+    if (uploadingPhoto) return;
+    const uri = await pickImage();
+    if (!uri) return;
+    setLoftPhotoUri(uri);
+    setUploadingPhoto(true);
+    const up = await uploadAlbumPhoto(uri);
+    setUploadingPhoto(false);
+    if (up) {
+      setLoftPhoto(up);
+      hapticMedium();
+    } else {
+      setLoftPhotoUri(null);
+      hapticWarning();
+      Alert.alert(
+        lang === 'en' ? 'Upload failed' : '上傳失敗',
+        lang === 'en' ? 'Could not upload the photo. You can still enter without one.' : '照片上傳失敗，你仍然可以不帶照片進入。',
         [{ text: 'OK', style: 'cancel' }],
       );
     }
@@ -238,6 +271,31 @@ export default function LoftScreen({ navigation }: Props) {
               {t('loftLine2', lang)}
             </Text>
           </View>
+
+          {/* Optional photo for the night — others only see a blurred hint. */}
+          <TouchableOpacity onPress={pickLoftPhoto} activeOpacity={0.8} disabled={uploadingPhoto}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, paddingHorizontal: 4 }}>
+            <View style={{ width: 48, height: 48, borderRadius: 10, overflow: 'hidden', borderWidth: 0.5, borderColor: 'rgba(232,165,87,0.35)', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(232,165,87,0.06)' }}>
+              {loftPhotoUri ? (
+                <>
+                  <Image source={{ uri: loftPhotoUri }} blurRadius={18} style={StyleSheet.absoluteFill} />
+                  {uploadingPhoto ? <ActivityIndicator color={L.candle} /> : null}
+                </>
+              ) : (
+                <Text style={{ fontSize: 22, color: L.candle }}>＋</Text>
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: L.ink, letterSpacing: 0.5 }}>
+                {loftPhoto
+                  ? (lang === 'en' ? 'Photo added · tap to change' : '已加入照片 · 點擊更換')
+                  : (lang === 'en' ? 'Bring a photo tonight (optional)' : '帶一張照片進來（選填）')}
+              </Text>
+              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11.5, color: L.muted, marginTop: 3, lineHeight: 17 }}>
+                {lang === 'en' ? 'Others only see a blurred hint · gone by dawn' : '別人只會看到模糊的你 · 天亮後刪除'}
+              </Text>
+            </View>
+          </TouchableOpacity>
 
           {/* Enter button */}
           <TouchableOpacity onPress={handleEnter} activeOpacity={0.85}
@@ -566,15 +624,29 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
                 <PressableScale key={m.seed} onPress={() => handlePickPerson(m.session)}
                   disabled={connecting === m.seed}>
                   <View style={[styles.loftCard, { backgroundColor: 'rgba(245,226,196,0.04)', borderColor: 'rgba(232,165,87,0.18)' }]}>
-                    {/* Veiled portrait — warm candlelit gloom with a faint figure */}
+                    {/* Veiled portrait — a blurred hint of their photo if they
+                        brought one, otherwise warm candlelit gloom + a faint figure. */}
                     <View style={{ width: 60, height: 80, borderRadius: 12, overflow: 'hidden', flexShrink: 0, borderWidth: 0.5, borderColor: 'rgba(232,165,87,0.2)' }}>
-                      <LinearGradient colors={['#5a2f3a', '#3a1f29', '#241318']} start={{ x: 0.3, y: 0 }} end={{ x: 0.7, y: 1 }}
-                        style={StyleSheet.absoluteFill} />
-                      {/* faint head-and-shoulders silhouette behind the veil */}
-                      <View style={{ position: 'absolute', top: 16, alignSelf: 'center', width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(245,226,196,0.10)' }} />
-                      <View style={{ position: 'absolute', bottom: -6, alignSelf: 'center', width: 44, height: 34, borderRadius: 22, backgroundColor: 'rgba(245,226,196,0.08)' }} />
-                      {/* candle glow at the base */}
-                      <View style={{ position: 'absolute', bottom: 6, alignSelf: 'center', width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(232,165,87,0.28)' }} />
+                      {m.session.photoUrl ? (
+                        <>
+                          {/* Double-blurred: Cloudinary transform + native blur so the
+                              face is never legible even if the transform is bypassed. */}
+                          <Image source={{ uri: loftBlur(m.session.photoUrl) }} blurRadius={22} style={StyleSheet.absoluteFill} />
+                          <LinearGradient colors={['rgba(90,47,58,0.35)', 'rgba(36,19,24,0.55)']} start={{ x: 0.3, y: 0 }} end={{ x: 0.7, y: 1 }}
+                            style={StyleSheet.absoluteFill} />
+                          <View style={{ position: 'absolute', bottom: 6, alignSelf: 'center', width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(232,165,87,0.28)' }} />
+                        </>
+                      ) : (
+                        <>
+                          <LinearGradient colors={['#5a2f3a', '#3a1f29', '#241318']} start={{ x: 0.3, y: 0 }} end={{ x: 0.7, y: 1 }}
+                            style={StyleSheet.absoluteFill} />
+                          {/* faint head-and-shoulders silhouette behind the veil */}
+                          <View style={{ position: 'absolute', top: 16, alignSelf: 'center', width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(245,226,196,0.10)' }} />
+                          <View style={{ position: 'absolute', bottom: -6, alignSelf: 'center', width: 44, height: 34, borderRadius: 22, backgroundColor: 'rgba(245,226,196,0.08)' }} />
+                          {/* candle glow at the base */}
+                          <View style={{ position: 'absolute', bottom: 6, alignSelf: 'center', width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(232,165,87,0.28)' }} />
+                        </>
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: L.ink, lineHeight: 24, letterSpacing: 0.5 }}>

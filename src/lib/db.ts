@@ -587,7 +587,10 @@ export function isLoftOpen(now: Date = new Date()): boolean {
   return h >= 13 || h < 7;
 }
 
-export async function enterLoft(nightName: string): Promise<{
+export async function enterLoft(
+  nightName: string,
+  photo?: { url: string; publicId: string } | null,
+): Promise<{
   ok: boolean; sessionId?: string; balance?: number; error?: string;
 }> {
   const uid = getCurrentUid();
@@ -624,12 +627,48 @@ export async function enterLoft(nightName: string): Promise<{
     gender: myGender,
     ageBracket: myAge,
     visible: myVisible,
+    photoUrl: photo?.url ?? null,
+    photoPublicId: photo?.publicId ?? null,
     enteredAt: serverTimestamp(),
     leftAt: null,
   });
 
+  // Purge any Loft photo I left on a previous night — the picture is only meant
+  // to live for one night. Fire-and-forget so it never blocks entry.
+  void purgeMyOldLoftPhotos(uid, tonight, ref.id);
+
   const balance = userSnap.exists() ? (userSnap.data() as any).wicks : 0;
   return { ok: true, sessionId: ref.id, balance };
+}
+
+// Destroys Cloudinary assets for my Loft sessions from earlier nights (or any
+// stray earlier session tonight) and clears the metadata, so a face never
+// outlives the night it was brought in. Best-effort; failures are swallowed.
+async function purgeMyOldLoftPhotos(uid: string, tonight: string, keepSessionId: string): Promise<void> {
+  try {
+    const mine = await getDocs(query(
+      collection(db, 'loftSessions'),
+      where('userId', '==', uid),
+      limit(20),
+    ));
+    const idToken = await auth.currentUser?.getIdToken();
+    await Promise.all(mine.docs.map(async d => {
+      const data = d.data() as any;
+      if (d.id === keepSessionId) return;
+      const publicId = data.photoPublicId as string | undefined;
+      if (!publicId) return;
+      if (idToken) {
+        try {
+          await fetch(`${BACKEND_BASE}/api/photos/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+            body: JSON.stringify({ publicId }),
+          });
+        } catch { /* best effort */ }
+      }
+      try { await updateDoc(d.ref, { photoUrl: null, photoPublicId: null }); } catch { /* best effort */ }
+    }));
+  } catch { /* best effort */ }
 }
 
 export interface DbLoftSession {
@@ -640,6 +679,10 @@ export interface DbLoftSession {
   gender?: string | null;
   ageBracket?: string | null;
   visible?: boolean;
+  // A single photo brought into the Loft for the night. Others only ever see a
+  // heavily blurred version; the asset is purged after the night.
+  photoUrl?: string | null;
+  photoPublicId?: string | null;
   enteredAt: any;
 }
 
