@@ -749,11 +749,15 @@ export async function createLoftConversation(params: {
   const uid = getCurrentUid();
   if (!uid) return null;
   try {
-    // Check if conversation already exists tonight
+    // Check if I already opened a conversation with them tonight. Only query my
+    // OWN conversations (userAId == me): the rules only let a participant read a
+    // loftConversation, so an `in [me, them]` query would try to read docs I'm
+    // not part of and fail with permission-denied — which made every tap silently
+    // do nothing (returned null). Worst case we create a fresh (ephemeral) doc.
     const tonight = new Date().toISOString().slice(0, 10);
     const existQ = query(
       collection(db, 'loftConversations'),
-      where('userAId', 'in', [uid, params.otherUserId]),
+      where('userAId', '==', uid),
       limit(20),
     );
     const existSnap = await getDocs(existQ);
