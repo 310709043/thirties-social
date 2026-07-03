@@ -30,6 +30,7 @@ export default function RoomScreen({ navigation, route }: Props) {
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [roomTopic, setRoomTopic] = useState('');
   const [roomCreated, setRoomCreated] = useState(false);
+  const [creatingRoom, setCreatingRoom] = useState(false);
   const [identitySeed, setIdentitySeed] = useState(seed);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [room, setRoom] = useState<DbRoom | null>(null);
@@ -465,7 +466,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                   </GlassCard>
                   <TouchableOpacity
                     onPress={async () => {
-                      if (roomTopic.trim().length === 0) return;
+                      if (creatingRoom || roomTopic.trim().length === 0) return;
                       const free = getTier() === 'free';
                       // Free users get 1 free room/day; beyond that it costs wicks. Vigil free.
                       const mustPay = roomCreateCostsWick();
@@ -482,6 +483,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                         );
                         return;
                       }
+                      setCreatingRoom(true);
                       const newRoom = await createRoom({ topicZh: roomTopic.trim() });
                       if (newRoom) {
                         if (mustPay) await spendWicks(ROOM_CREATE_COST, 'open_room');
@@ -490,11 +492,15 @@ export default function RoomScreen({ navigation, route }: Props) {
                         setRoom(newRoom);
                         setRoomCreated(true);
                       }
+                      setCreatingRoom(false);
                     }}
+                    disabled={creatingRoom || roomTopic.trim().length === 0}
                     style={[styles.inviteBtn, { backgroundColor: roomTopic.trim().length > 0 ? p.ink : p.line }]}
                   >
                     <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: roomTopic.trim().length > 0 ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
-                      {lang === 'en' ? 'Open the room' : '開啟火盆'}
+                      {creatingRoom
+                        ? (lang === 'en' ? 'Opening…' : '開啟中…')
+                        : (lang === 'en' ? 'Open the room' : '開啟火盆')}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => setShowCreateRoom(false)} style={styles.cancelBtn}>
