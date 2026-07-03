@@ -9,7 +9,7 @@ import { DIRECTIONS } from '../lib/theme';
 import { VaporBackground, GlassCard, Cap, WickGlyph, PhotoVeil, FadeInUp, ScreenHeader } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, setIdentityKind, getAvailableIdentityKinds, setLoftVisible } from '../hooks/useAppStore';
+import { useAppStore, setIdentityKind, getAvailableIdentityKinds, setLoftVisible, getTier } from '../hooks/useAppStore';
 import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, IdentityKind, getLoftName } from '../lib/identity';
 import { pickImage, uploadAlbumPhoto } from '../lib/photos';
 import { getAlbum, addAlbumPhoto, removeAlbumPhoto, AlbumPhoto } from '../lib/db';
@@ -72,6 +72,18 @@ export default function ProfileScreen({ navigation }: Props) {
   const ALBUM_MAX = 6;
   const addPhoto = async () => {
     if (uploading || album.length >= ALBUM_MAX) return;
+    // Guests can browse but not build a profile — nudge them to create an account.
+    if (getTier() === 'guest') {
+      Alert.alert(
+        lang === 'en' ? 'Create an account first' : '先建立帳號',
+        lang === 'en' ? 'Sign up to add photos to your profile.' : '建立帳號後才能在個人檔案加入照片。',
+        [
+          { text: lang === 'en' ? 'Not now' : '再看看', style: 'cancel' },
+          { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
+        ],
+      );
+      return;
+    }
     const uri = await pickImage();
     if (!uri) return;
     setUploading(true);
