@@ -7,7 +7,7 @@ import {
   onSnapshot, runTransaction, serverTimestamp,
   Timestamp, getDocs, increment, arrayUnion, arrayRemove,
 } from 'firebase/firestore';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { signInAnonymously, onAuthStateChanged, deleteUser } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { sendPushToUser } from './notifications';
 
@@ -1292,10 +1292,24 @@ export async function deleteAccount(): Promise<{ ok: boolean; error?: string }> 
     const txSnap = await getDocs(txQ);
     await Promise.all(txSnap.docs.map(d => deleteDoc(d.ref)));
 
-    // 4. Delete loft sessions
+    // 4. Delete loft sessions — and destroy any Loft photo left on Cloudinary so a
+    //    face doesn't outlive the account (the blurred photo they brought in).
     const loftQ = query(collection(db, 'loftSessions'), where('userId', '==', uid));
     const loftSnap = await getDocs(loftQ);
-    await Promise.all(loftSnap.docs.map(d => deleteDoc(d.ref)));
+    const loftToken = await auth.currentUser?.getIdToken().catch(() => null);
+    await Promise.all(loftSnap.docs.map(async d => {
+      const publicId = (d.data() as any).photoPublicId;
+      if (publicId && loftToken) {
+        try {
+          await fetch(`${BACKEND_BASE}/api/photos/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${loftToken}` },
+            body: JSON.stringify({ publicId }),
+          });
+        } catch {}
+      }
+      await deleteDoc(d.ref);
+    }));
 
     // 5. Delete reports filed by this user
     const reportQ = query(collection(db, 'reports'), where('reporterId', '==', uid));
@@ -1351,8 +1365,17 @@ export async function deleteAccount(): Promise<{ ok: boolean; error?: string }> 
     const rrSnap = await getDocs(rrQ);
     await Promise.all(rrSnap.docs.map(d => deleteDoc(d.ref)));
 
-    // 9. Sign out Firebase
-    await auth.signOut();
+    // 9. Delete the Firebase Auth account itself (not just the data), so the
+    //    email/Google credential is gone and a stale "auth exists but no profile"
+    //    state can't happen on re-login. May throw auth/requires-recent-login for
+    //    an old session — fall back to signing out so the account is at least
+    //    detached locally (the profile data is already gone above).
+    const authUser = auth.currentUser;
+    try {
+      if (authUser) await deleteUser(authUser);
+    } catch {
+      try { await auth.signOut(); } catch {}
+    }
 
     return { ok: true };
   } catch (e: any) {
