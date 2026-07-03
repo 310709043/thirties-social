@@ -427,7 +427,7 @@ function ritualAgo(ms: number, lang: string): string {
 }
 
 function LoftInside({ lang, wicks, onBack, onEnter }: any) {
-  const { seed, identityKind, gender: myGender } = useAppStore();
+  const { seed, identityKind } = useAppStore();
   const myName = getLoftName(seed, lang);
   const [sessions, setSessions] = React.useState<DbLoftSession[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -436,10 +436,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const [responses, setResponses] = React.useState<DbRitualResponse[]>([]);
   const [ritualText, setRitualText] = React.useState('');
   const [posting, setPosting] = React.useState(false);
-  // Non-binary users default to seeing 'nonbinary' so they feel seen immediately;
-  // everyone else starts on 'all'. Any user can still change it freely.
-  const defaultGenderF = myGender === 'nonbinary' ? 'nonbinary' : 'all';
-  const [genderF, setGenderF] = React.useState<'all' | 'female' | 'male' | 'nonbinary'>(defaultGenderF);
+  const [genderF, setGenderF] = React.useState<'all' | 'female' | 'male'>('all');
   const [ageF, setAgeF] = React.useState<string>('all');
 
   // First time inside the Loft: a one-time, quiet guide to the few mechanics the
@@ -602,7 +599,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
           <View style={{ marginTop: 14, gap: 8 }}>
             {/* wrap so the four chips never overflow / get clipped on narrow screens */}
             <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-              {([['all', lang === 'en' ? 'Everyone' : '所有人'], ['female', lang === 'en' ? 'Women' : '女生'], ['male', lang === 'en' ? 'Men' : '男生'], ['nonbinary', lang === 'en' ? 'Non-binary' : '非二元']] as const).map(([v, label]) => (
+              {([['all', lang === 'en' ? 'Everyone' : '所有人'], ['female', lang === 'en' ? 'Women' : '女生'], ['male', lang === 'en' ? 'Men' : '男生']] as const).map(([v, label]) => (
                 <TouchableOpacity key={v} onPress={() => setGenderF(v as any)} activeOpacity={0.8}
                   style={{ paddingHorizontal: 13, paddingVertical: 6, borderRadius: 999,
                     borderWidth: genderF === v ? 1 : 0.5,

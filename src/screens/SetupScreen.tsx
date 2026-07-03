@@ -185,7 +185,6 @@ export default function SetupScreen({ navigation }: Props) {
               {[
                 { v: 'f', zh: '女生', en: 'Woman' },
                 { v: 'm', zh: '男生', en: 'Man' },
-                { v: 'x', zh: '非二元', en: 'Non-binary' },
               ].map(g => (
                 <TouchableOpacity key={g.v} onPress={() => setGender(g.v)} activeOpacity={0.8}
                   style={[styles.genderCard, {
