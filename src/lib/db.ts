@@ -812,7 +812,11 @@ export async function createLoftConversation(params: {
       const involves = (data.userAId === uid && data.userBId === params.otherUserId)
         || (data.userAId === params.otherUserId && data.userBId === uid);
       const isTonight = data.createdAt?.toDate?.()?.toISOString?.()?.slice(0, 10) === tonight;
-      return involves && isTonight && !data.endedAt;
+      // Must still be live — reusing an already-expired conversation would drop the
+      // user into a chat that instantly closes itself (remaining <= 0 → goBack),
+      // which looks exactly like "tapping does nothing". Expired → make a fresh one.
+      const notExpired = (data.expiresAt?.toMillis?.() ?? 0) > Date.now();
+      return involves && isTonight && !data.endedAt && notExpired;
     });
     if (existing) return { id: existing.id, ...existing.data() } as DbLoftConversation;
 
