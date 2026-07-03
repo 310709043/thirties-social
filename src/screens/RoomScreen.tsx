@@ -51,8 +51,24 @@ export default function RoomScreen({ navigation, route }: Props) {
   );
   const liveCount = activeMembers.length;
   const isRoomFull = liveCount >= ROOM_CAPACITY;
+  // Guests can watch the room chat, but not participate — any action nudges them
+  // to create an account.
+  const isGuestUser = getTier() === 'guest';
   // readOnly is set only when we entered an already-full room (never joined).
-  const canSend = !readOnly && !!uid;
+  const canSend = !readOnly && !!uid && !isGuestUser;
+
+  const promptRegister = () => {
+    Alert.alert(
+      lang === 'en' ? 'Create an account to join in' : '建立帳號才能參與',
+      lang === 'en'
+        ? 'As a guest you can read the room. Create an account to speak, react, and connect.'
+        : '訪客可以閱讀火盆裡的對話。建立帳號後，就能發言、回應、和人搭上話。',
+      [
+        { text: lang === 'en' ? 'Not now' : '再看看', style: 'cancel' },
+        { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
+      ],
+    );
+  };
 
   const reshuffleIdentity = () => {
     setIdentitySeed(Math.random().toString(36).slice(2));
@@ -134,6 +150,8 @@ export default function RoomScreen({ navigation, route }: Props) {
     let hbId: ReturnType<typeof setInterval> | undefined;
     setReadOnly(false);
     (async () => {
+      // Guests only watch — they don't join presence or take up a room slot.
+      if (isGuestUser) { setReadOnly(true); return; }
       const others = await fetchActivePresenceCount(roomId);
       if (!active) return;
       if (others >= ROOM_CAPACITY) { setReadOnly(true); return; }
@@ -189,6 +207,7 @@ export default function RoomScreen({ navigation, route }: Props) {
       );
       return;
     }
+    if (isGuestUser) { promptRegister(); return; }
     const check = filterMessage(inputText.trim());
     if (check.blocked) {
       Alert.alert(
@@ -308,7 +327,7 @@ export default function RoomScreen({ navigation, route }: Props) {
               )}
               {messages.map((msg, i) => (
                 <FadeInUp key={msg.id} distance={10} delay={Math.min(i * 30, 180)}>
-                  <TouchableOpacity onPress={() => setInviting({ senderId: msg.senderId, seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 })} activeOpacity={0.8}>
+                  <TouchableOpacity onPress={() => { if (isGuestUser) return promptRegister(); setInviting({ senderId: msg.senderId, seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 }); }} activeOpacity={0.8}>
                     <View style={{ flexDirection: 'row', gap: 12 }}>
                       <Identity kind={identityKind === 'character' ? 'sigil' : identityKind} seed={msg.senderSeed} size={32} palette={p} lang={lang} trust={0.15} />
                       <View style={{ flex: 1 }}>
@@ -325,7 +344,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                                 {(n as number) > 1 && <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.accent, marginLeft: 3 }}>{n as number}</Text>}
                               </View>
                             ))}
-                          <TouchableOpacity onPress={() => setReactingMsg(msg.id)} hitSlop={8}
+                          <TouchableOpacity onPress={() => { if (isGuestUser) return promptRegister(); setReactingMsg(msg.id); }} hitSlop={8}
                             style={[styles.resoAdd, { borderColor: p.line }]}>
                             <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: p.muted }}>
                               {lang === 'en' ? '+ resonate' : '＋ 共鳴'}
@@ -397,6 +416,17 @@ export default function RoomScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               </View>
             </>
+          ) : isGuestUser ? (
+            // Guests can watch the room, but speaking requires an account.
+            <TouchableOpacity onPress={promptRegister}
+              style={[styles.identityComposerRow, { backgroundColor: p.surface, borderColor: p.line, justifyContent: 'center', gap: 8 }]}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center' }}>
+                {lang === 'en' ? 'You’re watching as a guest · ' : '你正以訪客身分旁觀 · '}
+              </Text>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>
+                {lang === 'en' ? 'create an account to speak' : '建立帳號即可發言'}
+              </Text>
+            </TouchableOpacity>
           ) : (
             <View style={[styles.identityComposerRow, { backgroundColor: p.surface, borderColor: p.line }]}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center', flex: 1 }}>
