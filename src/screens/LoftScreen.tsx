@@ -17,7 +17,7 @@ import { getLoftName } from '../lib/identity';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
 import { filterMessage } from '../lib/filter';
 import { hasLoftPin, verifyLoftPin, setLoftPin, clearLoftPin } from '../lib/loftLock';
-import { pickImage, uploadAlbumPhoto } from '../lib/photos';
+import { pickImage, uploadLoftPhoto } from '../lib/photos';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // A heavy Cloudinary blur — the Loft only ever shows a fogged hint of a face.
@@ -95,7 +95,7 @@ export default function LoftScreen({ navigation }: Props) {
     if (!uri) return;
     setLoftPhotoUri(uri);
     setUploadingPhoto(true);
-    const up = await uploadAlbumPhoto(uri);
+    const up = await uploadLoftPhoto(uri);
     setUploadingPhoto(false);
     if (up) {
       setLoftPhoto(up);
