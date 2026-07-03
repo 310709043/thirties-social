@@ -15,6 +15,7 @@ import { getTonightRitual } from '../lib/rituals';
 import { TextInput } from 'react-native';
 import { getLoftName } from '../lib/identity';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
+import { filterMessage } from '../lib/filter';
 import { hasLoftPin, verifyLoftPin, setLoftPin, clearLoftPin } from '../lib/loftLock';
 import { pickImage, uploadAlbumPhoto } from '../lib/photos';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -198,9 +199,11 @@ export default function LoftScreen({ navigation }: Props) {
 
   if (inside) {
     return <LoftInside lang={lang} wicks={wicks} onBack={() => setInside(false)}
-      onEnter={(otherSeed: string, loftConversationId: string, otherName: string, enteredAt?: any) => {
-        const sessionEnteredAt = enteredAt?.toDate?.()?.getTime?.() ?? Date.now();
-        navigation.push('LoftChat', { otherSeed, loftConversationId, otherName, sessionEnteredAt });
+      onEnter={(otherSeed: string, loftConversationId: string, otherName: string, expiresAt?: any, otherPhotoUrl?: string | null) => {
+        // Timer runs off the CONVERSATION's own 58-min window (expiresAt), not the
+        // other person's Loft entry — otherwise a chat could open near-expired.
+        const expiresMs = expiresAt?.toDate?.()?.getTime?.() ?? (Date.now() + 58 * 60 * 1000);
+        navigation.push('LoftChat', { otherSeed, loftConversationId, otherName, expiresAt: expiresMs, otherPhotoUrl: otherPhotoUrl ?? null });
       }} />;
   }
 
@@ -438,10 +441,17 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const dismissLoftGuide = () => { setShowLoftGuide(false); AsyncStorage.setItem('loftGuideSeen', '1'); };
 
   React.useEffect(() => {
-    fetchTonightLoftSessions().then(s => {
+    let alive = true;
+    const load = () => fetchTonightLoftSessions().then(s => {
+      if (!alive) return;
       setSessions(s);
       setLoading(false);
     });
+    load();
+    // Re-poll so people who arrive after you actually show up (a one-shot fetch
+    // made the Loft feel empty). 25s keeps reads bounded.
+    const id = setInterval(load, 25000);
+    return () => { alive = false; clearInterval(id); };
   }, []);
 
   React.useEffect(() => subscribeToTonightRitual(setResponses), []);
@@ -449,6 +459,18 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const submitRitual = async () => {
     const c = ritualText.trim();
     if (!c || posting) return;
+    // The ritual answer is broadcast to everyone in the Loft, so it must pass the
+    // same content filter as chat messages.
+    const check = filterMessage(c);
+    if (check.blocked) {
+      hapticWarning();
+      Alert.alert(
+        lang === 'en' ? 'Not tonight' : '這句話留著吧',
+        lang === 'en' ? 'This answer contains content that may harm others.' : '這則回答包含可能傷害他人的內容，換個說法吧。',
+        [{ text: 'OK', style: 'cancel' }],
+      );
+      return;
+    }
     setPosting(true);
     const ok = await postRitualResponse({ content: c, seed, name: myName });
     setPosting(false);
@@ -467,7 +489,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
     });
     setConnecting(null);
     if (conv) {
-      onEnter(session.userId, conv.id, session.nightName, session.enteredAt);
+      onEnter(session.userId, conv.id, session.nightName, conv.expiresAt, session.photoUrl);
     }
   };
 

@@ -31,7 +31,7 @@ export type RootStackParamList = {
   Profile: undefined;
   Settings: undefined;
   Loft: undefined;
-  LoftChat: { otherSeed: string; loftConversationId: string; otherName: string; sessionEnteredAt?: number };
+  LoftChat: { otherSeed: string; loftConversationId: string; otherName: string; sessionEnteredAt?: number; expiresAt?: number; otherPhotoUrl?: string | null };
   Upgrade: undefined;
 };
 

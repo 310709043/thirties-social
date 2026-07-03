@@ -695,7 +695,7 @@ export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
   const q = query(
     collection(db, 'loftSessions'),
     where('nightDate', '==', tonight),
-    limit(50),
+    limit(200),
   );
   const [snap, myUserSnap] = await Promise.all([
     getDocs(q),
@@ -704,7 +704,10 @@ export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
   const myBlocked: string[] = myUserSnap?.exists() ? (myUserSnap.data().blockedUsers ?? []) : [];
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }) as DbLoftSession)
-    .filter(s => !(s as any).leftAt && (s as any).visible !== false && s.userId !== uid && !myBlocked.includes(s.userId));
+    .filter(s => !(s as any).leftAt && (s as any).visible !== false && s.userId !== uid && !myBlocked.includes(s.userId))
+    // Newest arrivals first — most likely to still be around (sorted in JS to
+    // avoid a composite index on nightDate + enteredAt).
+    .sort((a, b) => ((b as any).enteredAt?.toMillis?.() ?? 0) - ((a as any).enteredAt?.toMillis?.() ?? 0));
 }
 
 // ── Loft Ritual (今夜之題) ────────────────────────────────
@@ -870,7 +873,46 @@ export function subscribeToLoftMessages(
 
 export async function endLoftConversation(loftConversationId: string): Promise<void> {
   try {
-    await updateDoc(doc(db, 'loftConversations', loftConversationId), { endedAt: serverTimestamp() });
+    // Stamp who ended it so the other side can show a "they left" notice
+    // (endedReason holds the leaver's uid; the survivor sees reason !== their uid).
+    await updateDoc(doc(db, 'loftConversations', loftConversationId), {
+      endedAt: serverTimestamp(),
+      endedReason: getCurrentUid() ?? 'ended',
+    });
+  } catch {}
+}
+
+/** Watch a Loft conversation for the other person leaving (endedAt gets stamped). */
+export function subscribeToLoftConversationEnded(
+  loftConversationId: string,
+  onEnded: (reason: string | null) => void,
+): () => void {
+  return onSnapshot(doc(db, 'loftConversations', loftConversationId), snap => {
+    if (!snap.exists()) { onEnded('gone'); return; }
+    const data = snap.data();
+    onEnded(data.endedAt ? (data.endedReason ?? 'ended') : null);
+  });
+}
+
+/** How far I've lifted the veil on this Loft chat (persisted so paid progress
+ *  survives leaving/re-entering and is never charged twice). Returns 1 (fully
+ *  veiled) if none stored. */
+export async function fetchLoftVeilLevel(loftConversationId: string): Promise<number> {
+  const uid = getCurrentUid();
+  if (!uid) return 1;
+  try {
+    const snap = await getDoc(doc(db, 'loftConversations', loftConversationId));
+    const level = snap.exists() ? (snap.data() as any).veils?.[uid] : undefined;
+    return typeof level === 'number' && level >= 1 ? level : 1;
+  } catch { return 1; }
+}
+
+/** Persist my veil-lift level for this Loft chat (per-viewer). */
+export async function bumpLoftVeilLevel(loftConversationId: string, level: number): Promise<void> {
+  const uid = getCurrentUid();
+  if (!uid) return;
+  try {
+    await updateDoc(doc(db, 'loftConversations', loftConversationId), { [`veils.${uid}`]: level });
   } catch {}
 }
 
