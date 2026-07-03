@@ -367,7 +367,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 {lang === 'en' ? 'send a veiled photo — they reveal it with wicks' : '傳送帶紗照片，對方用燭芯揭開'}
               </Text>
               <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted }}>
-                {lang === 'en' ? '3 wicks' : '3 芯'}
+                {lang === 'en' ? '2 wicks' : '2 芯'}
               </Text>
             </TouchableOpacity>
             <GlassCard p={p} padding={6} radius={28}
@@ -441,8 +441,8 @@ export default function ChatScreen({ navigation, route }: Props) {
                 {!veilSent ? (
                   <TouchableOpacity
                     onPress={async () => {
-                      if (!selectedPhotoUri || !conversationId || wicks < 3) return;
-                      const result = await spendWicks(3, 'photo_veil', conversationId);
+                      if (!selectedPhotoUri || !conversationId || wicks < 2) return;
+                      const result = await spendWicks(2, 'photo_veil', conversationId);
                       if (result.ok) {
                         const photo = await uploadVeiledPhoto({ conversationId, uri: selectedPhotoUri });
                         if (photo) {
@@ -457,15 +457,15 @@ export default function ChatScreen({ navigation, route }: Props) {
                         }
                       }
                     }}
-                    disabled={!selectedPhotoUri || wicks < 3}
-                    style={[styles.sendVeilBtn, { backgroundColor: (selectedPhotoUri && wicks >= 3) ? p.ink : p.line }]}>
+                    disabled={!selectedPhotoUri || wicks < 2}
+                    style={[styles.sendVeilBtn, { backgroundColor: (selectedPhotoUri && wicks >= 2) ? p.ink : p.line }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: (selectedPhotoUri && wicks >= 3) ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: (selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
                         {lang === 'en' ? 'Send veiled photo' : '送出帶紗照片'}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <WickGlyph size={11} color={(selectedPhotoUri && wicks >= 3) ? (p.dark ? '#1a1530' : '#fff') : p.muted} />
-                        <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: (selectedPhotoUri && wicks >= 3) ? (p.dark ? '#1a1530' : 'rgba(255,255,255,0.7)') : p.muted }}>3</Text>
+                        <WickGlyph size={11} color={(selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : '#fff') : p.muted} />
+                        <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: (selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : 'rgba(255,255,255,0.7)') : p.muted }}>2</Text>
                       </View>
                     </View>
                   </TouchableOpacity>
