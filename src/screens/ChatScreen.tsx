@@ -17,6 +17,7 @@ import { subscribeToConversationMessages, sendConversationMessage, spendWicks, g
 import { filterMessage } from '../lib/filter';
 import { analytics } from '../lib/analytics';
 import { pickImage, uploadVeiledPhoto, getVeiledPhoto } from '../lib/photos';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ScreenCapture from 'expo-screen-capture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
@@ -498,6 +499,22 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
   const [working, setWorking] = React.useState(false);
   const revealed = veilStep >= 3;
 
+  // Persist how far this photo was lifted (per photo, on this device) so paid
+  // layers survive leaving/re-entering the chat and are never charged twice.
+  const veilKey = m.photoId ? `veilStep_${m.photoId}` : null;
+  React.useEffect(() => {
+    if (!veilKey || isMe) return;
+    let alive = true;
+    AsyncStorage.getItem(veilKey).then(async v => {
+      const step = v ? parseInt(v, 10) : 0;
+      if (!alive || !step) return;
+      const photo = await getVeiledPhoto(m.photoId);
+      if (alive && photo?.url) { setPhotoUrl(photo.url); setVeilStep(step); }
+    });
+    return () => { alive = false; };
+  }, [veilKey, isMe]);
+  const persistVeil = (step: number) => { if (veilKey) void AsyncStorage.setItem(veilKey, String(step)); };
+
   // Cloudinary server-side blur so the earlier layers show only a blurred image,
   // not the original file — the raw photo URL is only used on the final layer.
   const blurred = (url: string, amount: number) =>
@@ -520,7 +537,7 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
       setWorking(true);
       const photo = await getVeiledPhoto(m.photoId);
       setWorking(false);
-      if (photo?.url) { setPhotoUrl(photo.url); setVeilStep(1); }
+      if (photo?.url) { setPhotoUrl(photo.url); setVeilStep(1); persistVeil(1); }
       return;
     }
     // Layers 2 and 3 cost 1 wick each.
@@ -534,7 +551,7 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
     setWorking(true);
     const result = await spendWicks(1, 'veil_reveal', conversationId);
     setWorking(false);
-    if (result.ok) setVeilStep(s => s + 1);
+    if (result.ok) setVeilStep(s => { const next = s + 1; persistVeil(next); return next; });
   };
 
   const bubble = isPhoto ? (
