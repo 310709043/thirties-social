@@ -17,6 +17,12 @@ import { ToastProvider } from './src/components/ui/Toast';
 import { ErrorBoundary } from './src/components/ui/ErrorBoundary';
 import { configureGoogle } from './src/lib/googleAuth';
 
+// Cap OS font-scaling so an accessibility "huge text" setting can't overflow the
+// app's tight fixed-height rows/buttons (same failure mode as text overlap, but
+// font-driven). 1.3 still respects a meaningful amount of user scaling.
+const TextWithDefaults = Text as unknown as { defaultProps?: { maxFontSizeMultiplier?: number } };
+TextWithDefaults.defaultProps = { ...(TextWithDefaults.defaultProps ?? {}), maxFontSizeMultiplier: 1.3 };
+
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
