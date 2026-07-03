@@ -219,7 +219,11 @@ export default function LoftScreen({ navigation }: Props) {
       }} />
 
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={styles.container}>
+        {/* Scrollable so the entry never overlaps on shorter / denser screens
+            (a fixed layout let the flex tagline get squeezed and overrun the
+            consent box once the optional photo row was added). */}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Back + Loft lock */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingVertical: 4 }}>
@@ -249,8 +253,8 @@ export default function LoftScreen({ navigation }: Props) {
             </Text>
           </View>
 
-          {/* Tagline */}
-          <View style={{ marginTop: 36, paddingHorizontal: 12, flex: 1 }}>
+          {/* Tagline — natural height (no flex) so its text is never squeezed. */}
+          <View style={{ marginTop: 36, paddingHorizontal: 12 }}>
             <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 22, lineHeight: 38, color: L.ink, fontWeight: '300', letterSpacing: 1, textAlign: 'center' }}>
               {t('loftTagline', lang)}
             </Text>
@@ -261,6 +265,10 @@ export default function LoftScreen({ navigation }: Props) {
               {t('loftSub', lang)}
             </Text>
           </View>
+
+          {/* Flexible spacer: pushes the consent box + button toward the bottom
+              when there's room, and collapses (never overlaps) when there isn't. */}
+          <View style={{ flexGrow: 1, minHeight: 24 }} />
 
           {/* Consent box */}
           <View style={[styles.consentBox, { backgroundColor: 'rgba(232,165,87,0.05)', borderColor: 'rgba(232,165,87,0.2)' }]}>
@@ -323,7 +331,7 @@ export default function LoftScreen({ navigation }: Props) {
               {t('loftBack', lang)}
             </Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </SafeAreaView>
 
       {/* Broke sheet — shown when free user already entered tonight */}
@@ -779,7 +787,7 @@ const styles = StyleSheet.create({
   guideRow:     { flexDirection: 'row', gap: 13, alignItems: 'flex-start', paddingVertical: 13 },
   guideDot:     { width: 32, height: 32, borderRadius: 16, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   guideEnter:   { height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 20 },
-  container:    { flex: 1, padding: 28, paddingBottom: 32 },
+  container:    { flexGrow: 1, padding: 28, paddingBottom: 32 },
   consentBox:   { padding: 14, borderRadius: 12, borderWidth: 0.5, marginBottom: 18 },
   enterBtn:     { height: 60, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, overflow: 'hidden' },
   brokeOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(11,6,8,0.8)', alignItems: 'center', justifyContent: 'center', padding: 32 },
