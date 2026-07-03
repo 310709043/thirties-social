@@ -207,7 +207,7 @@ export default function MoodScreen({ navigation }: Props) {
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
         {/* ── Top Bar ── */}
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.identityRow} activeOpacity={0.8}

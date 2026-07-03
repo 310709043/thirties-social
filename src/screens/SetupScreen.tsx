@@ -286,7 +286,7 @@ export default function SetupScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  scroll:     { padding: 26, paddingBottom: 48 },
+  scroll:     { padding: 26, paddingBottom: 48, width: '100%', maxWidth: 560, alignSelf: 'center' },
   title:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 28, fontWeight: '400', lineHeight: 38, marginTop: 8 },
   sub:        { fontFamily: 'NotoSerifTC-Regular', fontSize: 13, lineHeight: 22, marginTop: 8 },
   genderCard: { flex: 1, padding: 14, borderRadius: 16, borderWidth: 1 },

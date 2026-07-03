@@ -399,7 +399,7 @@ function IdentityKindPicker({ current, vigil, lang, p, onSelect, onUpgrade }: {
 }
 
 const styles = StyleSheet.create({
-  scroll:          { padding: 22, paddingBottom: 48 },
+  scroll:          { padding: 22, paddingBottom: 48, width: '100%', maxWidth: 560, alignSelf: 'center' },
   topBar:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 20 },
   backBtn:         { width: 36, height: 36, borderRadius: 18, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
   nightNameBox:    { marginTop: 16, padding: 16, borderRadius: 16, borderWidth: 0.5 },

@@ -286,7 +286,7 @@ export default function AuthScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  scroll:     { padding: 28, paddingBottom: 48, justifyContent: 'center', flexGrow: 1 },
+  scroll:     { padding: 28, paddingBottom: 48, justifyContent: 'center', flexGrow: 1, width: '100%', maxWidth: 560, alignSelf: 'center' },
   logoWrap:   { alignItems: 'center', marginBottom: 24 },
   header:     { alignItems: 'center', marginBottom: 24, gap: 6 },
   title:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 28, letterSpacing: 2 },

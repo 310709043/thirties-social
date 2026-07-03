@@ -180,7 +180,7 @@ export default function MatchScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container:    { flex: 1, padding: 28, justifyContent: 'space-between' },
+  container:    { flex: 1, padding: 28, justifyContent: 'space-between', width: '100%', maxWidth: 560, alignSelf: 'center' },
   header:       { gap: 4, marginTop: 24 },
   title:        { fontFamily: 'NotoSerifTC-Regular', fontSize: 32, lineHeight: 42 },
   titleAlt:     { fontFamily: 'EBGaramond-Italic', fontSize: 14, opacity: 0.4 },

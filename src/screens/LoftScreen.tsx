@@ -784,7 +784,7 @@ const styles = StyleSheet.create({
   guideRow:     { flexDirection: 'row', gap: 13, alignItems: 'flex-start', paddingVertical: 13 },
   guideDot:     { width: 32, height: 32, borderRadius: 16, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   guideEnter:   { height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 20 },
-  container:    { flexGrow: 1, padding: 28, paddingBottom: 32 },
+  container:    { flexGrow: 1, padding: 28, paddingBottom: 32, width: '100%', maxWidth: 560, alignSelf: 'center' },
   consentBox:   { padding: 14, borderRadius: 12, borderWidth: 0.5, marginBottom: 18 },
   enterBtn:     { height: 60, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, overflow: 'hidden' },
   brokeOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(11,6,8,0.8)', alignItems: 'center', justifyContent: 'center', padding: 32 },

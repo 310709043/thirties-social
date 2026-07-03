@@ -158,7 +158,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ flex: 1 }}
+          style={{ flex: 1, width: '100%', maxWidth: 620, alignSelf: 'center' }}
         >
           {/* TOP */}
           <View style={styles.topBar}>

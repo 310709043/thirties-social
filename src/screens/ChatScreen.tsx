@@ -210,7 +210,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     <VaporBackground p={p} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView
-          style={{ flex: 1 }}
+          style={{ flex: 1, width: '100%', maxWidth: 620, alignSelf: 'center' }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={0}
         >

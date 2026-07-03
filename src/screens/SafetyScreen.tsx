@@ -165,7 +165,7 @@ export default function SafetyScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container:    { flex: 1, padding: 28, gap: 0 },
+  container:    { flex: 1, padding: 28, gap: 0, width: '100%', maxWidth: 560, alignSelf: 'center' },
   backBtn:      { paddingBottom: 20 },
   backText:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
   header:       { gap: 12, marginBottom: 32 },

@@ -236,7 +236,7 @@ function IntroMark3({ color, accent }: { color: string; accent: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 28, paddingBottom: 38 },
+  container: { flex: 1, paddingHorizontal: 28, paddingBottom: 38, width: '100%', maxWidth: 560, alignSelf: 'center' },
   brand:     { alignItems: 'center', gap: 12, marginTop: 8 },
   brandName: { fontFamily: 'NotoSerifTC-Regular', fontSize: 18, letterSpacing: 2, textAlign: 'center' },
   brandEn:   { fontFamily: 'EBGaramond-Italic', fontSize: 13, textAlign: 'center' },

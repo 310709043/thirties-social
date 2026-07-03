@@ -262,7 +262,7 @@ export default function UpgradeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  scroll:       { padding: 24, paddingBottom: 48 },
+  scroll:       { padding: 24, paddingBottom: 48, width: '100%', maxWidth: 560, alignSelf: 'center' },
   backBtn:      { paddingBottom: 20 },
   blurb:        { fontFamily: 'NotoSerifTC-Regular', fontSize: 13, lineHeight: 22, marginTop: 8 },
   vigilBtn:     { height: 52, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 16 },

@@ -233,7 +233,7 @@ export default function RoomScreen({ navigation, route }: Props) {
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1, width: '100%', maxWidth: 620, alignSelf: 'center' }}>
         {/* TOP BAR */}
         <View style={styles.topBar}>
           <TouchableOpacity

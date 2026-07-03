@@ -129,7 +129,7 @@ export default function CloseScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 32, justifyContent: 'space-between' },
+  container: { flex: 1, padding: 32, justifyContent: 'space-between', width: '100%', maxWidth: 560, alignSelf: 'center' },
   orb:       { position: 'absolute', width: 300, height: 300, borderRadius: 150, top: '15%', alignSelf: 'center' },
   content:   { flex: 1, justifyContent: 'center', gap: 16, alignItems: 'center' },
   title:     { fontFamily: 'NotoSerifTC-Light', fontSize: 36, lineHeight: 46, textAlign: 'center' },
