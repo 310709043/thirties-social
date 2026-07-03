@@ -571,7 +571,7 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
           <PhotoVeil p={p} liftLevel={0} size={120} lang={lang} />
         ) : (
           <Image
-            source={{ uri: revealed ? photoUrl : blurred(photoUrl, veilStep === 1 ? 1500 : 500) }}
+            source={{ uri: revealed ? photoUrl : blurred(photoUrl, veilStep === 1 ? 1600 : 1000) }}
             style={{ width: 160, height: 160, borderRadius: 14 }}
             resizeMode="cover"
           />
