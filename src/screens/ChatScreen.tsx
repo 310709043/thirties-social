@@ -59,6 +59,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [inputText, setInputText] = useState('');
   const [showVeilSheet, setShowVeilSheet] = useState(false);
   const [veilSent, setVeilSent] = useState(false);
+  const [veilSending, setVeilSending] = useState(false);
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [otherTyping, setOtherTyping] = useState(false);
   const [otherLeft, setOtherLeft] = useState(false);
@@ -441,27 +442,38 @@ export default function ChatScreen({ navigation, route }: Props) {
                 {!veilSent ? (
                   <TouchableOpacity
                     onPress={async () => {
-                      if (!selectedPhotoUri || !conversationId || wicks < 2) return;
+                      // Guard against double-taps (each tap would upload + charge again).
+                      if (veilSending || !selectedPhotoUri || !conversationId || wicks < 2) return;
+                      setVeilSending(true);
+                      // Upload FIRST, charge only once it's actually on Cloudinary — so a
+                      // failed upload never burns wicks. (A rare charge failure after upload
+                      // just orphans the asset, which is purged when the chat ends.)
+                      const photo = await uploadVeiledPhoto({ conversationId, uri: selectedPhotoUri });
+                      if (!photo) {
+                        setVeilSending(false);
+                        Alert.alert(lang === 'en' ? 'Upload failed' : '上傳失敗', lang === 'en' ? 'No wick was used. Please try again.' : '沒有扣燭芯，請再試一次。');
+                        return;
+                      }
                       const result = await spendWicks(2, 'photo_veil', conversationId);
                       if (result.ok) {
-                        const photo = await uploadVeiledPhoto({ conversationId, uri: selectedPhotoUri });
-                        if (photo) {
-                          await sendConversationMessage({
-                            conversationId,
-                            content: photo.id,
-                            messageType: 'photo',
-                          });
-                          hapticMedium();
-                          setVeilSent(true);
-                          analytics.loftVeilLift(0);
-                        }
+                        await sendConversationMessage({
+                          conversationId,
+                          content: photo.id,
+                          messageType: 'photo',
+                        });
+                        hapticMedium();
+                        setVeilSent(true);
+                        analytics.loftVeilLift(0);
                       }
+                      setVeilSending(false);
                     }}
-                    disabled={!selectedPhotoUri || wicks < 2}
+                    disabled={veilSending || !selectedPhotoUri || wicks < 2}
                     style={[styles.sendVeilBtn, { backgroundColor: (selectedPhotoUri && wicks >= 2) ? p.ink : p.line }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: (selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
-                        {lang === 'en' ? 'Send veiled photo' : '送出帶紗照片'}
+                        {veilSending
+                          ? (lang === 'en' ? 'Sending…' : '送出中…')
+                          : (lang === 'en' ? 'Send veiled photo' : '送出帶紗照片')}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                         <WickGlyph size={11} color={(selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : '#fff') : p.muted} />
