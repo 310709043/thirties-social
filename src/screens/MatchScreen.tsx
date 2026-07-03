@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
@@ -10,7 +10,7 @@ import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, matchCostsWick } from '../hooks/useAppStore';
 import { trackPerson } from '../hooks/useAppStore';
-import { leaveMatchQueue } from '../lib/db';
+import { leaveMatchQueue, endConversation, subscribeToConversationEnded } from '../lib/db';
 import { analytics } from '../lib/analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Match'>;
@@ -31,6 +31,26 @@ export default function MatchScreen({ navigation, route }: Props) {
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const acceptPulse = useRef(new Animated.Value(1)).current;
   const haloPulse = useRef(new Animated.Value(0.6)).current;
+  // Set once I've accepted/declined, so the "they left" watcher below doesn't
+  // fire off my own action or after I've navigated away.
+  const iActedRef = useRef(false);
+
+  // If the other person declines or leaves before I decide, the conversation gets
+  // ended — so I'm not left staring at (or entering an empty chat with) a match
+  // that's already gone.
+  useEffect(() => {
+    if (!conversationId) return;
+    return subscribeToConversationEnded(conversationId, reason => {
+      if (!reason || iActedRef.current) return;
+      iActedRef.current = true;
+      leaveMatchQueue();
+      Alert.alert(
+        lang === 'en' ? 'They stepped away' : '對方先離開了',
+        lang === 'en' ? 'No wick was used. Try again — someone else may be waiting.' : '沒有扣任何燭芯。再試一次，也許有別人在等。',
+        [{ text: lang === 'en' ? 'OK' : '好', onPress: () => navigation.goBack() }],
+      );
+    });
+  }, [conversationId]);
 
   useEffect(() => {
     Animated.parallel([
@@ -122,6 +142,7 @@ export default function MatchScreen({ navigation, route }: Props) {
               <Animated.View style={{ transform: [{ scale: acceptPulse }] }}>
                 <SoftButton p={p} variant="primary" size="lg" full
                   onPress={async () => {
+                    iActedRef.current = true;
                     await trackPerson();
                     analytics.matchAccept();
                     // Charge moves to the first message sent (so neither side pays
@@ -137,7 +158,15 @@ export default function MatchScreen({ navigation, route }: Props) {
             </FadeInUp>
             <FadeInUp delay={500} distance={8}>
               <TouchableOpacity
-                onPress={async () => { analytics.matchDecline(); await leaveMatchQueue(); navigation.goBack(); }}
+                onPress={async () => {
+                  iActedRef.current = true;
+                  analytics.matchDecline();
+                  // Tell the other side the match fell through (they may be on this
+                  // same screen or already waiting in the chat).
+                  if (conversationId) await endConversation(conversationId, 'declined');
+                  await leaveMatchQueue();
+                  navigation.goBack();
+                }}
                 style={styles.decline}
               >
                 <Text style={[styles.declineText, { color: p.muted }]}>{t('matchDecline', lang)}</Text>
