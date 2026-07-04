@@ -485,16 +485,31 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const handlePickPerson = async (session: DbLoftSession) => {
     if (connecting) return;
     setConnecting(session.userId);
-    const conv = await createLoftConversation({
-      otherUserId: session.userId,
-      mySeed: seed,
-      otherSeed: session.userId,
-      myName,
-      otherName: session.nightName,
-    });
+    let conv = null;
+    try {
+      conv = await createLoftConversation({
+        otherUserId: session.userId,
+        mySeed: seed,
+        otherSeed: session.userId,
+        myName,
+        otherName: session.nightName,
+      });
+    } catch (e) {
+      console.warn('[Loft] handlePickPerson createLoftConversation threw:', e);
+    }
     setConnecting(null);
     if (conv) {
       onEnter(session.userId, conv.id, session.nightName, conv.expiresAt, session.photoUrl);
+    } else {
+      // Don't fail silently — a null means the conversation couldn't be created
+      // (permission/network). Surfacing it tells us (and the user) something's wrong
+      // instead of a dead tap.
+      hapticWarning();
+      Alert.alert(
+        lang === 'en' ? 'Could not open' : '無法開啟',
+        lang === 'en' ? 'Could not start this whisper. Please try again.' : '暫時無法開啟這段對話，請再試一次。',
+        [{ text: 'OK', style: 'cancel' }],
+      );
     }
   };
 
