@@ -305,6 +305,16 @@ export interface DbRoom {
 export const ROOM_CAPACITY = 20;
 /** A presence entry counts as "online" if its heartbeat is within this window. */
 export const PRESENCE_STALE_MS = 45 * 1000;
+/** Every brazier lives exactly 24 hours from the moment it's lit. */
+export const ROOM_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
+/** A room is expired once its closesAt has passed (isActive alone isn't enough —
+ *  nothing flips the flag server-side, so the client must honor closesAt). */
+function roomExpired(r: DbRoom): boolean {
+  const c: any = r.closesAt;
+  const ms = c?.toMillis ? c.toMillis() : (typeof c?.seconds === 'number' ? c.seconds * 1000 : null);
+  return ms != null && ms < Date.now();
+}
 
 export async function fetchActiveRooms(): Promise<DbRoom[]> {
   const q = query(
@@ -315,6 +325,7 @@ export async function fetchActiveRooms(): Promise<DbRoom[]> {
   const snap = await getDocs(q);
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }) as DbRoom)
+    .filter(r => !roomExpired(r))
     .sort((a, b) => (b.messageCount ?? 0) - (a.messageCount ?? 0))
     .slice(0, 20);
 }
@@ -343,7 +354,7 @@ export async function createRoom(params: {
     isUserCreated: true,
     messageCount: 0,
     createdAt: serverTimestamp(),
-    closesAt: Timestamp.fromDate(new Date(Date.now() + 43200 * 1000)),
+    closesAt: Timestamp.fromDate(new Date(Date.now() + ROOM_LIFETIME_MS)),
   };
   const ref = await addDoc(collection(db, 'rooms'), data);
   return { id: ref.id, ...data } as DbRoom;
@@ -702,12 +713,16 @@ export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
     uid ? getDoc(doc(db, 'users', uid)) : Promise.resolve(null),
   ]);
   const myBlocked: string[] = myUserSnap?.exists() ? (myUserSnap.data().blockedUsers ?? []) : [];
-  return snap.docs
+  const list = snap.docs
     .map(d => ({ id: d.id, ...d.data() }) as DbLoftSession)
     .filter(s => !(s as any).leftAt && (s as any).visible !== false && s.userId !== uid && !myBlocked.includes(s.userId))
     // Newest arrivals first — most likely to still be around (sorted in JS to
     // avoid a composite index on nightDate + enteredAt).
     .sort((a, b) => ((b as any).enteredAt?.toMillis?.() ?? 0) - ((a as any).enteredAt?.toMillis?.() ?? 0));
+  // One card per person: Vigil users can re-enter and leave several session docs
+  // behind, which showed up as the same name repeated — keep only the latest.
+  const seen = new Set<string>();
+  return list.filter(s => (seen.has(s.userId) ? false : (seen.add(s.userId), true)));
 }
 
 // ── Loft Ritual (今夜之題) ────────────────────────────────
@@ -1153,6 +1168,7 @@ export function subscribeToActiveRooms(onChange: (rooms: DbRoom[]) => void): () 
       if (cancelled) return;
       const rooms = snap.docs
         .map(d => ({ id: d.id, ...d.data() }) as DbRoom)
+        .filter(r => !roomExpired(r))
         .sort((a, b) => (b.messageCount ?? 0) - (a.messageCount ?? 0))
         .slice(0, 20);
       onChange(rooms);
@@ -1178,7 +1194,7 @@ export async function getOrCreatePresetRoom(params: {
       customTopicZh: params.topicZh, customTopicEn: params.topicEn,
       isActive: true, isUserCreated: false, messageCount: 0,
       createdAt: serverTimestamp(),
-      closesAt: Timestamp.fromDate(new Date(Date.now() + 43200 * 1000)),
+      closesAt: Timestamp.fromDate(new Date(Date.now() + ROOM_LIFETIME_MS)),
     };
     const ref = await addDoc(collection(db, 'rooms'), data);
     return { id: ref.id, ...data } as DbRoom;

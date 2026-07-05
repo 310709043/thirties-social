@@ -32,7 +32,7 @@ export const SWATCHES = [
 
 export const CHAR_POOL = '靜默霧雨夜冷暮歸潮影空惘茫渺渙寂晦悄忱忐悠寥曠淡涼涔淳潤湫渝沉惻悒愀慍憮憫黯沓徬徨惘徘徊靄';
 
-export type IdentityKind = 'sigil' | 'silhouette' | 'color+adj' | 'character' | 'text';
+export type IdentityKind = 'sigil' | 'silhouette' | 'color+adj' | 'character' | 'text' | 'flame' | 'constellation';
 
 export function getColorAdj(seed: string, lang: 'zh' | 'en' = 'zh'): { color: string; colorName: string; adj: string; label: string } {
   const r = rand(seed, 3);

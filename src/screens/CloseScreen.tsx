@@ -30,10 +30,11 @@ export default function CloseScreen({ navigation, route }: Props) {
   useEffect(() => {
     const tick = () => {
       const now = new Date();
+      // Next 03:00 — today's if we're before it (e.g. 01:00), otherwise tomorrow's.
       const reset = new Date(now);
-      reset.setHours(27, 0, 0, 0);
-      let diff = (reset.getTime() - now.getTime()) / 1000;
-      if (diff < 0) diff += 86400;
+      reset.setHours(3, 0, 0, 0);
+      if (reset.getTime() <= now.getTime()) reset.setDate(reset.getDate() + 1);
+      const diff = (reset.getTime() - now.getTime()) / 1000;
       const h = String(Math.floor(diff / 3600)).padStart(2, '0');
       const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
       const s = String(Math.floor(diff % 60)).padStart(2, '0');

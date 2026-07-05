@@ -33,12 +33,12 @@ const PULSES = [
 ];
 
 // Lifting a veil costs wicks for everyone, including Vigil (intimacy is paid).
-const VEIL_LIFT_COST = 3;
+const VEIL_LIFT_COST = 1;
 // Minimum messages exchanged before a veiled photo can be lifted (anti photo-grab).
 const VEIL_MIN_MESSAGES = 10;
 
 export default function LoftChatScreen({ navigation, route }: Props) {
-  const { lang, wicks, seed } = useAppStore();
+  const { lang, wicks, seed, autoFilter } = useAppStore();
   const { otherSeed, loftConversationId, otherName, sessionEnteredAt, expiresAt, otherPhotoUrl } = route.params;
   const uid = getCurrentUid();
   ScreenCapture.usePreventScreenCapture();
@@ -124,7 +124,8 @@ export default function LoftChatScreen({ navigation, route }: Props) {
 
   const sendText = async () => {
     if (!message.trim() || !loftConversationId) return;
-    const check = filterMessage(message.trim());
+    // Same rule as the 1:1 chat: the filter only runs if the user turned it on.
+    const check = autoFilter ? filterMessage(message.trim()) : { blocked: false };
     if (check.blocked) {
       Alert.alert(
         lang === 'en' ? 'Message blocked' : '\u8A0A\u606F\u5DF2\u88AB\u904E\u6FFE',

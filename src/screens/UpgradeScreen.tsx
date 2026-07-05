@@ -53,6 +53,28 @@ export default function UpgradeScreen({ navigation }: Props) {
     return true;
   };
 
+  // Map purchase failures to something the user (and our testers) can act on —
+  // the old generic "try again" hid the real cause and made billing bugs
+  // impossible to diagnose from a screenshot.
+  const purchaseErrorText = (error?: string): string => {
+    switch (error) {
+      case 'cancelled':
+        return ''; // user backed out — say nothing
+      case 'not_configured':
+        return lang === 'en'
+          ? 'Purchases are unavailable in this build. Please install the app from Google Play and try again.'
+          : '此安裝版本無法購買。請從 Google Play 商店安裝的正式版本中購買。';
+      case 'product_not_found':
+        return lang === 'en'
+          ? 'This item is not available in the store yet. Please try again later.'
+          : '商品尚未在商店生效，請稍後再試。';
+      default:
+        return (lang === 'en'
+          ? 'Could not complete purchase. Please try again.\n\n'
+          : '無法完成購買。請再試一次。\n\n') + (error ?? '');
+    }
+  };
+
   const handleBuyPack = async (amount: number) => {
     if (requireAccount()) return;
     const productMap: Record<number, string> = {
@@ -67,13 +89,8 @@ export default function UpgradeScreen({ navigation }: Props) {
     if (result.ok) {
       hapticSuccess();
     } else {
-      Alert.alert(
-        lang === 'en' ? 'Purchase failed' : '購買失敗',
-        lang === 'en'
-          ? 'Could not complete purchase. Please try again.'
-          : '無法完成購買。請再試一次。',
-        [{ text: 'OK', style: 'cancel' }],
-      );
+      const msg = purchaseErrorText(result.error);
+      if (msg) Alert.alert(lang === 'en' ? 'Purchase failed' : '購買失敗', msg, [{ text: 'OK', style: 'cancel' }]);
     }
   };
 
@@ -84,13 +101,8 @@ export default function UpgradeScreen({ navigation }: Props) {
       hapticSuccess();
       navigation.goBack();
     } else {
-      Alert.alert(
-        lang === 'en' ? 'Purchase failed' : '購買失敗',
-        lang === 'en'
-          ? 'Could not complete subscription. Please try again.'
-          : '無法完成訂閱。請再試一次。',
-        [{ text: 'OK', style: 'cancel' }],
-      );
+      const msg = purchaseErrorText(result.error);
+      if (msg) Alert.alert(lang === 'en' ? 'Purchase failed' : '購買失敗', msg, [{ text: 'OK', style: 'cancel' }]);
     }
   };
 
@@ -241,8 +253,8 @@ export default function UpgradeScreen({ navigation }: Props) {
             <View style={[styles.wickNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.inkSoft, lineHeight: 20 }}>
                 {lang === 'en'
-                  ? 'Wicks are spent on: sending a veiled photo (3 wicks), revealing a veiled photo someone sent you (3 wicks), and each new match once your free matches run out (1 wick). Conversations and rooms are free.'
-                  : '燭芯用於：傳送帶紗照片（3 芯）、揭開對方傳來的帶紗照片（3 芯）、免費配對用完後每次新配對（1 芯）。對話與火盆都是免費的。'}
+                  ? 'Wicks are spent on: sending a veiled photo (2 wicks), lifting each layer of a veil (1 wick per layer), and each new match once your free matches run out (1 wick). Conversations and rooms are free.'
+                  : '燭芯用於：傳送帶紗照片（2 芯）、揭開面紗每層（1 芯）、免費配對用完後每次新配對（1 芯）。對話與火盆都是免費的。'}
               </Text>
             </View>
           </FadeInUp>

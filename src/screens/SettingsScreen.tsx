@@ -18,7 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
-  const { direction, lang, identityKind, seed, autoFilter, slowMode, vigil } = useAppStore();
+  const { direction, lang, identityKind, seed, autoFilter, slowMode, vigil, conversationsToday } = useAppStore();
   const p = DIRECTIONS[direction];
   const guest = isGuest();
 
@@ -62,7 +62,9 @@ export default function SettingsScreen({ navigation }: Props) {
                 <SettingRow p={p}
                   title={t('setVisibility', lang)}
                   alt={tAlt('setVisibility', lang)}
-                  sub={lang === 'en' ? 'Fixed — others see a blurred silhouette' : '固定 — 對方只看到模糊輪廓'}
+                  sub={lang === 'en'
+                    ? 'Everyone stays at layer 2 (a blurred outline) by design — a clearer you is only ever revealed inside a chat, veil by veil, with your consent.'
+                    : '所有人固定停在第二層（模糊輪廓）——更清楚的你，只會在對話裡經你同意、一層一層揭開。'}
                   control={
                     <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: p.muted }}>
                       {lang === 'en' ? 'Level 2' : '第二層'}
@@ -115,8 +117,14 @@ export default function SettingsScreen({ navigation }: Props) {
                 <SettingRow p={p}
                   title={lang === 'en' ? 'Daily quiet limit' : '每日對話上限'}
                   alt={lang === 'en' ? '每日對話上限' : 'Daily quiet limit'}
-                  sub={lang === 'en' ? '5 conversations per cycle.' : '每個 24 小時最多 5 段對話。'}
-                  control={<Text style={{ fontFamily: 'Inter-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>{vigil ? '∞' : '5'}</Text>}
+                  sub={lang === 'en'
+                    ? 'At most 5 one-on-one chats per cycle — so nights stay quiet, not endless. Resets at 03:00.'
+                    : '每個循環最多 5 段一對一對話——讓夜晚保持安靜，而不是無止盡。今晚 03:00 重新計算。'}
+                  control={
+                    <Text style={{ fontFamily: 'Inter-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
+                      {vigil ? '∞' : `${Math.min(conversationsToday, 5)}/5`}
+                    </Text>
+                  }
                 />
               </GlassCard>
             </View>

@@ -1,11 +1,13 @@
 // On-device content filter for abusive language
 // No data leaves the device — all processing is local
 
+// Only direct attacks on\u53e6\u4e00\u500b\u4eba are blocked. Self-expression \u2014 including talk of
+// one's own pain or self-harm \u2014 must NEVER be filtered here: this app exists so
+// those words can be said. (Safety screen offers the hotline for that instead.)
 const BLOCKED_PATTERNS_ZH = [
-  /\u5e79\u4f60/, /\u64cd\u4f60/, /\u5a4a\u5b50/, /\u767d\u7601/, /\u5ee2\u7269/,
+  /\u5e79\u4f60/, /\u64cd\u4f60/, /\u5a4a\u5b50/,
   /\u53bb\u6b7b/, /\u6bba\u4e86\u4f60/, /\u6bba\u6389/,
   /\u5f37\u59e6/, /\u8f2a\u59e6/,
-  /\u81ea\u6bba/, /\u5272\u8173/,
 ];
 
 const BLOCKED_PATTERNS_EN = [

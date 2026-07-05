@@ -19,10 +19,10 @@ const COPY: Record<string, { zh: string; en: string }> = {
   obShuffle:       { zh: '換一個',           en: 'Reshuffle' },
 
   // Mood
-  moodHeader:      { zh: '今晚，你是什麼樣子都可以', en: 'Tonight, you can be however you are' },
+  moodHeader:      { zh: '此刻，你是什麼樣子都可以', en: 'Right now, you can be however you are' },
   moodPrompt:      { zh: '不用很難過，也不用假裝沒事。想說再說。', en: "No need to be sad, no need to pretend you're fine. Say it only if you want." },
   moodPlaceholder: { zh: '想說的、不想說的，都放這裡⋯⋯', en: 'What you want to say, or not — leave it here…' },
-  moodEnter:       { zh: '進入',             en: 'Enter' },
+  moodEnter:       { zh: '遇見一個人',       en: 'Meet someone' },
   moodSkip:        { zh: '什麼都不想說，先待著就好', en: 'Nothing to say — just stay a while' },
   moodSuggested:   { zh: '今晚有人在說',     en: 'People are talking about' },
   // First-time guidance — answers "what can I do here?"
@@ -76,7 +76,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
 
   // Close
   closeHeader:      { zh: '今天的窗口關了',   en: "Today's window is closed" },
-  closeBody:        { zh: '你和八個人說了話。沒有留下任何記錄。', en: 'You spoke with eight people. Nothing was kept.' },
+  closeBody:        { zh: '今晚說過的話，沒有留下任何記錄。', en: 'What was said tonight was not kept.' },
   closeReturn:      { zh: '明天 03:00 之後再回來', en: 'Come back after 03:00 tomorrow' },
   closeTimer:       { zh: '下一個窗口',       en: 'next window' },
   closeRest:        { zh: '先去休息',         en: 'Rest for now' },
@@ -141,6 +141,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   vigilCta:         { zh: '訂閱守夜',         en: 'Start Vigil' },
 
   // Settings
+  setTitle:         { zh: '設定',             en: 'Settings' },
   setIdentity:      { zh: '識別',             en: 'Identity' },
   setIdentitySub:   { zh: '每天重新生成',     en: 'Regenerates daily' },
   setExpiry:        { zh: '訊息保存',         en: 'Message lifetime' },

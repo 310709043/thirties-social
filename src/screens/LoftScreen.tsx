@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, Image,
+  Animated, Easing, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -209,14 +210,17 @@ export default function LoftScreen({ navigation }: Props) {
 
   return (
     <LinearGradient colors={L.bg as any} style={{ flex: 1 }}>
-      {/* Ambient glow */}
+      {/* Ambient glow — pulled higher & softer so it no longer sits behind the
+          tagline text (the old 380px disc washed out everything it touched). */}
       <View style={{
-        position: 'absolute', top: '10%', alignSelf: 'center',
-        width: 380, height: 380,
-        borderRadius: 190,
-        backgroundColor: 'rgba(232,165,87,0.25)',
+        position: 'absolute', top: '4%', alignSelf: 'center',
+        width: 300, height: 300,
+        borderRadius: 150,
+        backgroundColor: 'rgba(232,165,87,0.18)',
         opacity: 0.7,
       }} />
+      {/* Drifting embers — quiet fire in the dark */}
+      <Embers count={9} />
 
       <SafeAreaView style={{ flex: 1 }}>
         {/* Scrollable so the entry never overlaps on shorter / denser screens
@@ -417,6 +421,56 @@ export default function LoftScreen({ navigation }: Props) {
   );
 }
 
+/**
+ * Drifting embers — tiny warm sparks that rise and fade on a loop, giving the
+ * Loft's dark screens a live fire feel without costing real GPU time (a handful
+ * of native-driver opacity/translate loops).
+ */
+function Embers({ count = 8 }: { count?: number }) {
+  const { width: W, height: H } = Dimensions.get('window');
+  const embers = useRef(
+    Array.from({ length: count }, (_, i) => ({
+      x: (i + 0.5) / count * W + (Math.random() - 0.5) * 40,
+      size: 2 + Math.random() * 3.5,
+      delay: Math.random() * 6000,
+      duration: 7000 + Math.random() * 6000,
+      drift: (Math.random() - 0.5) * 60,
+      progress: new Animated.Value(0),
+    })),
+  ).current;
+
+  useEffect(() => {
+    const loops = embers.map(e =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(e.delay),
+          Animated.timing(e.progress, { toValue: 1, duration: e.duration, easing: Easing.linear, useNativeDriver: true }),
+          Animated.timing(e.progress, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ]),
+      ),
+    );
+    loops.forEach(l => l.start());
+    return () => loops.forEach(l => l.stop());
+  }, []);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {embers.map((e, i) => (
+        <Animated.View key={i} style={{
+          position: 'absolute', left: e.x, bottom: -10,
+          width: e.size, height: e.size, borderRadius: e.size,
+          backgroundColor: '#e8a557',
+          opacity: e.progress.interpolate({ inputRange: [0, 0.1, 0.7, 1], outputRange: [0, 0.8, 0.4, 0] }),
+          transform: [
+            { translateY: e.progress.interpolate({ inputRange: [0, 1], outputRange: [0, -H * 0.75] }) },
+            { translateX: e.progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, e.drift, e.drift * 0.4] }) },
+          ],
+        }} />
+      ))}
+    </View>
+  );
+}
+
 /** Soft relative time for ritual answers — "剛剛 / N 分鐘前 / N 小時前". */
 function ritualAgo(ms: number, lang: string): string {
   const min = Math.floor((Date.now() - ms) / 60000);
@@ -436,8 +490,11 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const [responses, setResponses] = React.useState<DbRitualResponse[]>([]);
   const [ritualText, setRitualText] = React.useState('');
   const [posting, setPosting] = React.useState(false);
+  // Gender is the only filter — age now shows on each card instead (choosing an
+  // exact age range in a small nightly pool mostly produced an empty list, and
+  // the old chips compared '18−24' (unicode minus) against '18-24' in the DB,
+  // so they never matched anything anyway).
   const [genderF, setGenderF] = React.useState<'all' | 'female' | 'male'>('all');
-  const [ageF, setAgeF] = React.useState<string>('all');
 
   // First time inside the Loft: a one-time, quiet guide to the few mechanics the
   // entry/consent screen doesn't teach (the ritual, picking someone, paid closeness).
@@ -514,8 +571,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   };
 
   const filteredSessions = sessions.filter(s =>
-    (genderF === 'all' || (s.gender ?? null) === genderF) &&
-    (ageF === 'all' || (s.ageBracket ?? null) === ageF),
+    (genderF === 'all' || (s.gender ?? null) === genderF),
   );
   // Latest tonight-ritual answer per person, so a card can show their own words
   // (a far stronger invitation to tap than a bare name) — no extra query, both
@@ -541,6 +597,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
 
   return (
     <LinearGradient colors={L.bg as any} style={{ flex: 1 }}>
+      <Embers count={6} />
       <SafeAreaView style={{ flex: 1 }}>
         <View style={{ flex: 1, padding: 22 }}>
           {/* TOP */}
@@ -631,20 +688,6 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
                 </TouchableOpacity>
               ))}
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {['all', '18−24', '25−30', '31−35', '36−40', '41−45', '46+'].map(a => (
-                  <TouchableOpacity key={a} onPress={() => setAgeF(a)}
-                    style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999, borderWidth: 0.5,
-                      backgroundColor: ageF === a ? 'rgba(232,165,87,0.18)' : 'rgba(245,226,196,0.04)',
-                      borderColor: ageF === a ? L.candle : L.line }}>
-                    <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: ageF === a ? L.candle : L.muted }}>
-                      {a === 'all' ? (lang === 'en' ? 'Any age' : '不限年齡') : a}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
           </View>
 
           {/* Listing */}
@@ -701,7 +744,18 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
                           “{m.answer.content}”
                         </Text>
                       ) : null}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+                        {/* Age + gender ride on the card now that the age filter is gone. */}
+                        {(m.session.ageBracket || m.session.gender) && (
+                          <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: 'rgba(232,165,87,0.12)', borderWidth: 0.5, borderColor: 'rgba(232,165,87,0.25)' }}>
+                            <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10.5, color: L.candle }}>
+                              {[
+                                m.session.gender === 'female' ? (lang === 'en' ? 'F' : '女') : m.session.gender === 'male' ? (lang === 'en' ? 'M' : '男') : null,
+                                m.session.ageBracket ?? null,
+                              ].filter(Boolean).join(' · ')}
+                            </Text>
+                          </View>
+                        )}
                         {m.answer ? (
                           <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: L.candle }}>
                             {ritualAgo(m.answer.createdAt?.toMillis?.() ?? Date.now(), lang)}

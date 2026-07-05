@@ -13,6 +13,7 @@ import { useAppStore, setIdentityKind, getAvailableIdentityKinds, setLoftVisible
 import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, IdentityKind, getLoftName } from '../lib/identity';
 import { pickImage, uploadAlbumPhoto } from '../lib/photos';
 import { getAlbum, addAlbumPhoto, removeAlbumPhoto, AlbumPhoto } from '../lib/db';
+import { getDiaryEntries, removeDiaryEntry, DiaryEntry } from '../lib/diary';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -67,7 +68,28 @@ export default function ProfileScreen({ navigation }: Props) {
   const p = DIRECTIONS[direction];
   const [album, setAlbum] = useState<AlbumPhoto[]>([]);
   const [uploading, setUploading] = useState(false);
-  useEffect(() => { getAlbum().then(setAlbum); }, []);
+  const [diary, setDiary] = useState<DiaryEntry[]>([]);
+  const [diaryExpanded, setDiaryExpanded] = useState(false);
+  useEffect(() => { getAlbum().then(setAlbum); getDiaryEntries().then(setDiary); }, []);
+
+  const deleteDiaryEntry = (entry: DiaryEntry) => {
+    Alert.alert(
+      lang === 'en' ? 'Remove this note?' : '刪除這段話？',
+      lang === 'en' ? 'It will be gone for good.' : '刪了就找不回來了。',
+      [
+        { text: lang === 'en' ? 'Keep' : '留著', style: 'cancel' },
+        { text: lang === 'en' ? 'Remove' : '刪除', style: 'destructive', onPress: async () => {
+          setDiary(d => d.filter(e => e.id !== entry.id));
+          await removeDiaryEntry(entry.id);
+        } },
+      ],
+    );
+  };
+
+  const diaryDate = (ms: number) => {
+    const d = new Date(ms);
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
 
   const ALBUM_MAX = 6;
   const addPhoto = async () => {
@@ -189,6 +211,7 @@ export default function ProfileScreen({ navigation }: Props) {
               vigil={vigil}
               lang={lang}
               p={p}
+              seedForPreview={seed}
               onSelect={setIdentityKind}
               onUpgrade={() => navigation.push('Upgrade')}
             />
@@ -237,13 +260,41 @@ export default function ProfileScreen({ navigation }: Props) {
           <FadeInUp delay={320} distance={10}>
             <View style={styles.profileSection}>
             <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Diary · 日記' : '日記 · Diary'}</Cap>
-            <GlassCard p={p} padding={20} radius={18}>
-              <Text style={{ fontFamily: lang === 'en' ? 'EBGaramond-Italic' : 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center', lineHeight: 22 }}>
-                {lang === 'en'
-                  ? 'Your late-night notes will live here. Coming soon.'
-                  : '你深夜的隻字片語會留在這裡。即將開放。'}
-              </Text>
-            </GlassCard>
+            {diary.length === 0 ? (
+              <GlassCard p={p} padding={20} radius={18}>
+                <Text style={{ fontFamily: lang === 'en' ? 'EBGaramond-Italic' : 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center', lineHeight: 22 }}>
+                  {lang === 'en'
+                    ? 'What you write before matching is kept here — only on this device, only for you.'
+                    : '你配對前寫下的心情會留在這裡。只存在這台裝置上，只有你看得到。'}
+                </Text>
+              </GlassCard>
+            ) : (
+              <GlassCard p={p} padding={16} radius={18}>
+                {(diaryExpanded ? diary : diary.slice(0, 3)).map((e, i) => (
+                  <TouchableOpacity key={e.id} onLongPress={() => deleteDiaryEntry(e)} delayLongPress={500} activeOpacity={0.85}
+                    style={{ paddingVertical: 10, borderTopWidth: i > 0 ? 0.5 : 0, borderTopColor: p.line }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, lineHeight: 24 }}>
+                      {e.content}
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted, marginTop: 4 }}>
+                      {diaryDate(e.createdAt)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {diary.length > 3 && (
+                  <TouchableOpacity onPress={() => setDiaryExpanded(x => !x)} style={{ alignItems: 'center', paddingTop: 10 }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
+                      {diaryExpanded
+                        ? (lang === 'en' ? 'collapse' : '收起')
+                        : (lang === 'en' ? `${diary.length - 3} more…` : `還有 ${diary.length - 3} 則⋯`)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 10.5, color: p.muted, marginTop: 8, textAlign: 'center' }}>
+                  {lang === 'en' ? 'long-press to remove · never leaves this device' : '長按可刪除 · 永遠不會離開這台裝置'}
+                </Text>
+              </GlassCard>
+            )}
           </View>
           </FadeInUp>
 
@@ -331,7 +382,7 @@ export default function ProfileScreen({ navigation }: Props) {
             <Text style={[styles.footer, { color: p.muted }]}>
             {lang === 'en'
               ? 'Your page is invisible in the Park. Only the Loft can see it — and only what you allow.'
-              : '公園裡沒有人看得到你的頁面。只有夜閣看得到——而且只有你允許的部分。'}
+              : '火盆裡沒有人看得到你的頁面。只有夜閣看得到——而且只有你允許的部分。'}
           </Text>
           </FadeInUp>
         </ScrollView>
@@ -341,18 +392,20 @@ export default function ProfileScreen({ navigation }: Props) {
 }
 
 const KIND_LABELS: Record<IdentityKind, { zh: string; en: string }> = {
-  sigil:       { zh: '符印',   en: 'Sigil' },
-  silhouette:  { zh: '剪影',   en: 'Silhouette' },
-  'color+adj': { zh: '色彩名', en: 'Color Name' },
-  character:   { zh: '文字',   en: 'Character' },
-  text:        { zh: '代號',   en: 'Text Code' },
+  sigil:         { zh: '符印',   en: 'Sigil' },
+  silhouette:    { zh: '剪影',   en: 'Silhouette' },
+  'color+adj':   { zh: '色彩名', en: 'Color Name' },
+  character:     { zh: '文字',   en: 'Character' },
+  text:          { zh: '代號',   en: 'Text Code' },
+  flame:         { zh: '燭火',   en: 'Flame' },
+  constellation: { zh: '星圖',   en: 'Stars' },
 };
 
-const ALL_KINDS: IdentityKind[] = ['sigil', 'silhouette', 'color+adj', 'character', 'text'];
+const ALL_KINDS: IdentityKind[] = ['sigil', 'silhouette', 'color+adj', 'character', 'text', 'flame', 'constellation'];
 
-function IdentityKindPicker({ current, vigil, lang, p, onSelect, onUpgrade }: {
+function IdentityKindPicker({ current, vigil, lang, p, onSelect, onUpgrade, seedForPreview }: {
   current: IdentityKind; vigil: boolean; lang: string; p: any;
-  onSelect: (k: IdentityKind) => void; onUpgrade: () => void;
+  onSelect: (k: IdentityKind) => void; onUpgrade: () => void; seedForPreview: string;
 }) {
   const available = getAvailableIdentityKinds();
   return (
@@ -365,8 +418,11 @@ function IdentityKindPicker({ current, vigil, lang, p, onSelect, onUpgrade }: {
           {lang === 'en' ? '身份樣式' : 'Identity Style'}
         </Text>
       </View>
+      {/* Each chip carries a live mini-preview of the style, so choosing one is
+          a visible act — the old text-only chips made selection feel broken
+          (especially when the current style was already selected). */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
           {ALL_KINDS.map(kind => {
             const unlocked = available.includes(kind);
             const selected = current === kind;
@@ -376,19 +432,30 @@ function IdentityKindPicker({ current, vigil, lang, p, onSelect, onUpgrade }: {
                 key={kind}
                 onPress={() => unlocked ? onSelect(kind) : onUpgrade()}
                 style={{
-                  paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999,
-                  backgroundColor: selected ? p.accent : p.surface,
-                  borderWidth: 0.5, borderColor: selected ? p.accent : p.line,
-                  opacity: unlocked ? 1 : 0.5,
-                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                  alignItems: 'center', gap: 6,
+                  paddingVertical: 10, paddingHorizontal: 12, borderRadius: 16,
+                  backgroundColor: selected ? p.accentSoft : p.surface,
+                  borderWidth: selected ? 1.5 : 0.5,
+                  borderColor: selected ? p.accent : p.line,
+                  opacity: unlocked ? 1 : 0.45,
+                  minWidth: 68,
                 }}>
-                {!unlocked && <Text style={{ fontSize: 10 }}>🔒</Text>}
-                <Text style={{
-                  fontFamily: 'NotoSerifTC-Regular', fontSize: 12,
-                  color: selected ? (p.dark ? '#1f1014' : '#fff') : p.ink,
-                }}>
-                  {lang === 'en' ? label.en : label.zh}
-                </Text>
+                <Identity kind={kind} seed={seedForPreview} size={34} palette={p} lang={lang as any} trust={0.3} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  {!unlocked && <Text style={{ fontSize: 9 }}>🔒</Text>}
+                  <Text style={{
+                    fontFamily: 'NotoSerifTC-Regular', fontSize: 11,
+                    color: selected ? p.accent : p.ink,
+                    fontWeight: selected ? '600' : '400',
+                  }}>
+                    {lang === 'en' ? label.en : label.zh}
+                  </Text>
+                </View>
+                {selected && (
+                  <Text style={{ fontFamily: 'Inter-Regular', fontSize: 8, color: p.accent, marginTop: -2 }}>
+                    {lang === 'en' ? 'in use' : '使用中'}
+                  </Text>
+                )}
               </TouchableOpacity>
             );
           })}

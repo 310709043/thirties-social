@@ -84,7 +84,7 @@ let _state: AppState = {
   banExpiresAt: null, lastRewardDate: null, rewardPending: false,
   gender: null, ageBracket: null, relationshipStatus: null, relationshipShape: null, seeking: [],
   boundary: null, freeTimes: [], region: null, quote: null, loftVisible: true,
-  autoFilter: true, slowMode: false, conversationsToday: 0, peopleTodayCount: 0,
+  autoFilter: false, slowMode: false, conversationsToday: 0, peopleTodayCount: 0,
   connectionsToday: 0, roomsToday: 0, freeMatchesUsed: 0, loftFreeUsed: 0, loftFreeWeek: null,
 };
 
@@ -135,7 +135,9 @@ export async function initStore() {
     region: storedRegion, quote: storedQuote,
     loftVisible: storedLoftVisible !== '0',
     identityKind: storedIdentityKind || 'sigil',
-    autoFilter: storedAutoFilter !== '0',
+    // Opt-in: the filter is OFF unless the user explicitly turned it on. (It used
+    // to default on and silently blocked ordinary venting — see filter.ts note.)
+    autoFilter: storedAutoFilter === '1',
     slowMode: storedSlowMode === '1',
     conversationsToday: storedConvToday ? parseInt(storedConvToday, 10) : 0,
     peopleTodayCount: storedPeopleToday ? parseInt(storedPeopleToday, 10) : 0,
@@ -492,8 +494,8 @@ export async function recordRoomCreated() {
   notify();
 }
 
-const FREE_IDENTITY_KINDS: IdentityKind[] = ['sigil', 'color+adj', 'text'];
-const VIGIL_IDENTITY_KINDS: IdentityKind[] = ['sigil', 'silhouette', 'color+adj', 'character', 'text'];
+const FREE_IDENTITY_KINDS: IdentityKind[] = ['sigil', 'color+adj', 'text', 'constellation'];
+const VIGIL_IDENTITY_KINDS: IdentityKind[] = ['sigil', 'silhouette', 'color+adj', 'character', 'text', 'flame', 'constellation'];
 
 export function getAvailableIdentityKinds(): IdentityKind[] {
   return _state.vigil ? VIGIL_IDENTITY_KINDS : FREE_IDENTITY_KINDS;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, Alert, Animated, Easing,
 } from 'react-native';
 import Svg, { Path, Circle, Line, Defs, RadialGradient as SvgRadialGradient, Stop } from 'react-native-svg';
@@ -19,6 +19,7 @@ import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, MATCH_WICK_COST } from '../hooks/useAppStore';
 import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode } from '../lib/db';
 import { analytics } from '../lib/analytics';
+import { addDiaryEntry } from '../lib/diary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
@@ -34,6 +35,8 @@ export default function MoodScreen({ navigation }: Props) {
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tonightMode, setTonightMode] = useState<TonightMode | null>(null);
   const [showModePicker, setShowModePicker] = useState(false);
+  // Full brazier list (only the top 3 fit on the home screen).
+  const [showAllRooms, setShowAllRooms] = useState(false);
   // First-time guide so new users know what the three spaces are.
   const [showGuide, setShowGuide] = useState(false);
   useEffect(() => { AsyncStorage.getItem('mainGuideSeen').then(v => { if (v !== '1') setShowGuide(true); }); }, []);
@@ -65,10 +68,11 @@ export default function MoodScreen({ navigation }: Props) {
   useEffect(() => {
     const tick = () => {
       const now = new Date();
+      // Next 03:00 — today's if we're before it (e.g. 01:00), otherwise tomorrow's.
       const reset = new Date(now);
-      reset.setHours(27, 0, 0, 0);
-      let diff = (reset.getTime() - now.getTime()) / 1000;
-      if (diff < 0) diff += 86400;
+      reset.setHours(3, 0, 0, 0);
+      if (reset.getTime() <= now.getTime()) reset.setDate(reset.getDate() + 1);
+      const diff = (reset.getTime() - now.getTime()) / 1000;
       const h = String(Math.floor(diff / 3600)).padStart(2, '0');
       const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
       const s = String(Math.floor(diff % 60)).padStart(2, '0');
@@ -189,6 +193,9 @@ export default function MoodScreen({ navigation }: Props) {
   const startMatching = async () => {
     setWaiting(true);
     analytics.matchSearch(text.length);
+    // Whatever they wrote tonight is kept for them — it becomes a diary entry
+    // (local-only) they can reread on their profile page.
+    if (text.trim()) void addDiaryEntry(text);
     const joined = await joinMatchQueue({ moodText: text || undefined, seed, gender, ageBracket, tonightMode });
     if (!joined) {
       setWaiting(false);
@@ -253,7 +260,7 @@ export default function MoodScreen({ navigation }: Props) {
             />
             <View style={styles.inputFooter}>
               <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted }}>
-                {lang === 'en' ? 'private' : '只有你看得到'}
+                {lang === 'en' ? 'your match sees this line · kept in your diary' : '配對到的人會看到這句 · 也會留進你的日記'}
               </Text>
               <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted }}>{text.length}/280</Text>
             </View>
@@ -296,6 +303,16 @@ export default function MoodScreen({ navigation }: Props) {
                     </View>
                   </PressableScale>
                 ))}
+                {activeRooms.length > 3 && (
+                  <TouchableOpacity onPress={() => setShowAllRooms(true)}
+                    style={{ alignItems: 'center', paddingVertical: 8 }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
+                      {lang === 'en'
+                        ? `${activeRooms.length - 3} more braziers →`
+                        : `還有 ${activeRooms.length - 3} 個火盆 →`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ) : (
               <PressableScale onPress={() => navigation.push('Room', { roomKey: 'new' })}>
@@ -360,6 +377,41 @@ export default function MoodScreen({ navigation }: Props) {
           )}
         </View>
       </SafeAreaView>
+
+      {/* All braziers — a scrollable sheet so any number of rooms stays tidy. */}
+      {showAllRooms && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.62)', justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowAllRooms(false)} />
+          <View style={{ backgroundColor: p.surfaceSolid, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 0.5, borderColor: p.line, paddingTop: 12, maxHeight: '70%', width: '100%', maxWidth: 560, alignSelf: 'center' }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: p.line, alignSelf: 'center', marginBottom: 10 }} />
+            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 17, color: p.ink, textAlign: 'center', marginBottom: 2 }}>
+              {lang === 'en' ? 'All braziers tonight' : '今晚所有火盆'}
+            </Text>
+            <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11.5, color: p.muted, textAlign: 'center', marginBottom: 10 }}>
+              {lang === 'en' ? 'each brazier burns for 24 hours' : '每個火盆點燃後只留 24 小時'}
+            </Text>
+            <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 8 }} showsVerticalScrollIndicator={false}>
+              {activeRooms.map(room => (
+                <TouchableOpacity key={room.id} activeOpacity={0.85}
+                  onPress={() => { setShowAllRooms(false); navigation.push('Room', { roomKey: room.roomKey ?? 'custom', roomId: room.id }); }}
+                  style={[styles.roomItem, { backgroundColor: p.glass, borderColor: p.line }]}>
+                  <BreathDot p={p} size={4} />
+                  <Text style={[styles.roomTopic, { color: p.ink }]} numberOfLines={1}>
+                    {room.customTopicZh || room.customTopicEn
+                      || (room.roomKey && !['new', 'custom'].includes(room.roomKey)
+                          ? t(room.roomKey as any, lang)
+                          : (lang === 'en' ? 'a quiet brazier' : '一個火盆'))}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Text style={[styles.roomCount, { color: p.muted }]}>{room.messageCount ?? 0}</Text>
+                    <Text style={{ color: p.muted, fontSize: 15, opacity: 0.5, marginTop: -1 }}>›</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      )}
 
       {showModePicker && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.62)', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 32, paddingHorizontal: 20 }}>
