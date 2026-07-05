@@ -150,8 +150,8 @@ export default function LoftScreen({ navigation }: Props) {
       Alert.alert(
         lang === 'en' ? 'The Loft is closed' : '夜閣還沒開',
         lang === 'en'
-          ? 'Weekdays: open 13:00–07:00 (next day). Weekends: open all day.'
-          : '平日 13:00 開到翌日 07:00；假日全天開放。',
+          ? 'The Loft opens nightly, 21:00–05:00. Come back after dark.'
+          : '夜閣每晚 21:00 開到清晨 05:00。天黑之後再來。',
         [{ text: 'OK', style: 'cancel' }],
       );
       return;

@@ -579,23 +579,21 @@ function localNightDate(): string {
   return `${y}-${m}-${day}`;
 }
 
-// The Loft is open from midnight to 05:00 (matching the in-app copy).
-export const LOFT_OPEN_HOUR = 0;
+// ONE truth for the Loft's hours: open nightly 21:00–05:00, every day. This is
+// also a liquidity lever — concentrating the small early user base into the
+// same window each night instead of spreading it thin across 24 hours. All
+// user-facing copy must match these numbers (copy.ts loftClose, banners).
+export const LOFT_OPEN_HOUR = 21;
 export const LOFT_CLOSE_HOUR = 5;
 
 /**
- * Whether the Loft is currently open. Always open in dev builds, or when
- * EXPO_PUBLIC_LOFT_ALWAYS_OPEN=1 — a test bypass so the Loft can be exercised
- * outside its midnight–05:00 window.
+ * Whether the Loft is currently open. EXPO_PUBLIC_LOFT_ALWAYS_OPEN=1 is a test
+ * bypass so the Loft can be exercised outside its nightly window.
  */
 export function isLoftOpen(now: Date = new Date()): boolean {
   if (process.env.EXPO_PUBLIC_LOFT_ALWAYS_OPEN === '1') return true;
-  const day = now.getDay();          // 0 = Sun, 6 = Sat
   const h = now.getHours();
-  const isWeekend = day === 0 || day === 6;
-  // 假日全天開放；平日 13:00 開到翌日 07:00（即僅 07:00–12:59 關閉）。
-  if (isWeekend) return true;
-  return h >= 13 || h < 7;
+  return h >= LOFT_OPEN_HOUR || h < LOFT_CLOSE_HOUR;
 }
 
 export async function enterLoft(
@@ -1220,6 +1218,56 @@ export async function createConversation(params: { userBId: string; roomId?: str
     const ref = await addDoc(collection(db, 'conversations'), data);
     return { id: ref.id, ...data } as DbConversation;
   } catch { return null; }
+}
+
+/** Load a conversation (for its authoritative expiresAt — both sides must run
+ *  the SAME clock, not a private 30-minute countdown from whenever they opened
+ *  the screen). */
+export async function getConversation(conversationId: string): Promise<DbConversation | null> {
+  try {
+    const snap = await getDoc(doc(db, 'conversations', conversationId));
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...snap.data() } as DbConversation;
+  } catch { return null; }
+}
+
+/**
+ * 續燭 — vote to extend this conversation by 30 minutes. Each side pays their
+ * own wicks BEFORE calling this. When the second vote lands, the same write
+ * pushes expiresAt out by 30 minutes and marks the conversation extended
+ * (one extension per conversation). Both clients see the new expiresAt via
+ * their conversation-doc subscription.
+ */
+export async function voteExtendConversation(conversationId: string): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    const snap = await getDoc(doc(db, 'conversations', conversationId));
+    if (!snap.exists()) return false;
+    const data = snap.data() as any;
+    if (data.extended) return true; // already extended — nothing to do
+    const votes: Record<string, boolean> = { ...(data.extendVotes ?? {}), [uid]: true };
+    const otherId = data.userAId === uid ? data.userBId : data.userAId;
+    const bothVoted = !!votes[otherId];
+    const patch: any = { [`extendVotes.${uid}`]: true };
+    if (bothVoted) {
+      const baseMs = data.expiresAt?.toMillis?.() ?? Date.now();
+      patch.expiresAt = Timestamp.fromMillis(baseMs + 30 * 60 * 1000);
+      patch.extended = true;
+    }
+    await updateDoc(doc(db, 'conversations', conversationId), patch);
+    return true;
+  } catch { return false; }
+}
+
+/** Watch the whole conversation doc — ended state, extend votes and expiresAt. */
+export function subscribeToConversationDoc(
+  conversationId: string,
+  onChange: (conv: (DbConversation & { extendVotes?: Record<string, boolean>; extended?: boolean }) | null) => void,
+): () => void {
+  return onSnapshot(doc(db, 'conversations', conversationId), snap => {
+    onChange(snap.exists() ? ({ id: snap.id, ...snap.data() } as any) : null);
+  });
 }
 
 export async function endConversation(conversationId: string, reason: string): Promise<void> {

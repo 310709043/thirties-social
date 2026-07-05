@@ -145,11 +145,20 @@ export default function LoftChatScreen({ navigation, route }: Props) {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
+  // Guard against rapid taps — a tester once fired 8 pulses (8 wicks) by
+  // hammering the button before the first write finished.
+  const pulseBusyRef = useRef(false);
   const sendPulse = async (emoji: string) => {
-    const result = await spendWicks(1, 'pulse', loftConversationId);
-    if (result.ok && loftConversationId) {
-      hapticMedium();
-      await sendLoftMessage({ loftConversationId, content: emoji, messageType: 'pulse' });
+    if (pulseBusyRef.current) return;
+    pulseBusyRef.current = true;
+    try {
+      const result = await spendWicks(1, 'pulse', loftConversationId);
+      if (result.ok && loftConversationId) {
+        hapticMedium();
+        await sendLoftMessage({ loftConversationId, content: emoji, messageType: 'pulse' });
+      }
+    } finally {
+      pulseBusyRef.current = false;
     }
   };
 

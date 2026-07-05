@@ -111,6 +111,39 @@ export async function scheduleLocalNotification(params: {
   });
 }
 
+const NIGHTLY_REMINDER_ID = 'nightly-window-reminder';
+
+/**
+ * Schedule the nightly "the window is open" reminder at 21:00 local time —
+ * the app's one re-engagement hook, matching the Loft's opening hour. Runs
+ * entirely on-device (no server), replaces any previous schedule, and is a
+ * no-op if the user never granted notification permission.
+ */
+export async function scheduleNightlyReminder(lang: 'zh' | 'en' = 'zh'): Promise<void> {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return;
+    await Notifications.cancelScheduledNotificationAsync(NIGHTLY_REMINDER_ID).catch(() => {});
+    await Notifications.scheduleNotificationAsync({
+      identifier: NIGHTLY_REMINDER_ID,
+      content: {
+        title: lang === 'en' ? 'The window is open' : '今晚的窗口開了',
+        body: lang === 'en'
+          ? 'The Loft is lit. Someone is also awake tonight.'
+          : '夜閣亮燈了。今晚也有人醒著，在等一句真話。',
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: 21,
+        minute: 0,
+      },
+    });
+  } catch (e) {
+    console.warn('[Notifications] nightly reminder failed:', e);
+  }
+}
+
 export function addNotificationListener(
   onReceive: (notification: Notifications.Notification) => void,
   onInteract: (response: Notifications.NotificationResponse) => void,

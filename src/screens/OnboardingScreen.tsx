@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Linking,
+  View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Linking, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Rect, Line } from 'react-native-svg';
@@ -57,10 +57,23 @@ export default function OnboardingScreen({ navigation }: Props) {
   const handleContinue = () => {
     if (!isPreview) {
       animateStep(step + 1);
-    } else {
-      setOnboardingDone();
-      navigation.replace('Setup');
+      return;
     }
+    // 18+ gate — this app hosts adult-leaning spaces (the Loft), so entry
+    // requires an explicit age confirmation before anything else.
+    Alert.alert(
+      lang === 'en' ? 'Adults only' : '需要年滿 18 歲',
+      lang === 'en'
+        ? 'Candle Whisper is for adults. Please confirm you are 18 or older.'
+        : '燭影私語是給成年人的空間。請確認你已年滿 18 歲。',
+      [
+        { text: lang === 'en' ? 'I am under 18' : '我未滿 18 歲', style: 'cancel' },
+        { text: lang === 'en' ? 'I am 18 or older' : '我已滿 18 歲', onPress: () => {
+          setOnboardingDone();
+          navigation.replace('Setup');
+        }},
+      ],
+    );
   };
 
   const handleBack = () => {

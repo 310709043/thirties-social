@@ -13,7 +13,7 @@ import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch } from '../hooks/useAppStore';
-import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationEnded } from '../lib/db';
+import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationDoc, voteExtendConversation } from '../lib/db';
 import { filterMessage } from '../lib/filter';
 import { analytics } from '../lib/analytics';
 import { pickImage, uploadVeiledPhoto, getVeiledPhoto } from '../lib/photos';
@@ -25,6 +25,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 const TOTAL_SECONDS = 30 * 60;
 /** Minimum messages exchanged before a veiled photo can be lifted (anti photo-grab). */
 const VEIL_MIN_MESSAGES = 10;
+/** 續燭 — each side pays this to vote for a one-time +30 min extension. */
+const EXTEND_WICK_COST = 2;
 
 export default function ChatScreen({ navigation, route }: Props) {
   const { seed, direction, lang, identityKind, wicks, autoFilter, slowMode } = useAppStore();
@@ -54,7 +56,15 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   ScreenCapture.usePreventScreenCapture();
 
+  // The countdown runs off the conversation's OWN expiresAt (shared by both
+  // sides), not a private 30-minute timer from when this screen mounted — the
+  // old version let the two sides run different clocks, so one person's chat
+  // died while the other thought they'd been ghosted.
+  const closeAtRef = useRef(Date.now() + TOTAL_SECONDS * 1000);
   const [remaining, setRemaining] = useState(TOTAL_SECONDS);
+  const [extendVotes, setExtendVotes] = useState<Record<string, boolean>>({});
+  const [extended, setExtended] = useState(false);
+  const [extendBusy, setExtendBusy] = useState(false);
   const [realMessages, setRealMessages] = useState<DbConvMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [showVeilSheet, setShowVeilSheet] = useState(false);
@@ -85,43 +95,73 @@ export default function ChatScreen({ navigation, route }: Props) {
     return subscribeToTyping(conversationId, uid, setOtherTyping);
   }, [conversationId]);
 
-  // Tell the user when the other person leaves (or the chat is gone), instead of
-  // letting them keep talking to no one. Ignore our own leave (iLeftRef).
+  // One doc subscription drives everything conversation-level: the other person
+  // leaving, extend votes, and the shared expiresAt (which moves when 續燭 lands).
   useEffect(() => {
     if (!conversationId) return;
-    return subscribeToConversationEnded(conversationId, reason => {
-      if (reason && !iLeftRef.current) setOtherLeft(true);
+    return subscribeToConversationDoc(conversationId, conv => {
+      if (!conv || (conv as any).endedAt) {
+        if (!iLeftRef.current) setOtherLeft(true);
+        return;
+      }
+      const expMs = (conv as any).expiresAt?.toMillis?.();
+      if (expMs) closeAtRef.current = expMs;
+      setExtendVotes(conv.extendVotes ?? {});
+      setExtended(!!conv.extended);
     });
   }, [conversationId]);
 
   useEffect(() => {
+    let warned = false;
     const id = setInterval(() => {
-      setRemaining(r => {
-        if (r <= 1) {
-          clearInterval(id);
-          iLeftRef.current = true;
-          (async () => {
-            if (conversationId) {
-              await endConversation(conversationId, 'timer_expired');
-              analytics.conversationEnd(conversationId, 'timer_expired');
-            }
-            navigation.replace('Close');
-          })();
-          return 0;
-        }
-        // Show warning at 60s and 10s
-        if (r === 60) {
-          hapticMedium();
-        }
-        return r - 1;
-      });
+      const left = Math.max(0, Math.floor((closeAtRef.current - Date.now()) / 1000));
+      setRemaining(left);
+      if (left <= 60 && !warned) { warned = true; hapticMedium(); }
+      if (left <= 0) {
+        clearInterval(id);
+        iLeftRef.current = true;
+        (async () => {
+          if (conversationId) {
+            await endConversation(conversationId, 'timer_expired');
+            analytics.conversationEnd(conversationId, 'timer_expired');
+          }
+          navigation.replace('Close');
+        })();
+      }
     }, 1000);
     return () => clearInterval(id);
   }, []);
 
+  // 續燭 — I pay my share, then vote; when the other side has voted too, the
+  // vote write itself pushes expiresAt out 30 minutes for both of us.
+  const myUid = getCurrentUid();
+  const iVotedExtend = !!(myUid && extendVotes[myUid]);
+  const otherVotedExtend = Object.keys(extendVotes).some(k => k !== myUid && extendVotes[k]);
+  const handleExtend = async () => {
+    if (extendBusy || extended || iVotedExtend || !conversationId) return;
+    if (wicks < EXTEND_WICK_COST) {
+      Alert.alert(
+        lang === 'en' ? 'Not enough wicks' : '燭芯不足',
+        lang === 'en' ? `Extending costs ${EXTEND_WICK_COST} wicks from each side.` : `續燭需要雙方各 ${EXTEND_WICK_COST} 燭芯。`,
+      );
+      return;
+    }
+    setExtendBusy(true);
+    const paid = await spendWicks(EXTEND_WICK_COST, 'extend', conversationId);
+    if (paid.ok) {
+      const ok = await voteExtendConversation(conversationId);
+      if (!ok) {
+        // Vote write failed after payment — extremely rare; tell the user.
+        Alert.alert(lang === 'en' ? 'Something went wrong' : '出了點問題',
+          lang === 'en' ? 'Please try again.' : '請再試一次。');
+      }
+    }
+    setExtendBusy(false);
+  };
+
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
   const ss = String(remaining % 60).padStart(2, '0');
-  const progress = remaining / TOTAL_SECONDS;
+  const progress = Math.min(1, remaining / TOTAL_SECONDS);
 
   // Debounced typing indicator
   const handleInputChange = (text: string) => {
@@ -266,6 +306,26 @@ export default function ChatScreen({ navigation, route }: Props) {
                     ? 'when this reaches zero, the entire conversation dissolves.'
                     : '歸零之後，整段對話會全部消散。')}
               </Text>
+              {/* 續燭 — one mutual +30 min per conversation. Shown once the chat
+                  is real (a few messages in) and until it's used. */}
+              {!extended && !otherLeft && realMessages.length >= 4 && (
+                <TouchableOpacity onPress={handleExtend} disabled={extendBusy || iVotedExtend}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 6, opacity: iVotedExtend ? 0.7 : 1 }}>
+                  <WickGlyph size={11} color={p.accent} />
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
+                    {iVotedExtend
+                      ? (lang === 'en' ? 'waiting for them to extend too…' : '等待對方一起續燭⋯')
+                      : otherVotedExtend
+                      ? (lang === 'en' ? `They want 30 more minutes — join in (${EXTEND_WICK_COST} wicks)` : `對方想多聊 30 分鐘 — 一起續燭（${EXTEND_WICK_COST} 芯）`)
+                      : (lang === 'en' ? `Extend +30 min · both agree · ${EXTEND_WICK_COST} wicks each` : `續燭 +30 分 · 雙方同意 · 各 ${EXTEND_WICK_COST} 芯`)}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {extended && (
+                <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.accent, textAlign: 'center', paddingVertical: 4 }}>
+                  {lang === 'en' ? '· the candle was relit · +30 min ·' : '· 燭火重新點亮 · +30 分 ·'}
+                </Text>
+              )}
             </View>
           </View>
 

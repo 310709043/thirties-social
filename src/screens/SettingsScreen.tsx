@@ -18,7 +18,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
-  const { direction, lang, identityKind, seed, autoFilter, slowMode, vigil, conversationsToday } = useAppStore();
+  const { direction, lang, identityKind, seed, autoFilter, slowMode, vigil, connectionsToday, gender } = useAppStore();
+  const unlimitedChats = vigil || gender === 'female';
   const p = DIRECTIONS[direction];
   const guest = isGuest();
 
@@ -115,14 +116,14 @@ export default function SettingsScreen({ navigation }: Props) {
                 />
                 <RowDivider p={p} />
                 <SettingRow p={p}
-                  title={lang === 'en' ? 'Daily quiet limit' : '每日對話上限'}
-                  alt={lang === 'en' ? '每日對話上限' : 'Daily quiet limit'}
+                  title={lang === 'en' ? 'Daily free matches' : '每日免費配對'}
+                  alt={lang === 'en' ? '每日免費配對' : 'Daily free matches'}
                   sub={lang === 'en'
-                    ? 'At most 5 one-on-one chats per cycle — so nights stay quiet, not endless. Resets at 03:00.'
-                    : '每個循環最多 5 段一對一對話——讓夜晚保持安靜，而不是無止盡。今晚 03:00 重新計算。'}
+                    ? 'Up to 10 free 1-on-1 connections a day, then 1 wick each. Resets at 03:00. Women and Vigil: unlimited.'
+                    : '每天 10 段免費一對一，用完後每段 1 燭芯。今晚 03:00 重新計算。女生與守夜會員不限次。'}
                   control={
                     <Text style={{ fontFamily: 'Inter-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
-                      {vigil ? '∞' : `${Math.min(conversationsToday, 5)}/5`}
+                      {unlimitedChats ? '∞' : `${Math.min(connectionsToday, 10)}/10`}
                     </Text>
                   }
                 />
@@ -176,7 +177,9 @@ export default function SettingsScreen({ navigation }: Props) {
                 <SettingRow p={p}
                   title={t('setLeave', lang)}
                   alt={tAlt('setLeave', lang)}
-                  sub={lang === 'en' ? 'No traces remain. We hold no records.' : '不留下任何資料。我們本來就沒有保存。'}
+                  sub={lang === 'en'
+                    ? 'Your account and all data are permanently erased. Chats already vanish on their own when they end.'
+                    : '帳號與所有資料將被永久刪除。對話本來就會在結束後自行消散。'}
                   danger
                   control={
                     <TouchableOpacity onPress={() => Alert.alert(

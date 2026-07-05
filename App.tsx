@@ -4,7 +4,7 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { initStore, useAppStore } from './src/hooks/useAppStore';
 import { initPurchases } from './src/lib/purchases';
-import { registerForPushNotifications, addNotificationListener } from './src/lib/notifications';
+import { registerForPushNotifications, addNotificationListener, scheduleNightlyReminder } from './src/lib/notifications';
 import { analytics } from './src/lib/analytics';
 import { navigationRef, resetAndNavigate } from './src/lib/navigationRef';
 import { RootStackParamList } from './src/navigation';
@@ -53,7 +53,10 @@ export default function App() {
   useEffect(() => {
     initStore().then(() => {
       setStoreReady(true);
-      registerForPushNotifications();
+      registerForPushNotifications().then(() => {
+        // Re-engagement: one local reminder a night when the window opens.
+        scheduleNightlyReminder();
+      });
       analytics.appOpen();
     });
     configureGoogle();

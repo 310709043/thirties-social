@@ -149,13 +149,14 @@ export default function MoodScreen({ navigation }: Props) {
     if (waiting) return;
     // Show the tonight-mode picker on first match attempt each session.
     if (!tonightMode) { setShowModePicker(true); return; }
-    // Guests can use rooms but not 1:1 matching.
-    if (getTier() === 'guest') {
+    // Guests get ONE taste match — the strongest possible first experience —
+    // and only hit the sign-up wall after they've felt what the app is.
+    if (getTier() === 'guest' && !canMatch()) {
       Alert.alert(
-        lang === 'en' ? 'Create an account to match' : '配對需要先建立帳號',
+        lang === 'en' ? 'That was your free taste' : '免費體驗用過了',
         lang === 'en'
-          ? 'Guests can join rooms. Create an account to start 1-on-1 matching.'
-          : '訪客可以參與火盆聊天。建立帳號後即可開始一對一配對。',
+          ? 'Create an account to keep matching — it takes a moment and keeps your wicks safe.'
+          : '你的一次免費配對體驗已用過。建立帳號就能繼續配對，也能保住你的燭芯。',
         [
           { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
           { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
@@ -164,7 +165,7 @@ export default function MoodScreen({ navigation }: Props) {
       return;
     }
     // Free user out of free matches and out of wicks.
-    if (!canMatch()) {
+    if (getTier() !== 'guest' && !canMatch()) {
       Alert.alert(
         lang === 'en' ? 'That\'s enough for tonight' : '今晚先到這裡',
         lang === 'en'
@@ -338,7 +339,7 @@ export default function MoodScreen({ navigation }: Props) {
                   {lang === 'en' ? 'The Loft' : '夜閣'}
                 </Text>
                 <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: 'rgba(245,226,196,0.6)', marginTop: 2 }}>
-                  {lang === 'en' ? 'opens midnight · face to face · veiled' : '午夜開啟 · 面對面 · 帶紗'}
+                  {lang === 'en' ? 'opens 21:00 nightly · face to face · veiled' : '每晚 21:00 開啟 · 面對面 · 帶紗'}
                 </Text>
               </View>
               <View style={{ alignItems: 'center', gap: 4 }}>

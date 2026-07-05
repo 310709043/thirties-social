@@ -59,6 +59,8 @@ interface AppState {
   loftFreeUsed: number;
   /** Week bucket (weeks-since-epoch) when the free user last used their weekly free Loft entry. */
   loftFreeWeek: number | null;
+  /** A guest's single free taste match — spent once, then sign-up is required. */
+  guestMatchUsed: boolean;
 }
 
 /**
@@ -86,6 +88,7 @@ let _state: AppState = {
   boundary: null, freeTimes: [], region: null, quote: null, loftVisible: true,
   autoFilter: false, slowMode: false, conversationsToday: 0, peopleTodayCount: 0,
   connectionsToday: 0, roomsToday: 0, freeMatchesUsed: 0, loftFreeUsed: 0, loftFreeWeek: null,
+  guestMatchUsed: false,
 };
 
 const _listeners = new Set<() => void>();
@@ -94,7 +97,7 @@ function notify() { _listeners.forEach(fn => fn()); }
 export async function initStore() {
   const deviceId = await getDeviceId();
   const seed = getDailySeed(deviceId);
-  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedShape, storedSeeking, storedBoundary, storedFreeTimes, storedRegion, storedQuote, storedLoftVisible, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind, storedFreeMatches, storedLoftFree, storedConnToday, storedRoomsToday, storedLoftFreeWeek] = await Promise.all([
+  const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedShape, storedSeeking, storedBoundary, storedFreeTimes, storedRegion, storedQuote, storedLoftVisible, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind, storedFreeMatches, storedLoftFree, storedConnToday, storedRoomsToday, storedLoftFreeWeek, storedGuestMatchUsed] = await Promise.all([
     AsyncStorage.getItem('direction') as Promise<Direction | null>,
     AsyncStorage.getItem('onboarding_done'),
     AsyncStorage.getItem('setup_done'),
@@ -121,6 +124,7 @@ export async function initStore() {
     AsyncStorage.getItem('connectionsToday'),
     AsyncStorage.getItem('roomsToday'),
     AsyncStorage.getItem('loftFreeWeek'),
+    AsyncStorage.getItem('guestMatchUsed'),
   ]);
   _state = {
     ..._state, deviceId, seed,
@@ -146,6 +150,7 @@ export async function initStore() {
     freeMatchesUsed: storedFreeMatches ? parseInt(storedFreeMatches, 10) : 0,
     loftFreeUsed: storedLoftFree ? parseInt(storedLoftFree, 10) : 0,
     loftFreeWeek: storedLoftFreeWeek ? parseInt(storedLoftFreeWeek, 10) : null,
+    guestMatchUsed: storedGuestMatchUsed === '1',
   };
   notify();
   _resetDailyCountersIfNeeded();
@@ -365,10 +370,9 @@ export async function trackPerson() {
   notify();
 }
 
-export function canStartConversation(): boolean {
-  if (_state.vigil) return true;
-  return _state.conversationsToday < 5;
-}
+// (The old canStartConversation 5-per-day cap was dead code that only lived on
+// in the Settings screen as a rule we never actually enforced — the one real
+// limit is FREE_DAILY_CONNECTIONS below.)
 
 // ── Tiers & capabilities ──────────────────────────────────
 export type Tier = 'guest' | 'free' | 'vigil';
@@ -381,20 +385,24 @@ export function getTier(): Tier {
 
 /**
  * A "connection" = starting a 1:1 chat, whether via random match or a room
- * invite. Guests can't; vigil is unlimited; free users get FREE_DAILY_CONNECTIONS
- * per day, then each costs MATCH_WICK_COST wicks.
+ * invite. Vigil is unlimited. Women match free and unlimited — they are the
+ * scarce side of this marketplace, and every barrier on them starves the whole
+ * app. Guests get ONE taste match before being asked to sign up. Free men get
+ * FREE_DAILY_CONNECTIONS per day, then each costs MATCH_WICK_COST wicks.
  */
 export function canMatch(): boolean {
   const t = getTier();
-  if (t === 'guest') return false;
+  if (t === 'guest') return !_state.guestMatchUsed;
   if (t === 'vigil') return true;
+  if (_state.gender === 'female') return true;
   if (_state.connectionsToday < FREE_DAILY_CONNECTIONS) return true;
   return _state.wicks >= MATCH_WICK_COST;
 }
 
 /** True once a free user has used today's free connections and must pay wicks. */
 export function matchCostsWick(): boolean {
-  return getTier() === 'free' && _state.connectionsToday >= FREE_DAILY_CONNECTIONS;
+  if (getTier() !== 'free' || _state.gender === 'female') return false;
+  return _state.connectionsToday >= FREE_DAILY_CONNECTIONS;
 }
 
 /** Remaining free connections (matches + room invites) for a free user today. */
@@ -414,7 +422,15 @@ export function freeConnectionsRemaining(): number {
  * the caller can avoid marking the connection as already charged.
  */
 export async function recordMatch(): Promise<boolean> {
+  if (getTier() === 'guest') {
+    // The guest's single taste match is now spent.
+    _state = { ..._state, guestMatchUsed: true };
+    await AsyncStorage.setItem('guestMatchUsed', '1');
+    notify();
+    return true;
+  }
   if (getTier() !== 'free') return true;
+  if (_state.gender === 'female') return true; // women never consume quota or wicks
   await _resetDailyCountersIfNeeded();
   if (_state.connectionsToday < FREE_DAILY_CONNECTIONS) {
     const used = _state.connectionsToday + 1;

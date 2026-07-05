@@ -113,7 +113,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   loftBack:         { zh: '改天',             en: 'Another night' },
   loftInside:       { zh: '在夜閣裡',         en: 'Inside the Loft' },
   loftPeople:       { zh: '今晚闋著的人',     en: 'who lingers tonight' },
-  loftClose:        { zh: '夜閣 05:00 自動關門', en: 'Loft closes at 05:00' },
+  loftClose:        { zh: '每晚 21:00–05:00 開放', en: 'Open nightly 21:00–05:00' },
   loftWhisper:      { zh: '輕輕說一句·身體會記得', en: 'Whisper — the body remembers' },
   loftPulse1:       { zh: '想你',             en: 'thinking of you' },
   loftPulse2:       { zh: '繼續',             en: 'go on' },
