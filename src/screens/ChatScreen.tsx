@@ -13,7 +13,8 @@ import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch } from '../hooks/useAppStore';
-import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationDoc, voteExtendConversation } from '../lib/db';
+import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationDoc, voteExtendConversation, voteRekindle, voteBond } from '../lib/db';
+import { scheduleRekindleReminder } from '../lib/notifications';
 import { filterMessage } from '../lib/filter';
 import { analytics } from '../lib/analytics';
 import { pickImage, uploadVeiledPhoto, getVeiledPhoto } from '../lib/photos';
@@ -27,9 +28,11 @@ const TOTAL_SECONDS = 30 * 60;
 const VEIL_MIN_MESSAGES = 10;
 /** 續燭 — each side pays this to vote for a one-time +30 min extension. */
 const EXTEND_WICK_COST = 2;
+/** 重逢 — each side pays this to vote for meeting again tomorrow night. */
+const REKINDLE_WICK_COST = 3;
 
 export default function ChatScreen({ navigation, route }: Props) {
-  const { seed, direction, lang, identityKind, wicks, autoFilter, slowMode } = useAppStore();
+  const { seed, direction, lang, identityKind, wicks, autoFilter, slowMode, vigil } = useAppStore();
   const p = DIRECTIONS[direction];
   const otherSeed = route.params?.otherSeed;
   const conversationId = (route.params as any)?.conversationId as string | undefined;
@@ -65,6 +68,11 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [extendVotes, setExtendVotes] = useState<Record<string, boolean>>({});
   const [extended, setExtended] = useState(false);
   const [extendBusy, setExtendBusy] = useState(false);
+  const [rekindleVotes, setRekindleVotes] = useState<Record<string, boolean>>({});
+  const [bondVotes, setBondVotes] = useState<Record<string, boolean>>({});
+  const [rekindleBusy, setRekindleBusy] = useState(false);
+  const [bondBusy, setBondBusy] = useState(false);
+  const rekindleScheduledRef = useRef(false);
   const [realMessages, setRealMessages] = useState<DbConvMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [showVeilSheet, setShowVeilSheet] = useState(false);
@@ -108,6 +116,15 @@ export default function ChatScreen({ navigation, route }: Props) {
       if (expMs) closeAtRef.current = expMs;
       setExtendVotes(conv.extendVotes ?? {});
       setExtended(!!conv.extended);
+      const rv = (conv as any).rekindleVotes ?? {};
+      setRekindleVotes(rv);
+      setBondVotes((conv as any).bondVotes ?? {});
+      // Reunion confirmed (both voted) — schedule tomorrow-21:00 reminder once.
+      const uid0 = getCurrentUid();
+      if (uid0 && rv[uid0] && Object.keys(rv).some(k => k !== uid0 && rv[k]) && !rekindleScheduledRef.current) {
+        rekindleScheduledRef.current = true;
+        void scheduleRekindleReminder(lang);
+      }
     });
   }, [conversationId]);
 
@@ -157,6 +174,58 @@ export default function ChatScreen({ navigation, route }: Props) {
       }
     }
     setExtendBusy(false);
+  };
+
+  // 重逢 — vote to meet again tomorrow night (3 wicks each, mutual).
+  const iVotedRekindle = !!(myUid && rekindleVotes[myUid]);
+  const otherVotedRekindle = Object.keys(rekindleVotes).some(k => k !== myUid && rekindleVotes[k]);
+  const rekindleConfirmed = iVotedRekindle && otherVotedRekindle;
+  const handleRekindle = async () => {
+    if (rekindleBusy || iVotedRekindle || !conversationId || !otherSeed) return;
+    if (wicks < REKINDLE_WICK_COST) {
+      Alert.alert(
+        lang === 'en' ? 'Not enough wicks' : '燭芯不足',
+        lang === 'en' ? `Meeting again costs ${REKINDLE_WICK_COST} wicks from each side.` : `重逢需要雙方各 ${REKINDLE_WICK_COST} 燭芯。`,
+      );
+      return;
+    }
+    setRekindleBusy(true);
+    const paid = await spendWicks(REKINDLE_WICK_COST, 'rekindle', conversationId);
+    if (paid.ok) {
+      const r = await voteRekindle({ conversationId, mySeed: seed, otherSeed });
+      if (r === 'confirmed') {
+        hapticMedium();
+        rekindleScheduledRef.current = true;
+        void scheduleRekindleReminder(lang);
+      }
+    }
+    setRekindleBusy(false);
+  };
+
+  // 熟人 — keep each other (Vigil proposes; either side may accept for free).
+  const iVotedBond = !!(myUid && bondVotes[myUid]);
+  const otherVotedBond = Object.keys(bondVotes).some(k => k !== myUid && bondVotes[k]);
+  const bondConfirmed = iVotedBond && otherVotedBond;
+  const handleBond = async () => {
+    if (bondBusy || iVotedBond || !conversationId || !otherSeed) return;
+    // Proposing is a Vigil perk; accepting someone else's proposal is free for all.
+    if (!vigil && !otherVotedBond) {
+      Alert.alert(
+        lang === 'en' ? 'A Vigil privilege' : '守夜會員特權',
+        lang === 'en'
+          ? 'Keeping each other is a Vigil privilege. If they propose it, you can accept for free.'
+          : '「留下彼此」是守夜會員的特權。若對方先提出，你可以免費答應。',
+        [
+          { text: lang === 'en' ? 'Not now' : '再想想', style: 'cancel' },
+          { text: lang === 'en' ? 'Go Vigil' : '升級守夜', onPress: () => navigation.push('Upgrade') },
+        ],
+      );
+      return;
+    }
+    setBondBusy(true);
+    const r = await voteBond({ conversationId, mySeed: seed, otherSeed });
+    if (r === 'confirmed') hapticMedium();
+    setBondBusy(false);
   };
 
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
@@ -325,6 +394,35 @@ export default function ChatScreen({ navigation, route }: Props) {
                 <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.accent, textAlign: 'center', paddingVertical: 4 }}>
                   {lang === 'en' ? '· the candle was relit · +30 min ·' : '· 燭火重新點亮 · +30 分 ·'}
                 </Text>
+              )}
+              {/* 重逢 & 留下彼此 — earned after a real conversation (10+ messages). */}
+              {!otherLeft && displayMessages.length >= VEIL_MIN_MESSAGES && (
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 18, paddingTop: 2 }}>
+                  <TouchableOpacity onPress={handleRekindle} disabled={rekindleBusy || iVotedRekindle}
+                    style={{ opacity: iVotedRekindle && !rekindleConfirmed ? 0.7 : 1 }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: rekindleConfirmed ? p.accent : p.inkSoft }}>
+                      {rekindleConfirmed
+                        ? (lang === 'en' ? '☾ meeting again tomorrow' : '☾ 明晚重逢已約定')
+                        : iVotedRekindle
+                        ? (lang === 'en' ? '☾ waiting for them…' : '☾ 等待對方⋯')
+                        : otherVotedRekindle
+                        ? (lang === 'en' ? `☾ they want to meet again (${REKINDLE_WICK_COST})` : `☾ 對方想明晚重逢（${REKINDLE_WICK_COST} 芯）`)
+                        : (lang === 'en' ? `☾ meet again tomorrow · ${REKINDLE_WICK_COST}` : `☾ 明晚重逢 · ${REKINDLE_WICK_COST} 芯`)}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleBond} disabled={bondBusy || iVotedBond}
+                    style={{ opacity: iVotedBond && !bondConfirmed ? 0.7 : 1 }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: bondConfirmed ? p.accent : p.inkSoft }}>
+                      {bondConfirmed
+                        ? (lang === 'en' ? '◈ kept each other' : '◈ 已留下彼此')
+                        : iVotedBond
+                        ? (lang === 'en' ? '◈ waiting for them…' : '◈ 等待對方⋯')
+                        : otherVotedBond
+                        ? (lang === 'en' ? '◈ they want to keep you' : '◈ 對方想留下你')
+                        : (lang === 'en' ? '◈ keep each other · Vigil' : '◈ 留下彼此 · 守夜')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           </View>

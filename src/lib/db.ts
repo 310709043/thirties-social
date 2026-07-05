@@ -6,7 +6,9 @@ import {
   collection, query, where, orderBy, limit,
   onSnapshot, runTransaction, serverTimestamp,
   Timestamp, getDocs, increment, arrayUnion, arrayRemove,
+  getCountFromServer,
 } from 'firebase/firestore';
+import { hash } from './identity';
 import { signInAnonymously, onAuthStateChanged, deleteUser } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { sendPushToUser } from './notifications';
@@ -931,6 +933,199 @@ export async function bumpLoftVeilLevel(loftConversationId: string, level: numbe
   try {
     await updateDoc(doc(db, 'loftConversations', loftConversationId), { [`veils.${uid}`]: level });
   } catch {}
+}
+
+// ── Official braziers (cold-start warmth) ─────────────────
+// Two official topic braziers are lit every night so a newcomer never walks
+// into a completely dark app. Topics rotate deterministically by date.
+const OFFICIAL_TOPICS: Array<{ zh: string; en: string }> = [
+  { zh: '今晚睡不著的人', en: 'awake tonight' },
+  { zh: '想說卻沒人聽的話', en: 'words with no listener' },
+  { zh: '最近撐得有點累', en: 'holding on, tired' },
+  { zh: '一個人吃晚餐的日子', en: 'dinners alone' },
+  { zh: '不敢跟朋友說的事', en: 'what friends can\'t hear' },
+  { zh: '差一點就說出口', en: 'almost said it' },
+  { zh: '假裝沒事的一天', en: 'pretending today' },
+  { zh: '很想念一個人', en: 'missing someone' },
+  { zh: '關於離開的念頭', en: 'thoughts of leaving' },
+  { zh: '今天有個小小的好事', en: 'one small good thing' },
+  { zh: '深夜的一句真話', en: 'one true late-night line' },
+  { zh: '婚姻裡安靜的部分', en: 'the quiet part of marriage' },
+];
+
+export async function ensureOfficialRooms(): Promise<void> {
+  const date = localNightDate();
+  const base = hash(date);
+  const i1 = base % OFFICIAL_TOPICS.length;
+  const i2 = (base + 5) % OFFICIAL_TOPICS.length; // offset keeps the pair distinct
+  await Promise.all([i1, i2].map((ti, slot) =>
+    getOrCreatePresetRoom({
+      roomKey: `official-${date}-${slot}`,
+      topicZh: OFFICIAL_TOPICS[ti].zh,
+      topicEn: OFFICIAL_TOPICS[ti].en,
+    }).catch(() => null),
+  ));
+}
+
+// ── Awake presence（今晚有 N 人醒著）───────────────────────
+// A tiny public heartbeat collection — one doc per user, only a timestamp — so
+// the home screen can show an HONEST count of who's around right now. (The
+// users collection is private per-user by rules, so it can't be counted.)
+const AWAKE_WINDOW_MS = 20 * 60 * 1000;
+
+export async function heartbeatAwake(): Promise<void> {
+  const uid = getCurrentUid();
+  if (!uid) return;
+  try {
+    await setDoc(doc(db, 'presence', uid), { lastActiveAt: serverTimestamp() }, { merge: true });
+  } catch { /* non-critical */ }
+}
+
+export async function fetchAwakeCount(): Promise<number> {
+  try {
+    const cutoff = Timestamp.fromMillis(Date.now() - AWAKE_WINDOW_MS);
+    const snap = await getCountFromServer(
+      query(collection(db, 'presence'), where('lastActiveAt', '>', cutoff)),
+    );
+    return snap.data().count;
+  } catch { return 0; }
+}
+
+// ── 重逢 Rekindle（明晚再見）────────────────────────────────
+// During a chat, both sides can pay to meet again TOMORROW night: each votes
+// (3 wicks, paid by the caller before voting); when the second vote lands, a
+// rekindle doc for tomorrow's nightDate is created. The next night, both see
+// a banner on the home screen that opens a fresh conversation.
+export interface DbRekindle {
+  id: string;
+  userAId: string;
+  userBId: string;
+  nightDate: string;               // the night they meet again (local date)
+  seeds: Record<string, string>;   // last night's seeds — so the banner can say who
+  conversationId: string | null;   // set when one side opens the reunion
+  status: 'pending' | 'opened';
+  createdAt: any;
+}
+
+function nextNightDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Vote to meet again tomorrow. Returns 'voted' | 'confirmed' | null on failure. */
+export async function voteRekindle(params: {
+  conversationId: string; mySeed: string; otherSeed: string;
+}): Promise<'voted' | 'confirmed' | null> {
+  const uid = getCurrentUid();
+  if (!uid) return null;
+  try {
+    const ref = doc(db, 'conversations', params.conversationId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    const data = snap.data() as any;
+    const otherId = data.userAId === uid ? data.userBId : data.userAId;
+    const bothVoted = !!(data.rekindleVotes ?? {})[otherId];
+    await updateDoc(ref, { [`rekindleVotes.${uid}`]: true });
+    if (!bothVoted) return 'voted';
+    await addDoc(collection(db, 'rekindles'), {
+      userAId: data.userAId,
+      userBId: data.userBId,
+      nightDate: nextNightDate(),
+      seeds: { [uid]: params.mySeed, [otherId]: params.otherSeed },
+      conversationId: null,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    });
+    return 'confirmed';
+  } catch { return null; }
+}
+
+/** Tonight's reunions waiting for me (both == queries; no composite index needed). */
+export async function fetchTonightRekindles(): Promise<DbRekindle[]> {
+  const uid = getCurrentUid();
+  if (!uid) return [];
+  const tonight = localNightDate();
+  try {
+    const [a, b] = await Promise.all([
+      getDocs(query(collection(db, 'rekindles'), where('userAId', '==', uid), where('nightDate', '==', tonight))),
+      getDocs(query(collection(db, 'rekindles'), where('userBId', '==', uid), where('nightDate', '==', tonight))),
+    ]);
+    return [...a.docs, ...b.docs].map(d => ({ id: d.id, ...d.data() }) as DbRekindle);
+  } catch { return []; }
+}
+
+/** Open (or rejoin) a reunion — returns the conversation to enter. */
+export async function openRekindle(rek: DbRekindle): Promise<{ conversationId: string; otherSeed: string } | null> {
+  const uid = getCurrentUid();
+  if (!uid) return null;
+  const otherId = rek.userAId === uid ? rek.userBId : rek.userAId;
+  const otherSeed = rek.seeds?.[otherId] ?? otherId;
+  try {
+    // Re-read first — the other side may already have opened it.
+    const fresh = await getDoc(doc(db, 'rekindles', rek.id));
+    const freshData = fresh.exists() ? (fresh.data() as any) : null;
+    if (freshData?.conversationId) return { conversationId: freshData.conversationId, otherSeed };
+    const conv = await createConversation({ userBId: otherId });
+    if (!conv) return null;
+    await updateDoc(doc(db, 'rekindles', rek.id), { conversationId: conv.id, status: 'opened' });
+    return { conversationId: conv.id, otherSeed };
+  } catch { return null; }
+}
+
+// ── 熟人 Bonds（留下彼此・守夜特權）─────────────────────────
+// Inside a chat, a Vigil member can propose keeping each other; when both agree
+// (bondVotes on the conversation doc), a permanent bond doc is written. Bonds
+// appear on the profile page and can start a fresh conversation any time.
+export interface DbBond {
+  id: string;
+  users: string[];
+  seeds: Record<string, string>; // seeds at bond time (the names they knew)
+  createdAt: any;
+}
+
+/** Vote to keep each other. Returns 'voted' | 'confirmed' | null. */
+export async function voteBond(params: {
+  conversationId: string; mySeed: string; otherSeed: string;
+}): Promise<'voted' | 'confirmed' | null> {
+  const uid = getCurrentUid();
+  if (!uid) return null;
+  try {
+    const ref = doc(db, 'conversations', params.conversationId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    const data = snap.data() as any;
+    const otherId = data.userAId === uid ? data.userBId : data.userAId;
+    const bothVoted = !!(data.bondVotes ?? {})[otherId];
+    await updateDoc(ref, { [`bondVotes.${uid}`]: true });
+    if (!bothVoted) return 'voted';
+    // Don't create the same pair twice.
+    const mine = await getDocs(query(collection(db, 'bonds'), where('users', 'array-contains', uid)));
+    if (mine.docs.some(d => (d.data().users as string[]).includes(otherId))) return 'confirmed';
+    await addDoc(collection(db, 'bonds'), {
+      users: [data.userAId, data.userBId],
+      seeds: { [uid]: params.mySeed, [otherId]: params.otherSeed },
+      createdAt: serverTimestamp(),
+    });
+    return 'confirmed';
+  } catch { return null; }
+}
+
+export async function fetchMyBonds(): Promise<DbBond[]> {
+  const uid = getCurrentUid();
+  if (!uid) return [];
+  try {
+    const snap = await getDocs(query(collection(db, 'bonds'), where('users', 'array-contains', uid)));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }) as DbBond)
+      .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
+  } catch { return []; }
+}
+
+export async function removeBond(bondId: string): Promise<void> {
+  try { await deleteDoc(doc(db, 'bonds', bondId)); } catch {}
 }
 
 // ── Match Queue ───────────────────────────────────────────

@@ -12,8 +12,9 @@ import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setIdentityKind, getAvailableIdentityKinds, setLoftVisible, getTier } from '../hooks/useAppStore';
 import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, IdentityKind, getLoftName } from '../lib/identity';
 import { pickImage, uploadAlbumPhoto } from '../lib/photos';
-import { getAlbum, addAlbumPhoto, removeAlbumPhoto, AlbumPhoto } from '../lib/db';
+import { getAlbum, addAlbumPhoto, removeAlbumPhoto, AlbumPhoto, fetchMyBonds, removeBond, DbBond, createConversation, getCurrentUid } from '../lib/db';
 import { getDiaryEntries, removeDiaryEntry, DiaryEntry } from '../lib/diary';
+import { getColorAdj } from '../lib/identity';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -70,7 +71,42 @@ export default function ProfileScreen({ navigation }: Props) {
   const [uploading, setUploading] = useState(false);
   const [diary, setDiary] = useState<DiaryEntry[]>([]);
   const [diaryExpanded, setDiaryExpanded] = useState(false);
-  useEffect(() => { getAlbum().then(setAlbum); getDiaryEntries().then(setDiary); }, []);
+  const [bonds, setBonds] = useState<DbBond[]>([]);
+  const [openingBond, setOpeningBond] = useState<string | null>(null);
+  useEffect(() => { getAlbum().then(setAlbum); getDiaryEntries().then(setDiary); fetchMyBonds().then(setBonds); }, []);
+
+  const openBondChat = async (bond: DbBond) => {
+    if (openingBond) return;
+    const uid = getCurrentUid();
+    const otherId = bond.users.find(u => u !== uid);
+    if (!otherId) return;
+    setOpeningBond(bond.id);
+    const conv = await createConversation({ userBId: otherId });
+    setOpeningBond(null);
+    if (conv) {
+      navigation.push('Chat', {
+        otherSeed: bond.seeds?.[otherId] ?? otherId,
+        conversationId: conv.id,
+        matchCharge: true, // a bond chat still counts as a connection (quota/wick rules apply)
+      } as any);
+    } else {
+      Alert.alert(lang === 'en' ? 'Could not open' : '暫時打不開', lang === 'en' ? 'Please try again.' : '請再試一次。');
+    }
+  };
+
+  const confirmRemoveBond = (bond: DbBond) => {
+    Alert.alert(
+      lang === 'en' ? 'Let them go?' : '放下這個人？',
+      lang === 'en' ? 'They will no longer appear here.' : '之後就不會再出現在這裡了。',
+      [
+        { text: lang === 'en' ? 'Keep' : '留著', style: 'cancel' },
+        { text: lang === 'en' ? 'Let go' : '放下', style: 'destructive', onPress: async () => {
+          setBonds(bs => bs.filter(b => b.id !== bond.id));
+          await removeBond(bond.id);
+        } },
+      ],
+    );
+  };
 
   const deleteDiaryEntry = (entry: DiaryEntry) => {
     Alert.alert(
@@ -255,6 +291,46 @@ export default function ProfileScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
           </FadeInUp>
+
+          {/* 熟人 — the people you both chose to keep (Vigil bond feature). */}
+          {bonds.length > 0 && (
+            <FadeInUp delay={300} distance={10}>
+              <View style={styles.profileSection}>
+                <Cap p={p} style={{ marginBottom: 10 }}>{lang === 'en' ? 'Kept · 熟人' : '熟人 · Kept'}</Cap>
+                <GlassCard p={p} padding={12} radius={18}>
+                  {bonds.map((bond, i) => {
+                    const uid = getCurrentUid();
+                    const otherId = bond.users.find(u => u !== uid) ?? '';
+                    const otherSeed = bond.seeds?.[otherId] ?? otherId;
+                    const label = getColorAdj(otherSeed, lang).label;
+                    return (
+                      <TouchableOpacity key={bond.id}
+                        onPress={() => openBondChat(bond)}
+                        onLongPress={() => confirmRemoveBond(bond)}
+                        delayLongPress={500}
+                        disabled={openingBond === bond.id}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 6,
+                                 borderTopWidth: i > 0 ? 0.5 : 0, borderTopColor: p.line, opacity: openingBond === bond.id ? 0.5 : 1 }}>
+                        <Identity kind={identityKind} seed={otherSeed} size={36} palette={p} lang={lang} trust={0.35} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink }}>{label}</Text>
+                          <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 10.5, color: p.muted, marginTop: 1 }}>
+                            {lang === 'en' ? 'kept each other' : '你們互相留下了彼此'}
+                          </Text>
+                        </View>
+                        <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
+                          {lang === 'en' ? 'talk →' : '說話 →'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 10.5, color: p.muted, marginTop: 6, textAlign: 'center' }}>
+                    {lang === 'en' ? 'long-press to let go' : '長按可放下'}
+                  </Text>
+                </GlassCard>
+              </View>
+            </FadeInUp>
+          )}
 
           {/* Diary */}
           <FadeInUp delay={320} distance={10}>

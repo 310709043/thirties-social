@@ -17,7 +17,8 @@ import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, MATCH_WICK_COST } from '../hooks/useAppStore';
-import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode } from '../lib/db';
+import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchTonightRekindles, openRekindle, DbRekindle } from '../lib/db';
+import { getColorAdj } from '../lib/identity';
 import { analytics } from '../lib/analytics';
 import { addDiaryEntry } from '../lib/diary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -25,7 +26,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
 
 export default function MoodScreen({ navigation }: Props) {
-  const { seed, direction, lang, identityKind, wicks, gender, ageBracket } = useAppStore();
+  const { seed, direction, lang, identityKind, wicks, gender, ageBracket, userId } = useAppStore();
   const p = DIRECTIONS[direction];
   const [text, setText] = useState('');
   const [timeStr, setTimeStr] = useState('');
@@ -55,6 +56,29 @@ export default function MoodScreen({ navigation }: Props) {
   );
 
   useEffect(() => { return subscribeToActiveRooms(setRooms); }, []);
+
+  // Cold-start warmth: make sure tonight's official braziers exist, count who's
+  // awake (honest number), and surface any reunion waiting for me tonight.
+  const [awakeCount, setAwakeCount] = useState<number | null>(null);
+  const [rekindles, setRekindles] = useState<DbRekindle[]>([]);
+  useEffect(() => {
+    void ensureOfficialRooms();
+    const beat = () => { void heartbeatAwake(); fetchAwakeCount().then(setAwakeCount); };
+    beat();
+    const id = setInterval(beat, 5 * 60 * 1000);
+    fetchTonightRekindles().then(setRekindles);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleOpenRekindle = async (rek: DbRekindle) => {
+    const opened = await openRekindle(rek);
+    if (opened) {
+      setRekindles(rs => rs.filter(r => r.id !== rek.id));
+      navigation.push('Chat', { otherSeed: opened.otherSeed, conversationId: opened.conversationId, matchCharge: false });
+    } else {
+      Alert.alert(lang === 'en' ? 'Could not open' : '暫時打不開', lang === 'en' ? 'Please try again.' : '請再試一次。');
+    }
+  };
 
   useEffect(() => {
     checkAndClaimDailyReward().then(r => {
@@ -98,19 +122,39 @@ export default function MoodScreen({ navigation }: Props) {
     // Keep actively looking for a partner while waiting.
     const retryId = setInterval(() => { if (!matched) tryFindMatch(); }, 5000);
 
-    // Give up after 60s if still unmatched.
-    matchTimeoutRef.current = setTimeout(() => {
+    // After 60s unmatched: soft-land instead of a dead end — keep matching in
+    // the background while they sit by a brazier, or wait another round.
+    const onTimeout = () => {
       if (matched) return;
-      setWaiting(false);
-      leaveMatchQueue();
       Alert.alert(
-        lang === 'en' ? 'No one waiting right now' : '現在沒有人在等配對',
+        lang === 'en' ? 'No one waiting right now' : '還沒有人配上',
         lang === 'en'
-          ? 'No wick was used. Sit by a brazier below — there are usually people there.'
-          : '沒有扣任何燭芯。先去下面的火盆待著吧 —— 那裡通常有人。',
-        [{ text: lang === 'en' ? 'OK' : '好', style: 'cancel' }],
+          ? 'No wick was used. Sit by a brazier while we keep looking, or wait a little longer.'
+          : '沒有扣任何燭芯。可以先去火盆待著，我會繼續幫你找——配到了馬上告訴你。',
+        [
+          {
+            text: lang === 'en' ? 'Sit by a brazier (keep looking)' : '去火盆待著（繼續幫我配）',
+            onPress: () => {
+              // Stay in the queue; another timeout round runs in the background.
+              matchTimeoutRef.current = setTimeout(onTimeout, 180000);
+              const hottest = activeRooms[0];
+              if (hottest) navigation.push('Room', { roomKey: hottest.roomKey ?? 'custom', roomId: hottest.id });
+              else navigation.push('Room', { roomKey: 'new' });
+            },
+          },
+          {
+            text: lang === 'en' ? 'Wait a bit more' : '再等一下',
+            onPress: () => { matchTimeoutRef.current = setTimeout(onTimeout, 60000); },
+          },
+          {
+            text: lang === 'en' ? 'Stop' : '先不找了',
+            style: 'cancel',
+            onPress: () => { setWaiting(false); leaveMatchQueue(); },
+          },
+        ],
       );
-    }, 60000);
+    };
+    matchTimeoutRef.current = setTimeout(onTimeout, 60000);
 
     const unsub = subscribeToMyMatch(entry => {
       // onSnapshot fires immediately with the current (waiting) doc — only act
@@ -247,6 +291,38 @@ export default function MoodScreen({ navigation }: Props) {
           {/* Heading + reassuring subline (type hierarchy + grayscale tone) */}
           <Text style={[styles.heading, { color: p.ink }]}>{t('moodHeader', lang)}</Text>
           <Text style={[styles.subheading, { color: p.muted }]}>{t('moodPrompt', lang)}</Text>
+          {/* Honest presence — a real count when the room is warm, honest quiet
+              when it isn't (never a fake number). */}
+          {awakeCount !== null && (
+            <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: p.accent, textAlign: 'center', marginTop: -12, opacity: 0.85 }}>
+              {awakeCount >= 3
+                ? (lang === 'en' ? `· ${awakeCount} people are awake right now ·` : `· 現在有 ${awakeCount} 人醒著 ·`)
+                : (lang === 'en' ? '· a quiet hour — a good time to write ·' : '· 現在很靜，適合先寫點什麼 ·')}
+            </Text>
+          )}
+
+          {/* Reunion banner — someone from last night is waiting. */}
+          {rekindles.map(rek => {
+            const otherId = rek.userAId === userId ? rek.userBId : rek.userAId;
+            const label = getColorAdj(rek.seeds?.[otherId] ?? otherId, lang).label;
+            return (
+              <TouchableOpacity key={rek.id} onPress={() => handleOpenRekindle(rek)} activeOpacity={0.85}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.accentSoft, borderWidth: 1, borderColor: p.accent + '55' }}>
+                <Text style={{ fontSize: 18 }}>☾</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
+                    {lang === 'en' ? 'Your reunion is tonight' : '今晚有一場重逢'}
+                  </Text>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.muted, marginTop: 2 }}>
+                    {lang === 'en' ? `"${label}" from last night is here` : `昨晚的「${label}」在等你`}
+                  </Text>
+                </View>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>
+                  {lang === 'en' ? 'meet →' : '赴約 →'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
 
           {/* Mood Input */}
           <View style={[styles.inputWrap, { backgroundColor: p.glass, borderColor: p.line }]}>
@@ -295,6 +371,13 @@ export default function MoodScreen({ navigation }: Props) {
                               ? t(room.roomKey as any, lang)
                               : (lang === 'en' ? 'a quiet brazier' : '一個火盆'))}
                       </Text>
+                      {room.roomKey?.startsWith('official') && (
+                        <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, backgroundColor: p.accentSoft }}>
+                          <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 9, color: p.accent }}>
+                            {lang === 'en' ? 'nightly' : '今夜'}
+                          </Text>
+                        </View>
+                      )}
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                         <Text style={[styles.roomCount, { color: p.muted }]}>
                           {room.messageCount ?? 0}

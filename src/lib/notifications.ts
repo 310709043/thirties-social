@@ -144,6 +144,32 @@ export async function scheduleNightlyReminder(lang: 'zh' | 'en' = 'zh'): Promise
   }
 }
 
+/**
+ * One-shot reminder for a confirmed 重逢 (reunion): tomorrow at 21:00 local.
+ * Scheduled on-device by each side when the second vote lands.
+ */
+export async function scheduleRekindleReminder(lang: 'zh' | 'en' = 'zh'): Promise<void> {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return;
+    const when = new Date();
+    when.setDate(when.getDate() + 1);
+    when.setHours(21, 0, 0, 0);
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: lang === 'en' ? 'Your reunion is tonight' : '今晚有一場重逢',
+        body: lang === 'en'
+          ? 'The person from last night is waiting to meet you again.'
+          : '昨晚的那個人，約好今晚再見一次。',
+        sound: true,
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
+    });
+  } catch (e) {
+    console.warn('[Notifications] rekindle reminder failed:', e);
+  }
+}
+
 export function addNotificationListener(
   onReceive: (notification: Notifications.Notification) => void,
   onInteract: (response: Notifications.NotificationResponse) => void,
