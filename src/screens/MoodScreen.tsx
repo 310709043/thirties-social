@@ -11,7 +11,7 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS, Palette } from '../lib/theme';
 import { t } from '../lib/copy';
 import {
-  VaporBackground, SoftButton, BreathDot, WickGlyph, AnimatedNumber, FadeInUp, PressableScale,
+  VaporBackground, SoftButton, BreathDot, WickGlyph, AnimatedNumber, FadeInUp, PressableScale, RekindleGlyph,
 } from '../components/ui';
 import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
@@ -386,7 +386,7 @@ export default function MoodScreen({ navigation }: Props) {
             return (
               <TouchableOpacity key={rek.id} onPress={() => handleOpenRekindle(rek)} activeOpacity={0.85}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.accentSoft, borderWidth: 1, borderColor: p.accent + '55' }}>
-                <Text style={{ fontSize: 18 }}>☾</Text>
+                <RekindleGlyph size={26} ink={p.accent} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
                     {lang === 'en' ? 'Your reunion is tonight' : '今晚有一場重逢'}

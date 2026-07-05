@@ -340,3 +340,4 @@ export { ToastProvider, useToast } from './Toast';
 export { Logo } from './Logo';
 export { TypingIndicator } from './TypingIndicator';
 export { Tooltip } from './Tooltip';
+export { ExtendGlyph, RekindleGlyph, BondGlyph } from './CandleGlyphs';

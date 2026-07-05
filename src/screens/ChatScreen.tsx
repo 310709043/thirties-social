@@ -8,7 +8,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t } from '../lib/copy';
-import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, FadeInUp, TypingIndicator } from '../components/ui';
+import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, FadeInUp, TypingIndicator, ExtendGlyph, RekindleGlyph, BondGlyph } from '../components/ui';
 import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
@@ -397,7 +397,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               {!extended && !otherLeft && realMessages.length >= 4 && (
                 <TouchableOpacity onPress={handleExtend} disabled={extendBusy || iVotedExtend}
                   style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 6, opacity: iVotedExtend ? 0.7 : 1 }}>
-                  <WickGlyph size={11} color={p.accent} />
+                  <ExtendGlyph size={15} ink={p.accent} />
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
                     {iVotedExtend
                       ? (lang === 'en' ? 'waiting for them to extend too…' : '等待對方一起續燭⋯')
@@ -416,27 +416,29 @@ export default function ChatScreen({ navigation, route }: Props) {
               {!otherLeft && displayMessages.length >= VEIL_MIN_MESSAGES && (
                 <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 18, paddingTop: 2 }}>
                   <TouchableOpacity onPress={handleRekindle} disabled={rekindleBusy || iVotedRekindle}
-                    style={{ opacity: iVotedRekindle && !rekindleConfirmed ? 0.7 : 1 }}>
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 5, opacity: iVotedRekindle && !rekindleConfirmed ? 0.7 : 1 }}>
+                    <RekindleGlyph size={15} ink={rekindleConfirmed ? p.accent : p.inkSoft} />
                     <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: rekindleConfirmed ? p.accent : p.inkSoft }}>
                       {rekindleConfirmed
-                        ? (lang === 'en' ? '☾ meeting again tomorrow' : '☾ 明晚重逢已約定')
+                        ? (lang === 'en' ? 'meeting again tomorrow' : '明晚重逢已約定')
                         : iVotedRekindle
-                        ? (lang === 'en' ? '☾ waiting for them…' : '☾ 等待對方⋯')
+                        ? (lang === 'en' ? 'waiting for them…' : '等待對方⋯')
                         : otherVotedRekindle
-                        ? (lang === 'en' ? `☾ they want to meet again (${REKINDLE_WICK_COST})` : `☾ 對方想明晚重逢（${REKINDLE_WICK_COST} 芯）`)
-                        : (lang === 'en' ? `☾ meet again tomorrow · ${REKINDLE_WICK_COST}` : `☾ 明晚重逢 · ${REKINDLE_WICK_COST} 芯`)}
+                        ? (lang === 'en' ? `they want to meet again (${REKINDLE_WICK_COST})` : `對方想明晚重逢（${REKINDLE_WICK_COST} 芯）`)
+                        : (lang === 'en' ? `meet again tomorrow · ${REKINDLE_WICK_COST}` : `明晚重逢 · ${REKINDLE_WICK_COST} 芯`)}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={handleBond} disabled={bondBusy || iVotedBond}
-                    style={{ opacity: iVotedBond && !bondConfirmed ? 0.7 : 1 }}>
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 5, opacity: iVotedBond && !bondConfirmed ? 0.7 : 1 }}>
+                    <BondGlyph size={15} ink={bondConfirmed ? p.accent : p.inkSoft} />
                     <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: bondConfirmed ? p.accent : p.inkSoft }}>
                       {bondConfirmed
-                        ? (lang === 'en' ? '◈ kept each other' : '◈ 已留下彼此')
+                        ? (lang === 'en' ? 'kept each other' : '已留下彼此')
                         : iVotedBond
-                        ? (lang === 'en' ? '◈ waiting for them…' : '◈ 等待對方⋯')
+                        ? (lang === 'en' ? 'waiting for them…' : '等待對方⋯')
                         : otherVotedBond
-                        ? (lang === 'en' ? '◈ they want to keep you' : '◈ 對方想留下你')
-                        : (lang === 'en' ? '◈ keep each other · Vigil' : '◈ 留下彼此 · 守夜')}
+                        ? (lang === 'en' ? 'they want to keep you' : '對方想留下你')
+                        : (lang === 'en' ? 'keep each other · Vigil' : '留下彼此 · 守夜')}
                     </Text>
                   </TouchableOpacity>
                 </View>
