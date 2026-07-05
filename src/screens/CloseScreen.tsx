@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet, Animated, Easing } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Animated, Easing, TextInput, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
@@ -7,16 +7,30 @@ import { DIRECTIONS } from '../lib/theme';
 import { t } from '../lib/copy';
 import { VaporBackground, SoftButton, Logo, FadeInUp } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
+import { sendEcho } from '../lib/db';
+import { hapticSuccess } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Close'>;
 
 export default function CloseScreen({ navigation, route }: Props) {
-  const { direction, lang, conversationsToday, peopleTodayCount, wicks, vigil } = useAppStore();
+  const { direction, lang, conversationsToday, peopleTodayCount, wicks, vigil, seed } = useAppStore();
   const convCount = (route.params as any)?.conversationsCount ?? conversationsToday;
   const peopleCount = (route.params as any)?.peopleCount ?? peopleTodayCount;
+  // 回聲 — offered when we just left a real conversation.
+  const echoToUid = (route.params as any)?.echoToUid as string | null | undefined;
+  const echoConversationId = (route.params as any)?.echoConversationId as string | undefined;
+  const [echoDraft, setEchoDraft] = useState('');
+  const [echoState, setEchoState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const p = DIRECTIONS[direction];
   const [timeStr, setTimeStr] = useState('');
   const orbPulse = useRef(new Animated.Value(0.5)).current;
+
+  const handleSendEcho = async () => {
+    if (echoState !== 'idle' || !echoDraft.trim() || !echoToUid || !echoConversationId) return;
+    setEchoState('sending');
+    const ok = await sendEcho({ toId: echoToUid, conversationId: echoConversationId, content: echoDraft, mySeed: seed });
+    if (ok) { hapticSuccess(); setEchoState('sent'); } else { setEchoState('idle'); }
+  };
 
   useEffect(() => {
     Animated.loop(
@@ -70,6 +84,46 @@ export default function CloseScreen({ navigation, route }: Props) {
             <FadeInUp delay={350} distance={10}>
               <Text style={[styles.body, { color: p.inkSoft }]}>{t('closeBody', lang)}</Text>
             </FadeInUp>
+
+            {/* 回聲 — one last line, delivered tomorrow at 09:00 */}
+            {echoToUid && echoConversationId && (
+              <FadeInUp delay={400} distance={12}>
+                <View style={[styles.echoCard, { backgroundColor: p.surface, borderColor: p.accent + '45' }]}>
+                  {echoState === 'sent' ? (
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent, textAlign: 'center', lineHeight: 22 }}>
+                      {lang === 'en'
+                        ? '✓ Your echo departs at dawn — it reaches them at 09:00.'
+                        : '✓ 你的回聲天亮出發，明早九點送到。'}
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5, color: p.ink, textAlign: 'center' }}>
+                        {lang === 'en' ? 'Leave one last line for them' : '留一句話給剛剛那個人'}
+                      </Text>
+                      <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, textAlign: 'center', marginTop: 2 }}>
+                        {lang === 'en' ? 'delivered tomorrow at 09:00 · free' : '明早九點送達 · 免費'}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                        <TextInput
+                          value={echoDraft}
+                          onChangeText={setEchoDraft}
+                          placeholder={lang === 'en' ? 'what you didn\'t get to say…' : '沒來得及說的那句⋯⋯'}
+                          placeholderTextColor={p.muted}
+                          maxLength={200}
+                          style={{ flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, backgroundColor: p.glass, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }}
+                        />
+                        <TouchableOpacity onPress={handleSendEcho} disabled={echoState !== 'idle' || !echoDraft.trim()}
+                          style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: echoDraft.trim() ? p.ink : p.line, alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ color: p.dark ? '#1a1530' : '#fff', fontSize: 15 }}>
+                            {echoState === 'sending' ? '⋯' : '↑'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                </View>
+              </FadeInUp>
+            )}
 
             {/* Session stats */}
             <FadeInUp delay={450} distance={12}>
@@ -146,4 +200,5 @@ const styles = StyleSheet.create({
   statNum:     { fontFamily: 'Inter-Regular', fontSize: 22, fontWeight: '300' },
   statLabel:   { fontFamily: 'NotoSerifTC-Regular', fontSize: 11, textAlign: 'center' },
   statDivider: { width: 0.5 },
+  echoCard:    { borderWidth: 0.5, borderRadius: 18, padding: 16, width: '100%', marginTop: 4 },
 });

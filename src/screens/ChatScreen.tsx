@@ -68,6 +68,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [extendVotes, setExtendVotes] = useState<Record<string, boolean>>({});
   const [extended, setExtended] = useState(false);
   const [extendBusy, setExtendBusy] = useState(false);
+  const otherUidRef = useRef<string | null>(null);
+  const msgCountRef = useRef(0);
   const [rekindleVotes, setRekindleVotes] = useState<Record<string, boolean>>({});
   const [bondVotes, setBondVotes] = useState<Record<string, boolean>>({});
   const [rekindleBusy, setRekindleBusy] = useState(false);
@@ -92,8 +94,21 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (!conversationId) return;
     trackConversation(conversationId);
     analytics.conversationStart(conversationId);
-    return subscribeToConversationMessages(conversationId, setRealMessages);
+    return subscribeToConversationMessages(conversationId, msgs => {
+      msgCountRef.current = msgs.length;
+      setRealMessages(msgs);
+    });
   }, [conversationId]);
+
+  // Leave to the Close screen, carrying what it needs to offer an echo (a last
+  // line delivered tomorrow morning) — only when a real exchange happened.
+  const goClose = () => {
+    navigation.replace('Close', {
+      echoToUid: msgCountRef.current >= 2 ? otherUidRef.current : null,
+      echoConversationId: conversationId,
+      echoOtherSeed: otherSeed,
+    } as any);
+  };
 
   // Subscribe to other user's typing state
   useEffect(() => {
@@ -114,6 +129,8 @@ export default function ChatScreen({ navigation, route }: Props) {
       }
       const expMs = (conv as any).expiresAt?.toMillis?.();
       if (expMs) closeAtRef.current = expMs;
+      const me = getCurrentUid();
+      if (me) otherUidRef.current = conv.userAId === me ? conv.userBId : conv.userAId;
       setExtendVotes(conv.extendVotes ?? {});
       setExtended(!!conv.extended);
       const rv = (conv as any).rekindleVotes ?? {};
@@ -142,7 +159,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             await endConversation(conversationId, 'timer_expired');
             analytics.conversationEnd(conversationId, 'timer_expired');
           }
-          navigation.replace('Close');
+          goClose();
         })();
       }
     }, 1000);
@@ -337,7 +354,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     endConversation(conversationId, 'user_ended');
                     analytics.conversationEnd(conversationId, 'user_ended');
                   }
-                  navigation.replace('Close');
+                  goClose();
                 }}
                 style={styles.backBtn}
               >
@@ -502,7 +519,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, flex: 1 }}>
                   {lang === 'en' ? 'The other person has left this conversation.' : '對方已離開這段對話。'}
                 </Text>
-                <TouchableOpacity onPress={() => { iLeftRef.current = true; navigation.replace('Close'); }}>
+                <TouchableOpacity onPress={() => { iLeftRef.current = true; goClose(); }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>
                     {lang === 'en' ? 'Leave' : '離開'}
                   </Text>

@@ -17,7 +17,7 @@ import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, MATCH_WICK_COST } from '../hooks/useAppStore';
-import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchTonightRekindles, openRekindle, DbRekindle } from '../lib/db';
+import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchTonightRekindles, openRekindle, DbRekindle, sendNightLetter, hasSentTonightLetter, claimTonightLetter, replyToLetter, fetchMyLetterReplies, DbLetter, fetchArrivedEchoes, markEchoRead, DbEcho, createConversation } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
 import { analytics } from '../lib/analytics';
 import { addDiaryEntry } from '../lib/diary';
@@ -69,6 +69,67 @@ export default function MoodScreen({ navigation }: Props) {
     fetchTonightRekindles().then(setRekindles);
     return () => clearInterval(id);
   }, []);
+
+  // ── 夜信 & 回聲 state ──
+  const [showLetters, setShowLetters] = useState(false);
+  const [letterSentTonight, setLetterSentTonight] = useState(false);
+  const [receivedLetter, setReceivedLetter] = useState<DbLetter | null>(null);
+  const [letterReplies, setLetterReplies] = useState<DbLetter[]>([]);
+  const [letterDraft, setLetterDraft] = useState('');
+  const [replyDraft, setReplyDraft] = useState('');
+  const [letterBusy, setLetterBusy] = useState(false);
+  const [echoes, setEchoes] = useState<DbEcho[]>([]);
+
+  useEffect(() => {
+    hasSentTonightLetter().then(setLetterSentTonight);
+    fetchMyLetterReplies().then(setLetterReplies);
+    fetchArrivedEchoes().then(setEchoes);
+  }, []);
+
+  // Opening the letters sheet also tries to claim tonight's letter for me.
+  const openLetters = async () => {
+    setShowLetters(true);
+    if (!receivedLetter) claimTonightLetter().then(setReceivedLetter);
+  };
+
+  const handleSendLetter = async () => {
+    if (letterBusy || !letterDraft.trim()) return;
+    setLetterBusy(true);
+    const ok = await sendNightLetter(letterDraft, seed);
+    setLetterBusy(false);
+    if (ok) {
+      hapticSuccess();
+      setLetterSentTonight(true);
+      setLetterDraft('');
+    }
+  };
+
+  const handleReplyLetter = async () => {
+    if (letterBusy || !receivedLetter || !replyDraft.trim()) return;
+    setLetterBusy(true);
+    const ok = await replyToLetter(receivedLetter.id, replyDraft, seed);
+    setLetterBusy(false);
+    if (ok) {
+      hapticSuccess();
+      setReceivedLetter({ ...receivedLetter, replyContent: replyDraft.trim(), status: 'replied' });
+      setReplyDraft('');
+    }
+  };
+
+  // A reply came back — the sender may open a conversation with that person.
+  const handleTalkFromLetter = async (letter: DbLetter) => {
+    if (!letter.toId) return;
+    const conv = await createConversation({ userBId: letter.toId });
+    if (conv) {
+      setShowLetters(false);
+      navigation.push('Chat', { otherSeed: letter.toSeed ?? letter.toId, conversationId: conv.id, matchCharge: true });
+    }
+  };
+
+  const dismissEcho = (echo: DbEcho) => {
+    setEchoes(es => es.filter(e => e.id !== echo.id));
+    void markEchoRead(echo.id);
+  };
 
   const handleOpenRekindle = async (rek: DbRekindle) => {
     const opened = await openRekindle(rek);
@@ -301,6 +362,23 @@ export default function MoodScreen({ navigation }: Props) {
             </Text>
           )}
 
+          {/* Echoes that arrived this morning — the one line that crossed the dissolve. */}
+          {echoes.slice(0, 1).map(echo => (
+            <TouchableOpacity key={echo.id} onPress={() => dismissEcho(echo)} activeOpacity={0.9}
+              style={{ padding: 14, borderRadius: 16, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.accent + '50' }}>
+              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: p.accent }}>
+                {lang === 'en' ? 'an echo arrived' : '一句回聲抵達了'}
+              </Text>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, lineHeight: 25, marginTop: 6 }}>
+                「{echo.content}」
+              </Text>
+              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 6 }}>
+                — {getColorAdj(echo.fromSeed, lang).label}
+                {lang === 'en' ? ' · left after your chat dissolved · tap to keep it' : ' · 對話消散後留給你的 · 輕點收下'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+
           {/* Reunion banner — someone from last night is waiting. */}
           {rekindles.map(rek => {
             const otherId = rek.userAId === userId ? rek.userBId : rek.userAId;
@@ -433,6 +511,20 @@ export default function MoodScreen({ navigation }: Props) {
               </View>
             </LinearGradient>
           </TouchableOpacity>
+
+          {/* 夜信 — slow mail to a stranger, delivered tomorrow night */}
+          <TouchableOpacity onPress={openLetters} activeOpacity={0.85}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, backgroundColor: p.glass, borderWidth: 0.5, borderColor: p.line }}>
+            <Text style={{ fontSize: 15 }}>✉</Text>
+            <Text style={{ flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>
+              {letterReplies.length > 0
+                ? (lang === 'en' ? 'Your letter got a reply' : '你的夜信有了回音')
+                : letterSentTonight
+                ? (lang === 'en' ? 'Your letter departs at dawn' : '你的信天亮後出發')
+                : (lang === 'en' ? 'Night letter — write to a stranger of tomorrow' : '夜信 — 寫給明晚的一個陌生人')}
+            </Text>
+            <Text style={{ color: p.muted, fontSize: 15, opacity: 0.5 }}>›</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── Bottom: Match Button ── */}
@@ -461,6 +553,137 @@ export default function MoodScreen({ navigation }: Props) {
           )}
         </View>
       </SafeAreaView>
+
+      {/* 夜信 sheet — read tonight's letter, reply, see replies, write tomorrow's. */}
+      {showLetters && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.62)', justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowLetters(false)} />
+          <View style={{ backgroundColor: p.surfaceSolid, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 0.5, borderColor: p.line, paddingTop: 12, maxHeight: '82%', width: '100%', maxWidth: 560, alignSelf: 'center' }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: p.line, alignSelf: 'center', marginBottom: 10 }} />
+            <ScrollView contentContainerStyle={{ padding: 22, paddingTop: 4, gap: 18 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <View style={{ alignItems: 'center', gap: 4 }}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 19, color: p.ink }}>
+                  {lang === 'en' ? 'Night letters' : '夜信'}
+                </Text>
+                <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11.5, color: p.muted, textAlign: 'center' }}>
+                  {lang === 'en'
+                    ? 'written tonight · reaches one stranger tomorrow night'
+                    : '今晚寫下 · 明晚寄到一個陌生人手上'}
+                </Text>
+              </View>
+
+              {/* Tonight's letter for me */}
+              {receivedLetter ? (
+                <View style={{ padding: 16, borderRadius: 16, backgroundColor: p.glass, borderWidth: 0.5, borderColor: p.accent + '40' }}>
+                  <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: p.accent }}>
+                    {lang === 'en' ? 'a letter reached you tonight' : '今晚寄到你手上的信'}
+                  </Text>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, lineHeight: 26, marginTop: 8 }}>
+                    {receivedLetter.content}
+                  </Text>
+                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 6 }}>
+                    — {getColorAdj(receivedLetter.fromSeed, lang).label}
+                  </Text>
+                  {receivedLetter.status === 'replied' ? (
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent, marginTop: 10 }}>
+                      ✓ {lang === 'en' ? 'You replied. It reaches them tonight.' : '你回信了。今晚會送到他們手上。'}
+                    </Text>
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                      <TextInput
+                        value={replyDraft}
+                        onChangeText={setReplyDraft}
+                        placeholder={lang === 'en' ? 'reply once, softly…' : '輕輕回一句⋯⋯'}
+                        placeholderTextColor={p.muted}
+                        maxLength={500}
+                        style={{ flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, backgroundColor: p.surface, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }}
+                      />
+                      <TouchableOpacity onPress={handleReplyLetter} disabled={letterBusy || !replyDraft.trim()}
+                        style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: replyDraft.trim() ? p.ink : p.line, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ color: p.dark ? '#1a1530' : '#fff', fontSize: 15 }}>↑</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <View style={{ padding: 16, borderRadius: 16, backgroundColor: p.glass, borderWidth: 0.5, borderColor: p.line }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center', lineHeight: 22 }}>
+                    {lang === 'en'
+                      ? 'No letter has reached you tonight yet. They arrive as the night deepens.'
+                      : '今晚還沒有信寄到你手上。夜深一點，信才會到。'}
+                  </Text>
+                </View>
+              )}
+
+              {/* Replies to my letters */}
+              {letterReplies.length > 0 && (
+                <View style={{ gap: 10 }}>
+                  <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: p.muted }}>
+                    {lang === 'en' ? 'replies to your letters' : '你的信的回音'}
+                  </Text>
+                  {letterReplies.slice(0, 5).map(l => (
+                    <View key={l.id} style={{ padding: 14, borderRadius: 14, backgroundColor: p.glass, borderWidth: 0.5, borderColor: p.line }}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.muted }} numberOfLines={1}>
+                        {lang === 'en' ? 'you wrote: ' : '你寫的：'}{l.content}
+                      </Text>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, lineHeight: 24, marginTop: 6 }}>
+                        「{l.replyContent}」
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                        <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted }}>
+                          — {l.toSeed ? getColorAdj(l.toSeed, lang).label : (lang === 'en' ? 'a stranger' : '一個陌生人')}
+                        </Text>
+                        <TouchableOpacity onPress={() => handleTalkFromLetter(l)}>
+                          <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
+                            {lang === 'en' ? 'talk to them →' : '跟這個人說話 →'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Write tonight's letter */}
+              {letterSentTonight ? (
+                <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: p.muted, textAlign: 'center' }}>
+                  {lang === 'en'
+                    ? '✓ Tonight\'s letter is written. It departs at dawn.'
+                    : '✓ 今晚的信寫好了，天亮後出發。'}
+                </Text>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: p.muted }}>
+                    {lang === 'en' ? 'write tonight\'s letter' : '寫今晚的信'}
+                  </Text>
+                  <TextInput
+                    value={letterDraft}
+                    onChangeText={setLetterDraft}
+                    placeholder={lang === 'en'
+                      ? 'To whoever finds this tomorrow night…'
+                      : '給明晚撿到這封信的人⋯⋯'}
+                    placeholderTextColor={p.muted}
+                    multiline
+                    maxLength={500}
+                    style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 25, color: p.ink, backgroundColor: p.glass, borderWidth: 0.5, borderColor: p.line, borderRadius: 14, padding: 14, minHeight: 90, textAlignVertical: 'top' }}
+                  />
+                  <TouchableOpacity onPress={handleSendLetter} disabled={letterBusy || !letterDraft.trim()}
+                    style={{ height: 46, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: letterDraft.trim() ? p.ink : p.line }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, letterSpacing: 1, color: letterDraft.trim() ? (p.dark ? '#1a1530' : '#fff') : p.muted }}>
+                      {letterBusy ? (lang === 'en' ? 'Sealing…' : '封緘中⋯') : (lang === 'en' ? 'Seal the letter · one per night' : '封緘寄出 · 每晚一封')}
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 10.5, color: p.muted, textAlign: 'center' }}>
+                    {lang === 'en'
+                      ? 'anonymous · one random stranger · they may reply once'
+                      : '匿名 · 隨機一個陌生人收到 · 對方可以回一次信'}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      )}
 
       {/* All braziers — a scrollable sheet so any number of rooms stays tidy. */}
       {showAllRooms && (

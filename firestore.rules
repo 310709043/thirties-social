@@ -159,6 +159,61 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid in resource.data.users;
     }
 
+    // ── 夜信 Letters（慢通信）────────────────────────────
+    match /letters/{letterId} {
+      // Unclaimed letters must be readable so a stranger can claim one;
+      // claimed letters are private to sender + recipient.
+      allow read:   if request.auth != null
+                    && (resource.data.toId == null
+                        || resource.data.fromId == request.auth.uid
+                        || resource.data.toId == request.auth.uid);
+      allow create: if request.auth != null
+                    && request.resource.data.fromId == request.auth.uid
+                    && request.resource.data.toId == null
+                    && request.resource.data.status == 'unsent'
+                    && request.resource.data.content is string
+                    && request.resource.data.content.size() <= 500
+                    && notBanned();
+      allow update: if request.auth != null
+                    && (
+                      // Claiming: an unclaimed letter becomes mine.
+                      (resource.data.toId == null
+                       && request.resource.data.toId == request.auth.uid
+                       && request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['toId', 'status']))
+                      ||
+                      // Replying: the recipient writes one reply, once.
+                      (resource.data.toId == request.auth.uid
+                       && !('replyContent' in resource.data)
+                       && request.resource.data.replyContent is string
+                       && request.resource.data.replyContent.size() <= 500
+                       && request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['replyContent', 'toSeed', 'repliedAt', 'status'])
+                       && notBanned())
+                    );
+      allow delete: if request.auth != null && resource.data.fromId == request.auth.uid;
+    }
+
+    // ── 回聲 Echoes（結束後的最後一句話）─────────────────
+    match /echoes/{echoId} {
+      allow read:   if request.auth != null
+                    && (resource.data.toId == request.auth.uid
+                        || resource.data.fromId == request.auth.uid);
+      allow create: if request.auth != null
+                    && request.resource.data.fromId == request.auth.uid
+                    && request.resource.data.content is string
+                    && request.resource.data.content.size() <= 200
+                    && request.resource.data.read == false
+                    && notBanned();
+      allow update: if request.auth != null
+                    && resource.data.toId == request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['read']);
+      allow delete: if request.auth != null
+                    && (resource.data.toId == request.auth.uid
+                        || resource.data.fromId == request.auth.uid);
+    }
+
     // ── Loft Sessions ───────────────────────────────────
     match /loftSessions/{sessionId} {
       // Anyone can see tonight's sessions (to find others in the Loft)

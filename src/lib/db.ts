@@ -1128,6 +1128,184 @@ export async function removeBond(bondId: string): Promise<void> {
   try { await deleteDoc(doc(db, 'bonds', bondId)); } catch {}
 }
 
+// ── 夜信 Night Letters（慢通信）────────────────────────────
+// Write a letter tonight; it reaches ONE random stranger tomorrow night. Fully
+// asynchronous — no two people need to be online at the same time, which makes
+// this the one connection path that works no matter how small the user base is.
+export interface DbLetter {
+  id: string;
+  fromId: string;
+  fromSeed: string;
+  content: string;
+  nightDate: string;    // night it was written
+  deliverDate: string;  // night it becomes claimable (the next night)
+  toId: string | null;  // set when a stranger claims it
+  toSeed?: string | null;
+  status: 'unsent' | 'delivered' | 'replied';
+  replyContent?: string | null;
+  repliedAt?: any;
+  createdAt: any;
+}
+
+/** Send tonight's letter (one per night). Returns false if already sent or failed. */
+export async function sendNightLetter(content: string, mySeed: string): Promise<boolean> {
+  const uid = getCurrentUid();
+  const text = content.trim();
+  if (!uid || !text) return false;
+  try {
+    const tonight = localNightDate();
+    const mine = await getDocs(query(
+      collection(db, 'letters'),
+      where('fromId', '==', uid), where('nightDate', '==', tonight),
+    ));
+    if (!mine.empty) return false;
+    await addDoc(collection(db, 'letters'), {
+      fromId: uid, fromSeed: mySeed, content: text,
+      nightDate: tonight, deliverDate: nextNightDate(),
+      toId: null, status: 'unsent', createdAt: serverTimestamp(),
+    });
+    return true;
+  } catch { return false; }
+}
+
+/** True if I already wrote tonight's letter. */
+export async function hasSentTonightLetter(): Promise<boolean> {
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    const mine = await getDocs(query(
+      collection(db, 'letters'),
+      where('fromId', '==', uid), where('nightDate', '==', localNightDate()),
+    ));
+    return !mine.empty;
+  } catch { return false; }
+}
+
+/**
+ * Tonight's letter for me: the one I already claimed, or claim a fresh one
+ * (transaction guards two people grabbing the same letter). Returns null when
+ * nothing is waiting.
+ */
+export async function claimTonightLetter(): Promise<DbLetter | null> {
+  const uid = getCurrentUid();
+  if (!uid) return null;
+  const today = localNightDate();
+  try {
+    // Already claimed one tonight? Re-show it (also lets them finish a reply).
+    const mine = await getDocs(query(
+      collection(db, 'letters'),
+      where('toId', '==', uid), where('deliverDate', '==', today),
+    ));
+    if (!mine.empty) {
+      const d = mine.docs[0];
+      return { id: d.id, ...d.data() } as DbLetter;
+    }
+    // Claim an unclaimed letter (not my own).
+    const open = await getDocs(query(
+      collection(db, 'letters'),
+      where('deliverDate', '==', today), where('toId', '==', null), limit(10),
+    ));
+    const candidates = open.docs.filter(d => (d.data() as any).fromId !== uid);
+    if (!candidates.length) return null;
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const claimed = await runTransaction(db, async txn => {
+      const fresh = await txn.get(pick.ref);
+      if (!fresh.exists() || (fresh.data() as any).toId !== null) return false;
+      txn.update(pick.ref, { toId: uid, status: 'delivered' });
+      return true;
+    });
+    if (!claimed) return null;
+    return { id: pick.id, ...(pick.data() as any), toId: uid, status: 'delivered' } as DbLetter;
+  } catch { return null; }
+}
+
+/** Reply once to a letter I received. */
+export async function replyToLetter(letterId: string, content: string, mySeed: string): Promise<boolean> {
+  const uid = getCurrentUid();
+  const text = content.trim();
+  if (!uid || !text) return false;
+  try {
+    await updateDoc(doc(db, 'letters', letterId), {
+      replyContent: text, toSeed: mySeed, repliedAt: serverTimestamp(), status: 'replied',
+    });
+    return true;
+  } catch { return false; }
+}
+
+/** My letters that came back with a reply (the echoes of what I sent). */
+export async function fetchMyLetterReplies(): Promise<DbLetter[]> {
+  const uid = getCurrentUid();
+  if (!uid) return [];
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'letters'),
+      where('fromId', '==', uid), where('status', '==', 'replied'), limit(20),
+    ));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }) as DbLetter)
+      .sort((a, b) => (b.repliedAt?.toMillis?.() ?? 0) - (a.repliedAt?.toMillis?.() ?? 0));
+  } catch { return []; }
+}
+
+// ── 回聲 Echoes（結束後的最後一句話）───────────────────────
+// When a chat dissolves, each side may leave ONE line that reaches the other
+// person the next morning at 09:00 — the only thing that crosses the dissolve,
+// and the softest possible reason to come back tomorrow.
+export interface DbEcho {
+  id: string;
+  fromId: string;
+  fromSeed: string;
+  toId: string;
+  conversationId: string;
+  content: string;
+  deliverAt: any;   // Timestamp — next 09:00 after sending
+  read: boolean;
+  createdAt: any;
+}
+
+function nextMorningNine(): Date {
+  const d = new Date();
+  d.setHours(9, 0, 0, 0);
+  if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+export async function sendEcho(params: {
+  toId: string; conversationId: string; content: string; mySeed: string;
+}): Promise<boolean> {
+  const uid = getCurrentUid();
+  const text = params.content.trim();
+  if (!uid || !text) return false;
+  try {
+    await addDoc(collection(db, 'echoes'), {
+      fromId: uid, fromSeed: params.mySeed, toId: params.toId,
+      conversationId: params.conversationId, content: text,
+      deliverAt: Timestamp.fromDate(nextMorningNine()),
+      read: false, createdAt: serverTimestamp(),
+    });
+    return true;
+  } catch { return false; }
+}
+
+/** Echoes that have arrived for me and aren't read yet. */
+export async function fetchArrivedEchoes(): Promise<DbEcho[]> {
+  const uid = getCurrentUid();
+  if (!uid) return [];
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'echoes'),
+      where('toId', '==', uid), where('read', '==', false), limit(10),
+    ));
+    const now = Date.now();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }) as DbEcho)
+      .filter(e => (e.deliverAt?.toMillis?.() ?? 0) <= now)
+      .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
+  } catch { return []; }
+}
+
+export async function markEchoRead(echoId: string): Promise<void> {
+  try { await updateDoc(doc(db, 'echoes', echoId), { read: true }); } catch {}
+}
+
 // ── Match Queue ───────────────────────────────────────────
 export type TonightMode = 'just_here' | 'want_to_talk' | 'open_to_more';
 
