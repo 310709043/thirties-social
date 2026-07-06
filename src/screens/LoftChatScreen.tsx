@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, ScrollView, Alert,
-  StyleSheet, KeyboardAvoidingView, Platform, Image,
+  StyleSheet, KeyboardAvoidingView, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,6 +19,7 @@ import {
 import { hapticMedium } from '../lib/haptics';
 import { filterMessage } from '../lib/filter';
 import * as ScreenCapture from 'expo-screen-capture';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LoftChat'>;
 
@@ -64,6 +65,13 @@ export default function LoftChatScreen({ navigation, route }: Props) {
     return subscribeToLoftMessages(loftConversationId, setMessages);
   }, [loftConversationId]);
 
+  // Everything on screen counts as read — the Loft list uses this stored count
+  // to show an unread ember on whispers that moved while I was away.
+  useEffect(() => {
+    if (!loftConversationId || messages.length === 0) return;
+    AsyncStorage.setItem(`loftSeen:${loftConversationId}`, String(messages.length)).catch(() => {});
+  }, [loftConversationId, messages.length]);
+
   // Restore how far I'd already lifted the veil (paid progress survives re-entry).
   useEffect(() => {
     if (!loftConversationId) return;
@@ -103,8 +111,10 @@ export default function LoftChatScreen({ navigation, route }: Props) {
     return () => clearInterval(id);
   }, [closeAtMs]);
 
-  const hh = String(Math.floor(remaining / 3600)).padStart(2, '0');
-  const mm = String(Math.floor((remaining % 3600) / 60)).padStart(2, '0');
+  // The whisper window is under an hour, so show minutes:seconds — an hh:mm
+  // display ("00:57") only moved once a minute and read as a frozen clock.
+  const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+  const ss = String(remaining % 60).padStart(2, '0');
 
   // Open/close times derived from the conversation window.
   const closeTime = new Date(closeAtMs);
@@ -118,8 +128,12 @@ export default function LoftChatScreen({ navigation, route }: Props) {
   const cloudBlur = (amt: number) => (otherPhotoUrl && otherPhotoUrl.includes('/image/upload/')
     ? otherPhotoUrl.replace('/image/upload/', `/image/upload/e_blur:${amt},q_auto/`)
     : otherPhotoUrl ?? undefined);
-  const BLUR_BY_LEVEL = [2000, 2000, 1200, 500, 0];       // index by veilLevel (1..4)
-  const NATIVE_BLUR_BY_LEVEL = [40, 40, 24, 10, 0];
+  // Each lift must be FELT. The old ramp (2000→1200→500 with a 40→24→10 native
+  // blur stacked on top) looked identical level to level — the native blur
+  // dominated and swallowed the Cloudinary steps. New ramp: level 1 is a fog,
+  // level 2 a figure, level 3 light-and-shadow you can almost read, level 4 clear.
+  const BLUR_BY_LEVEL = [2000, 2000, 600, 150, 0];        // index by veilLevel (1..4)
+  const NATIVE_BLUR_BY_LEVEL = [45, 45, 10, 2, 0];
   const photoRevealed = veilLevel >= 4;
 
   const sendText = async () => {
@@ -167,7 +181,10 @@ export default function LoftChatScreen({ navigation, route }: Props) {
     <LinearGradient colors={L.bg as any} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          // 'padding' on BOTH platforms: when Android's adjustResize works the
+          // measured overlap is 0 (no double inset); when edge-to-edge swallows
+          // the resize, the padding kicks in — either way the composer stays visible.
+          behavior="padding"
           style={{ flex: 1, width: '100%', maxWidth: 620, alignSelf: 'center' }}
         >
           {/* TOP */}
@@ -203,10 +220,10 @@ export default function LoftChatScreen({ navigation, route }: Props) {
           {/* Timer */}
           <View style={styles.timer}>
             <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', color: L.candle }}>
-              {t('loftClose', lang)}
+              {lang === 'en' ? 'this whisper fades in' : '這段夜語剩下'}
             </Text>
             <Text style={{ fontFamily: 'Inter-Regular', fontSize: 22, fontWeight: '300', color: L.ink, letterSpacing: 2, marginTop: 4 }}>
-              {hh}:{mm}
+              {mm}:{ss}
             </Text>
           </View>
 

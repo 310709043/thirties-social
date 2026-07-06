@@ -227,44 +227,32 @@ export default function SettingsScreen({ navigation }: Props) {
             </FadeInUp>
           )}
 
-          {/* Logout */}
-          <FadeInUp delay={450} distance={10}>
-            <TouchableOpacity
-              onPress={() => Alert.alert(
-                guest
-                  ? (lang === 'en' ? 'Sign out and lose everything?' : '登出將失去所有資料')
-                  : (lang === 'en' ? 'Sign out' : '登出'),
-                guest
-                  ? (lang === 'en'
-                      ? 'You are a guest. Signing out permanently deletes your wicks, subscription and history. Create an account first to keep them.'
-                      : '你是訪客。登出會永久刪除你的燭芯、訂閱與歷史記錄。建議先建立帳號保存。')
-                  : (lang === 'en' ? 'Are you sure you want to sign out?' : '確定要登出嗎？'),
-                guest
-                  ? [
-                      { text: lang === 'en' ? 'Cancel' : '取消', style: 'cancel' },
-                      { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
-                      { text: lang === 'en' ? 'Sign out anyway' : '仍要登出', style: 'destructive', onPress: async () => {
-                        await logout();
-                        await AsyncStorage.clear();
-                        navigation.reset({ index: 0, routes: [{ name: 'Auth' }] });
-                      }},
-                    ]
-                  : [
-                      { text: lang === 'en' ? 'Cancel' : '取消', style: 'cancel' },
-                      { text: lang === 'en' ? 'Sign out' : '登出', style: 'destructive', onPress: async () => {
-                        await logout();
-                        await AsyncStorage.clear();
-                        navigation.reset({ index: 0, routes: [{ name: 'Auth' }] });
-                      }},
-                    ]
-              )}
-              style={{ alignItems: 'center', paddingVertical: 14 }}
-            >
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.accent }}>
-                {lang === 'en' ? 'Sign out' : '登出'}
-              </Text>
-            </TouchableOpacity>
-          </FadeInUp>
+          {/* Logout — accounts only. A guest has nothing to sign out OF: showing
+              the button just offered a confusing way to destroy their session.
+              Guests get the "create an account" card above instead. */}
+          {!guest && (
+            <FadeInUp delay={450} distance={10}>
+              <TouchableOpacity
+                onPress={() => Alert.alert(
+                  lang === 'en' ? 'Sign out' : '登出',
+                  lang === 'en' ? 'Are you sure you want to sign out?' : '確定要登出嗎？',
+                  [
+                    { text: lang === 'en' ? 'Cancel' : '取消', style: 'cancel' },
+                    { text: lang === 'en' ? 'Sign out' : '登出', style: 'destructive', onPress: async () => {
+                      await logout();
+                      await AsyncStorage.clear();
+                      navigation.reset({ index: 0, routes: [{ name: 'Auth' }] });
+                    }},
+                  ]
+                )}
+                style={{ alignItems: 'center', paddingVertical: 14 }}
+              >
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.accent }}>
+                  {lang === 'en' ? 'Sign out' : '登出'}
+                </Text>
+              </TouchableOpacity>
+            </FadeInUp>
+          )}
 
           <FadeInUp delay={500} distance={8}>
             <Text style={[styles.footer, { color: p.muted }]}>

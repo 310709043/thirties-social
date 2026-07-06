@@ -816,13 +816,15 @@ export async function createLoftConversation(params: {
     // not part of and fail with permission-denied — which made every tap silently
     // do nothing (returned null). Worst case we create a fresh (ephemeral) doc.
     const tonight = new Date().toISOString().slice(0, 10);
-    const existQ = query(
-      collection(db, 'loftConversations'),
-      where('userAId', '==', uid),
-      limit(20),
-    );
-    const existSnap = await getDocs(existQ);
-    const existing = existSnap.docs.find(d => {
+    // BOTH directions: if THEY opened a whisper with me tonight, tapping their
+    // card must drop me into that same conversation — the old userAId-only
+    // check made B create a silent duplicate, so A and B talked past each
+    // other in two different rooms and "couldn't see each other's messages".
+    const [mineSnap, theirsSnap] = await Promise.all([
+      getDocs(query(collection(db, 'loftConversations'), where('userAId', '==', uid), limit(20))),
+      getDocs(query(collection(db, 'loftConversations'), where('userBId', '==', uid), limit(20))),
+    ]);
+    const existing = [...mineSnap.docs, ...theirsSnap.docs].find(d => {
       const data = d.data();
       const involves = (data.userAId === uid && data.userBId === params.otherUserId)
         || (data.userAId === params.otherUserId && data.userBId === uid);
@@ -933,6 +935,51 @@ export async function bumpLoftVeilLevel(loftConversationId: string, level: numbe
   try {
     await updateDoc(doc(db, 'loftConversations', loftConversationId), { [`veils.${uid}`]: level });
   } catch {}
+}
+
+/** A live whisper of mine tonight, shaped for the Loft's "ongoing" list. */
+export interface DbLoftWhisper {
+  id: string;
+  otherId: string;
+  otherName: string;
+  messageCount: number;
+  expiresAt: any;
+}
+
+/**
+ * All my still-burning Loft conversations (either direction). This is how the
+ * person who was *picked* discovers the whisper at all — before this list,
+ * only the opener could see the conversation existed. No date filter needed:
+ * the 58-minute expiry already bounds "tonight".
+ */
+export async function fetchMyTonightLoftWhispers(): Promise<DbLoftWhisper[]> {
+  const uid = getCurrentUid();
+  if (!uid) return [];
+  try {
+    const [mineSnap, theirsSnap] = await Promise.all([
+      getDocs(query(collection(db, 'loftConversations'), where('userAId', '==', uid), limit(20))),
+      getDocs(query(collection(db, 'loftConversations'), where('userBId', '==', uid), limit(20))),
+    ]);
+    const seen = new Set<string>();
+    const out: DbLoftWhisper[] = [];
+    for (const d of [...mineSnap.docs, ...theirsSnap.docs]) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      const c = d.data() as any;
+      if (c.endedAt) continue;
+      if ((c.expiresAt?.toMillis?.() ?? 0) <= Date.now()) continue;
+      const iAmA = c.userAId === uid;
+      out.push({
+        id: d.id,
+        otherId: iAmA ? c.userBId : c.userAId,
+        otherName: (iAmA ? c.userBName : c.userAName) ?? '',
+        messageCount: c.messageCount ?? 0,
+        expiresAt: c.expiresAt,
+      });
+    }
+    // Soonest-to-fade first — those are the ones to answer now.
+    return out.sort((a, b) => (a.expiresAt?.toMillis?.() ?? 0) - (b.expiresAt?.toMillis?.() ?? 0));
+  } catch { return []; }
 }
 
 // ── Official braziers (cold-start warmth) ─────────────────

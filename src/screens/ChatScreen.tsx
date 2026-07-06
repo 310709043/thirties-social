@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Alert,
-  ScrollView, StyleSheet, KeyboardAvoidingView, Platform, Image,
+  ScrollView, StyleSheet, KeyboardAvoidingView, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -337,7 +337,10 @@ export default function ChatScreen({ navigation, route }: Props) {
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView
           style={{ flex: 1, width: '100%', maxWidth: 620, alignSelf: 'center' }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          // 'padding' on BOTH platforms: when Android's adjustResize works the
+          // measured overlap is 0 (no double inset); when edge-to-edge swallows
+          // the resize, the padding kicks in — either way the composer stays visible.
+          behavior="padding"
           keyboardVerticalOffset={0}
         >
           {/* COUNTDOWN HEADER */}

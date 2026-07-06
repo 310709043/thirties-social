@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet, Animated, Easing, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Animated, Easing, TextInput, TouchableOpacity, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
@@ -62,6 +62,8 @@ export default function CloseScreen({ navigation, route }: Props) {
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
+       {/* The echo composer sits mid-screen — keep it above the keyboard. */}
+       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
           {/* Fading orb */}
           <Animated.View style={[styles.orb, { backgroundColor: p.accent + '33', opacity: orbPulse }]} />
@@ -178,6 +180,7 @@ export default function CloseScreen({ navigation, route }: Props) {
             </SoftButton>
           </FadeInUp>
         </ScrollView>
+       </KeyboardAvoidingView>
       </SafeAreaView>
     </VaporBackground>
   );

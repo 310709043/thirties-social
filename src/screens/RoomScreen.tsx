@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Alert,
-  TextInput, StyleSheet, RefreshControl,
+  TextInput, StyleSheet, RefreshControl, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -234,6 +234,9 @@ export default function RoomScreen({ navigation, route }: Props) {
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1, width: '100%', maxWidth: 620, alignSelf: 'center' }}>
+       {/* This screen never had a KeyboardAvoidingView at all — the room
+           composer was the most-reported "keyboard hides my typing" spot. */}
+       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         {/* TOP BAR */}
         <View style={styles.topBar}>
           <TouchableOpacity
@@ -438,10 +441,12 @@ export default function RoomScreen({ navigation, route }: Props) {
             </View>
           )}
         </View>
+       </KeyboardAvoidingView>
 
         {/* CREATE ROOM SHEET */}
         {showCreateRoom && (
-          <View style={[styles.sheetOverlay, { backgroundColor: p.dark ? 'rgba(10,12,28,0.7)' : 'rgba(160,150,170,0.4)' }]}>
+          <KeyboardAvoidingView behavior="padding"
+            style={[styles.sheetOverlay, { backgroundColor: p.dark ? 'rgba(10,12,28,0.7)' : 'rgba(160,150,170,0.4)' }]}>
             <TouchableOpacity style={{ flex: 1 }} onPress={() => { if (!roomCreated) setShowCreateRoom(false); }} />
             <View style={[styles.sheet, { backgroundColor: p.bgSolid, borderColor: p.line }]}>
               <View style={[styles.sheetHandle, { backgroundColor: p.line }]} />
@@ -524,7 +529,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                 </View>
               )}
             </View>
-          </View>
+          </KeyboardAvoidingView>
         )}
 
         {/* INVITE SHEET */}

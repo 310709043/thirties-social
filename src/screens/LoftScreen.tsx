@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, Image,
-  Animated, Easing, Dimensions,
+  Animated, Easing, Dimensions, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,7 +11,7 @@ import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber, PressableScale } from '../components/ui';
 import { useAppStore, canEnterLoft, recordLoftEntry, loftEntryIsFreeTrial, getTier } from '../hooks/useAppStore';
-import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, postRitualResponse, subscribeToTonightRitual, DbRitualResponse } from '../lib/db';
+import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, postRitualResponse, subscribeToTonightRitual, DbRitualResponse, fetchMyTonightLoftWhispers, DbLoftWhisper } from '../lib/db';
 import { getTonightRitual } from '../lib/rituals';
 import { TextInput } from 'react-native';
 import { getLoftName } from '../lib/identity';
@@ -125,7 +125,8 @@ export default function LoftScreen({ navigation }: Props) {
           : '夜閣是深夜的陪伴空間，註冊帳號即可體驗。',
         [
           { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
-          { text: lang === 'en' ? 'Sign up' : '註冊', onPress: () => navigation.push('Upgrade') },
+          // Straight to account creation — Upgrade is a paywall, not a sign-up.
+          { text: lang === 'en' ? 'Sign up' : '註冊', onPress: () => navigation.push('Auth', { mode: 'register' }) },
         ],
       );
       return;
@@ -486,6 +487,10 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const [sessions, setSessions] = React.useState<DbLoftSession[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [connecting, setConnecting] = React.useState<string | null>(null);
+  // Whispers already burning tonight (mine, both directions) + how many
+  // messages I'd seen in each — the delta is the unread ember.
+  const [whispers, setWhispers] = React.useState<DbLoftWhisper[]>([]);
+  const [seenCounts, setSeenCounts] = React.useState<Record<string, number>>({});
   const [ritual] = React.useState(() => getTonightRitual());
   const [responses, setResponses] = React.useState<DbRitualResponse[]>([]);
   const [ritualText, setRitualText] = React.useState('');
@@ -504,11 +509,24 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
 
   React.useEffect(() => {
     let alive = true;
-    const load = () => fetchTonightLoftSessions().then(s => {
-      if (!alive) return;
-      setSessions(s);
-      setLoading(false);
-    });
+    const load = () => {
+      fetchTonightLoftSessions().then(s => {
+        if (!alive) return;
+        setSessions(s);
+        setLoading(false);
+      });
+      // Ongoing whispers ride the same poll: this is how the person who was
+      // PICKED ever learns a conversation exists (and how anyone re-enters).
+      fetchMyTonightLoftWhispers().then(async ws => {
+        if (!alive) return;
+        setWhispers(ws);
+        const entries = await Promise.all(ws.map(async w => {
+          const v = await AsyncStorage.getItem(`loftSeen:${w.id}`);
+          return [w.id, Number(v ?? 0)] as const;
+        }));
+        if (alive) setSeenCounts(Object.fromEntries(entries));
+      });
+    };
     load();
     // Re-poll so people who arrive after you actually show up (a one-shot fetch
     // made the Loft feel empty). 25s keeps reads bounded.
@@ -541,6 +559,13 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
 
   const handlePickPerson = async (session: DbLoftSession) => {
     if (connecting) return;
+    // Already whispering with them tonight (either of us opened it) → walk
+    // straight back into the same room instead of creating anything.
+    const ongoing = whispers.find(w => w.otherId === session.userId);
+    if (ongoing) {
+      onEnter(ongoing.otherId, ongoing.id, ongoing.otherName || session.nightName, ongoing.expiresAt, session.photoUrl);
+      return;
+    }
     setConnecting(session.userId);
     let conv = null;
     try {
@@ -599,7 +624,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
     <LinearGradient colors={L.bg as any} style={{ flex: 1 }}>
       <Embers count={6} />
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={{ flex: 1, padding: 22 }}>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1, padding: 22 }}>
           {/* TOP */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <TouchableOpacity onPress={onBack}
@@ -656,6 +681,41 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
               </View>
             )}
           </View>
+
+          {/* Ongoing whispers — conversations already burning tonight. Without
+              this, the picked person had NO way to see a whisper existed. */}
+          {whispers.length > 0 && (
+            <View style={{ marginTop: 20 }}>
+              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 4, textTransform: 'uppercase', color: L.candle }}>
+                {lang === 'en' ? 'Tonight’s whispers' : '今晚的悄悄話'}
+              </Text>
+              {whispers.map(w => {
+                const unread = w.messageCount > (seenCounts[w.id] ?? 0);
+                const minsLeft = Math.max(0, Math.ceil(((w.expiresAt?.toMillis?.() ?? 0) - Date.now()) / 60000));
+                const photoUrl = sessions.find(s => s.userId === w.otherId)?.photoUrl ?? null;
+                return (
+                  <PressableScale key={w.id} onPress={() => onEnter(w.otherId, w.id, w.otherName, w.expiresAt, photoUrl)}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginTop: 10, borderRadius: 16, borderWidth: 0.5, borderColor: unread ? 'rgba(232,165,87,0.45)' : 'rgba(232,165,87,0.18)', backgroundColor: unread ? 'rgba(232,165,87,0.10)' : 'rgba(245,226,196,0.04)' }}>
+                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: unread ? L.candle : 'rgba(245,226,196,0.18)' }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: L.ink, letterSpacing: 0.5 }}>
+                          「{w.otherName}」
+                        </Text>
+                        <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11.5, color: unread ? L.candle : L.muted, marginTop: 2 }}>
+                          {unread
+                            ? (lang === 'en' ? 'new words are waiting' : '有新的話在等你')
+                            : (lang === 'en' ? `${w.messageCount} lines tonight` : `今晚說了 ${w.messageCount} 句`)}
+                          {' · '}
+                          {lang === 'en' ? `fades in ${minsLeft}m` : `${minsLeft} 分鐘後熄滅`}
+                        </Text>
+                      </View>
+                      <Text style={{ color: L.candle, fontSize: 18, opacity: 0.5 }}>›</Text>
+                    </View>
+                  </PressableScale>
+                );
+              })}
+            </View>
+          )}
 
           {/* Heading */}
           <View style={{ marginTop: 24 }}>
@@ -778,7 +838,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
           <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: L.faint, textAlign: 'center', lineHeight: 18, marginTop: 14 }}>
             {t('loftLine1', lang)} · {t('loftLine2', lang)}
           </Text>
-        </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
       {showLoftGuide && <LoftGuide lang={lang} onDismiss={dismissLoftGuide} />}
     </LinearGradient>

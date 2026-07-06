@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, Animated, Easing,
+  StyleSheet, Alert, Animated, Easing, KeyboardAvoidingView,
 } from 'react-native';
 import Svg, { Path, Circle, Line, Defs, RadialGradient as SvgRadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -88,6 +88,20 @@ export default function MoodScreen({ navigation }: Props) {
 
   // Opening the letters sheet also tries to claim tonight's letter for me.
   const openLetters = async () => {
+    // Letters write to a stranger — a doing-action, so guests go to sign-up.
+    if (getTier() === 'guest') {
+      Alert.alert(
+        lang === 'en' ? 'Create an account to write' : '寫信需要帳號',
+        lang === 'en'
+          ? 'Night letters travel between accounts. Sign up to send and receive.'
+          : '夜信是帳號之間的往來。建立帳號就能寄信、收信。',
+        [
+          { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
+          { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
+        ],
+      );
+      return;
+    }
     setShowLetters(true);
     if (!receivedLetter) claimTonightLetter().then(setReceivedLetter);
   };
@@ -252,16 +266,17 @@ export default function MoodScreen({ navigation }: Props) {
 
   const handleEnter = async () => {
     if (waiting) return;
-    // Show the tonight-mode picker on first match attempt each session.
-    if (!tonightMode) { setShowModePicker(true); return; }
-    // Guests get ONE taste match — the strongest possible first experience —
-    // and only hit the sign-up wall after they've felt what the app is.
-    if (getTier() === 'guest' && !canMatch()) {
+    // Guests browse only: rooms stay readable, but every *doing* action routes
+    // to sign-up. Checked FIRST — before the mode picker — so a guest never
+    // fills in "tonight's mood" only to hit the wall right after.
+    // (The old one-free-taste match dropped guests into a chat where every
+    // follow-up action hit a wall — confusing, not converting.)
+    if (getTier() === 'guest') {
       Alert.alert(
-        lang === 'en' ? 'That was your free taste' : '免費體驗用過了',
+        lang === 'en' ? 'Create an account to match' : '配對需要帳號',
         lang === 'en'
-          ? 'Create an account to keep matching — it takes a moment and keeps your wicks safe.'
-          : '你的一次免費配對體驗已用過。建立帳號就能繼續配對，也能保住你的燭芯。',
+          ? 'Sign up to meet someone tonight — it takes a moment.'
+          : '建立帳號就能開始配對，只要一下下。',
         [
           { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
           { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
@@ -269,6 +284,8 @@ export default function MoodScreen({ navigation }: Props) {
       );
       return;
     }
+    // Show the tonight-mode picker on first match attempt each session.
+    if (!tonightMode) { setShowModePicker(true); return; }
     // Free user out of free matches and out of wicks.
     if (getTier() !== 'guest' && !canMatch()) {
       Alert.alert(
@@ -321,6 +338,7 @@ export default function MoodScreen({ navigation }: Props) {
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
+       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         {/* ── Top Bar ── */}
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.identityRow} activeOpacity={0.8}
@@ -552,11 +570,13 @@ export default function MoodScreen({ navigation }: Props) {
             </SoftButton>
           )}
         </View>
+       </KeyboardAvoidingView>
       </SafeAreaView>
 
       {/* 夜信 sheet — read tonight's letter, reply, see replies, write tomorrow's. */}
       {showLetters && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.62)', justifyContent: 'flex-end' }}>
+        <KeyboardAvoidingView behavior="padding"
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.62)', justifyContent: 'flex-end' }}>
           <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowLetters(false)} />
           <View style={{ backgroundColor: p.surfaceSolid, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 0.5, borderColor: p.line, paddingTop: 12, maxHeight: '82%', width: '100%', maxWidth: 560, alignSelf: 'center' }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: p.line, alignSelf: 'center', marginBottom: 10 }} />
@@ -682,7 +702,7 @@ export default function MoodScreen({ navigation }: Props) {
               )}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       )}
 
       {/* All braziers — a scrollable sheet so any number of rooms stays tidy. */}

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, KeyboardAvoidingView, Platform,
+  StyleSheet, Alert, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -107,7 +107,8 @@ export default function AuthScreen({ navigation, route }: Props) {
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          // 'padding' on BOTH platforms — see ChatScreen for why this is safe.
+          behavior="padding"
         >
           <ScrollView
             contentContainerStyle={styles.scroll}
