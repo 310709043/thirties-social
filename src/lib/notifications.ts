@@ -3,7 +3,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
-import { getCurrentUid } from './db';
+import { getCurrentUid, getCurrentNightSession } from './db';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -131,6 +131,7 @@ export async function scheduleNightlyReminder(lang: 'zh' | 'en' = 'zh'): Promise
         body: lang === 'en'
           ? 'The Loft is lit. Someone is also awake tonight.'
           : '夜閣亮燈了。今晚也有人醒著，在等一句真話。',
+        data: { screen: 'Mood' },
         sound: true,
       },
       trigger: {
@@ -145,22 +146,30 @@ export async function scheduleNightlyReminder(lang: 'zh' | 'en' = 'zh'): Promise
 }
 
 /**
- * One-shot reminder for a confirmed 重逢 (reunion): tomorrow at 21:00 local.
- * Scheduled on-device by each side when the second vote lands.
+ * One-shot reminder for a confirmed 重逢 (reunion): fires at 21:00 of the night
+ * the reunion is FOR. Because a night session runs 21:00→05:00, a vote cast at
+ * 01:00 belongs to a session whose reunion is that same coming evening — so the
+ * target is "today 21:00" in that case, not "tomorrow 21:00". Deriving the
+ * target date from the shared 05:00 boundary keeps the reminder from firing a
+ * day late (the old raw `+1 day` did exactly that after midnight).
  */
 export async function scheduleRekindleReminder(lang: 'zh' | 'en' = 'zh'): Promise<void> {
   try {
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') return;
-    const when = new Date();
-    when.setDate(when.getDate() + 1);
-    when.setHours(21, 0, 0, 0);
+    // The reunion night = next night session. Anchor to its calendar day at
+    // 21:00; if that instant is already past (rare edge), skip scheduling.
+    const nightId = getCurrentNightSession(1); // 'YYYY-MM-DD'
+    const [y, mo, da] = nightId.split('-').map(Number);
+    const when = new Date(y, mo - 1, da, 21, 0, 0, 0);
+    if (when.getTime() <= Date.now()) return;
     await Notifications.scheduleNotificationAsync({
       content: {
         title: lang === 'en' ? 'Your reunion is tonight' : '今晚有一場重逢',
         body: lang === 'en'
           ? 'The person from last night is waiting to meet you again.'
           : '昨晚的那個人，約好今晚再見一次。',
+        data: { screen: 'Mood' },
         sound: true,
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },

@@ -116,7 +116,8 @@ export default function LoftScreen({ navigation }: Props) {
     }
   };
 
-  // The Loft is a Vigil space; a free user gets one lifetime free entry.
+  // The Loft is a Vigil space; a free user gets one free entry PER WEEK, and
+  // may come and go freely for the rest of that night once they're in.
   const handleEnter = async () => {
     const tier = getTier();
     // Guests can't enter at all.

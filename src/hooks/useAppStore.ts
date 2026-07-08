@@ -6,6 +6,7 @@ import { Lang } from '../lib/copy';
 import { IdentityKind } from '../lib/identity';
 import { ensureAnonAuth, upsertUser, updateUser, subscribeToUser, claimDailyRewardServer, spendWicks } from '../lib/db';
 import { isGuest } from '../lib/auth';
+import { safeWicks } from '../lib/num';
 
 let _deviceId: string | null = null;
 async function getDeviceId(): Promise<string> {
@@ -76,7 +77,9 @@ export const MATCH_WICK_COST = 1;
 export const FREE_DAILY_ROOMS = 1;
 /** Free users pay this to open a room; Vigil opens rooms for free. */
 export const ROOM_CREATE_COST = 2;
-/** A free user gets this many lifetime free Loft entries, then must go Vigil. */
+/** @deprecated Legacy constant — the live Loft gate is a WEEKLY free entry
+ *  (see canEnterLoft / loftFreeWeek), not a lifetime count. Kept only to avoid
+ *  churn; no code reads it. */
 export const FREE_LOFT_ALLOWANCE = 1;
 
 let _state: AppState = {
@@ -130,7 +133,7 @@ export async function initStore() {
     ..._state, deviceId, seed,
     direction: storedDir || DEFAULT_DIRECTION, lang: storedLang || 'zh',
     onboardingDone: storedDone === '1', setupDone: storedSetup === '1',
-    wicks: storedWicks ? parseInt(storedWicks, 10) : 3, vigil: storedVigil === '1',
+    wicks: storedWicks != null ? safeWicks(storedWicks) : 3, vigil: storedVigil === '1',
     gender: storedGender, ageBracket: storedAge, relationshipStatus: storedRelation,
     relationshipShape: storedShape,
     seeking: storedSeeking ? JSON.parse(storedSeeking) : [],
@@ -167,8 +170,9 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
       const today = new Date().toISOString().slice(0, 10);
       const lastReward = (dbUser as any).lastRewardDate ?? null;
       _state = {
-        // wicks: never let a missing field blank the display (undefined → 0/keep).
-        ..._state, userId, dbSynced: true, wicks: dbUser.wicks ?? _state.wicks ?? 0, vigil: dbUser.vigil,
+        // wicks: coerce through safeWicks so a missing/corrupt ("undefined"/NaN)
+        // field can never surface as NaN in the UI or get re-persisted.
+        ..._state, userId, dbSynced: true, wicks: safeWicks(dbUser.wicks), vigil: dbUser.vigil,
         // setupDone is sticky: once finished locally, a fresh/incomplete server
         // doc must never force the user to fill in their profile again.
         setupDone: dbUser.setupDone || _state.setupDone, isBanned: dbUser.isBanned, banReason: dbUser.banReason,
@@ -191,7 +195,7 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         loftFreeUsed: (dbUser as any).loftFreeUsed ?? _state.loftFreeUsed,
       };
       await Promise.all([
-        AsyncStorage.setItem('wicks', String(dbUser.wicks)),
+        AsyncStorage.setItem('wicks', String(safeWicks(dbUser.wicks))),
         AsyncStorage.setItem('vigil', dbUser.vigil ? '1' : '0'),
         AsyncStorage.setItem('setup_done', dbUser.setupDone ? '1' : '0'),
         dbUser.gender ? AsyncStorage.setItem('gender', dbUser.gender) : Promise.resolve(),
@@ -207,6 +211,13 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         AsyncStorage.setItem('autoFilter', (dbUser as any).autoFilter === true ? '1' : '0'),
         AsyncStorage.setItem('slowMode', (dbUser as any).slowMode ? '1' : '0'),
       ]);
+      // One-time migration for legacy docs created before autoFilter existed:
+      // stamp the field to false so its state is explicit going forward. Only
+      // when the field is entirely ABSENT — never overwrite a real user choice
+      // (true or false), and never for docs that already carry it.
+      if (!('autoFilter' in (dbUser as any))) {
+        updateUser({ autoFilter: false } as any).catch(() => {});
+      }
     } else {
       _state = { ..._state, userId, dbSynced: true };
     }
@@ -216,7 +227,7 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
       const today = new Date().toISOString().slice(0, 10);
       const lastReward = (updated as any).lastRewardDate ?? null;
       _state = {
-        ..._state, wicks: updated.wicks ?? _state.wicks ?? 0, vigil: updated.vigil,
+        ..._state, wicks: safeWicks(updated.wicks), vigil: updated.vigil,
         isBanned: updated.isBanned, banReason: updated.banReason,
         banExpiresAt: (updated as any).banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
@@ -233,11 +244,9 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         freeMatchesUsed: (updated as any).freeMatchesUsed ?? _state.freeMatchesUsed,
         loftFreeUsed: (updated as any).loftFreeUsed ?? _state.loftFreeUsed,
       };
-      // Guard: a doc missing `wicks` must not persist the string "undefined"
-      // (which parses to NaN on the next cold start and blanks the balance).
-      if (typeof updated.wicks === 'number' && Number.isFinite(updated.wicks)) {
-        AsyncStorage.setItem('wicks', String(updated.wicks));
-      }
+      // Persist a guaranteed-finite balance (safeWicks) so a cold start never
+      // reads back the string "undefined" → NaN.
+      AsyncStorage.setItem('wicks', String(safeWicks(updated.wicks)));
       notify();
     });
   } catch (e) {

@@ -66,7 +66,8 @@ export async function register(email: string, password: string): Promise<{
       loftVisible: true,
       nightColorIdx: 0,
       nightAdjIdx: 0,
-      autoFilter: true,
+      // Abuse filter is opt-in — must be false at creation (see db.ts upsertUser).
+      autoFilter: false,
       slowMode: false,
       freeMatchesUsed: 0,
       loftFreeUsed: 0,

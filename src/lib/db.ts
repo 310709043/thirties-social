@@ -9,6 +9,7 @@ import {
   getCountFromServer,
 } from 'firebase/firestore';
 import { hash } from './identity';
+import { safeWicks } from './num';
 import { signInAnonymously, onAuthStateChanged, deleteUser } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { sendPushToUser } from './notifications';
@@ -101,7 +102,10 @@ export async function upsertUser(params: {
       loftVisible: true,
       nightColorIdx: 0,
       nightAdjIdx: 0,
-      autoFilter: true,
+      // Abuse filter is OPT-IN. This must be false at creation — writing true
+      // here was the real root cause of the filter "coming back": every new
+      // doc shipped with it on, and the sync then read that true straight back.
+      autoFilter: false,
       slowMode: false,
       freeMatchesUsed: 0,
       loftFreeUsed: 0,
@@ -237,7 +241,10 @@ export async function spendWicks(
       const userRef = doc(db, 'users', uid);
       const snap = await tx.get(userRef);
       if (!snap.exists()) throw new Error('user_not_found');
-      const current = snap.data().wicks as number;
+      // safeWicks: a missing/corrupt balance must read as 0, not undefined —
+      // otherwise `undefined < amount` is false (bypasses the funds check) and
+      // `undefined - amount` writes NaN back into the balance.
+      const current = safeWicks(snap.data().wicks);
       if (current < amount) throw new Error('insufficient_wicks');
       newBalance = current - amount;
       tx.update(userRef, { wicks: newBalance, lastActiveAt: serverTimestamp() });
@@ -272,7 +279,7 @@ export async function addWicks(
       const userRef = doc(db, 'users', uid);
       const snap = await tx.get(userRef);
       if (!snap.exists()) throw new Error('user_not_found');
-      newBalance = (snap.data().wicks as number) + amount;
+      newBalance = safeWicks(snap.data().wicks) + amount;
       tx.update(userRef, { wicks: newBalance, lastActiveAt: serverTimestamp() });
       tx.set(doc(collection(db, 'wicksTransactions')), {
         userId: uid,
@@ -574,19 +581,32 @@ export function subscribeToTyping(
  * at 08:00 for UTC+8 users.
  */
 /**
- * The date of the CURRENT NIGHT, rolling over at 05:00 (the Loft's closing
- * hour) instead of midnight. With a plain calendar date, everything keyed by
- * night broke at 00:00 — halfway through the Loft's 21:00–05:00 window:
- * everyone who entered before midnight vanished from the list, the ritual
- * answers reset, and a 重逢/夜信 made at 01:00 computed "tomorrow" as the
- * night after the one the user meant. 03:20 still belongs to "last night".
+ * THE single source of truth for "which night is it". A night session runs
+ * 21:00 → 05:00 and is labelled by the calendar date it BEGAN on, so the whole
+ * window (including the 00:00–05:00 hours) shares one id. Implemented by
+ * shifting the clock back 5h before taking the date: 03:20 today still resolves
+ * to yesterday's label, and a fresh session only begins at 05:00.
+ *
+ * Everything keyed by night — Loft roster, tonight's ritual, 重逢 invites, 夜信
+ * delivery, reminders — MUST derive its date from here (or `nextNightSession`).
+ * Never call `new Date().toISOString().slice(0,10)` for a night date again: a
+ * plain calendar date rolled over at midnight and emptied the Loft mid-window.
+ *
+ * @param offsetNights 0 = current night (default), 1 = the coming night, etc.
  */
-export function localNightDate(): string {
+export function getCurrentNightSession(offsetNights = 0): string {
   const d = new Date(Date.now() - 5 * 3600 * 1000);
+  if (offsetNights) d.setDate(d.getDate() + offsetNights);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/** @deprecated internal alias — use getCurrentNightSession(). Kept so existing
+ *  call sites stay terse; both resolve to the same 05:00-boundary night id. */
+export function localNightDate(): string {
+  return getCurrentNightSession(0);
 }
 
 // ONE truth for the Loft's hours: open nightly 21:00–05:00, every day. This is
@@ -1077,16 +1097,10 @@ export interface DbRekindle {
   createdAt: any;
 }
 
-/** The night AFTER the current night — derived from the same 05:00 boundary
- *  as localNightDate, so "tomorrow night" voted at 01:00 means the coming
- *  evening, not the day after it. */
+/** The night AFTER the current one — so "tomorrow night" voted at 01:00 means
+ *  the coming evening, not the day after it. Delegates to the one truth. */
 function nextNightDate(): string {
-  const d = new Date(Date.now() - 5 * 3600 * 1000);
-  d.setDate(d.getDate() + 1);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return getCurrentNightSession(1);
 }
 
 /** Vote to meet again tomorrow. Returns 'voted' | 'confirmed' | null on failure. */
@@ -1587,10 +1601,10 @@ export async function claimDailyReward(): Promise<{
       const snap = await tx.get(userRef);
       if (!snap.exists()) throw new Error('user_not_found');
       const data = snap.data();
-      if (data.lastRewardDate === today) { newBalance = data.wicks; return; }
+      if (data.lastRewardDate === today) { newBalance = safeWicks(data.wicks); return; }
       // Free: +2/day, Vigil: +5/day
       amount = data.vigil ? 5 : 2;
-      newBalance = data.wicks + amount;
+      newBalance = safeWicks(data.wicks) + amount;
       rewarded = true;
       tx.update(userRef, { wicks: newBalance, lastRewardDate: today, lastActiveAt: serverTimestamp() });
       tx.set(doc(collection(db, 'wicksTransactions')), {

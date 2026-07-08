@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { initStore, useAppStore } from './src/hooks/useAppStore';
+import { initStore, useAppStore, getState } from './src/hooks/useAppStore';
 import { initPurchases } from './src/lib/purchases';
 import { registerForPushNotifications, addNotificationListener, scheduleNightlyReminder } from './src/lib/notifications';
 import { analytics } from './src/lib/analytics';
 import { navigationRef, resetAndNavigate } from './src/lib/navigationRef';
 import { RootStackParamList } from './src/navigation';
-import { onAuthChange } from './src/lib/auth';
+import { onAuthChange, getCurrentUser } from './src/lib/auth';
 import Navigation from './src/navigation';
 import LoadingScreen from './src/components/LoadingScreen';
 import { WickGlyph, Logo } from './src/components/ui';
@@ -24,6 +24,12 @@ const TextWithDefaults = Text as unknown as { defaultProps?: { maxFontSizeMultip
 TextWithDefaults.defaultProps = { ...(TextWithDefaults.defaultProps ?? {}), maxFontSizeMultiplier: 1.3 };
 
 SplashScreen.preventAutoHideAsync();
+
+/** The store's language once initStore has resolved — for one-off calls (like
+ *  scheduling the nightly reminder) that need lang outside a React component. */
+function getStoreLang(): 'zh' | 'en' {
+  return getState().lang === 'en' ? 'en' : 'zh';
+}
 
 export default function App() {
   const [storeReady, setStoreReady] = useState(false);
@@ -55,7 +61,8 @@ export default function App() {
       setStoreReady(true);
       registerForPushNotifications().then(() => {
         // Re-engagement: one local reminder a night when the window opens.
-        scheduleNightlyReminder();
+        // Pass the user's language so an EN user doesn't get a Chinese reminder.
+        scheduleNightlyReminder(getStoreLang());
       });
       analytics.appOpen();
     });
@@ -73,10 +80,12 @@ export default function App() {
     const removeListeners = addNotificationListener(
       (notification) => {},
       (response) => {
+        // A tap always signals intent to open the app somewhere. Use the
+        // explicit screen when present, otherwise fall back to home (Mood) —
+        // notifications used to carry only `type`, so taps did nothing at all.
         const data = response.notification.request.content.data;
-        if (data?.screen) {
-          resetAndNavigate(data.screen as keyof RootStackParamList, data);
-        }
+        const screen = (data?.screen as keyof RootStackParamList) ?? 'Mood';
+        resetAndNavigate(screen, data ?? {});
       },
     );
 
@@ -115,8 +124,13 @@ function AppGate({ authUser, authChecked }: { authUser: any; authChecked: boolea
   const store = useAppStore();
   const L = LOFT_PALETTE;
 
-  // Show auth screen if not logged in
-  if (authChecked && !authUser) {
+  // Only route to Auth when auth has TRULY settled to signed-out. On a cold
+  // start the listener fires null once before anonymous sign-in completes; the
+  // synchronous auth.currentUser is set the instant that lands, so we fall back
+  // to it to avoid flashing the Auth screen at a brand-new (guest) user. We also
+  // wait for the store to finish syncing so a returning session isn't misjudged.
+  const liveUser = authUser ?? getCurrentUser();
+  if (authChecked && !liveUser && store.dbSynced) {
     return <Navigation initialRoute="Auth" />;
   }
 
