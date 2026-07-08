@@ -51,11 +51,19 @@ export async function uploadVeiledPhoto(params: {
   }
 
   try {
-    // Re-encode to strip all metadata (EXIF/GPS) and get base64 in one pass.
+    // PRIVACY-CRITICAL: never keep a recoverable clear original. The other
+    // participant can read this photo's Firestore doc, so a full-res URL there
+    // could be stripped of its blur transform and grabbed as a sharp face — the
+    // whole "earn the reveal" ritual would be pure client-side theatre. Instead
+    // we bake the anonymity into the pixels: downscale hard at upload so even
+    // the raw asset is a low-detail, soft image. The reveal is meant to be
+    // "light and shadow of someone", never an ID photo — so 140px, shown with a
+    // gentle blur on top, reads as dreamy soft-focus while staying un-doxxable.
+    // (Same principle as uploadLoftPhoto's 96px.) Also strips EXIF/GPS.
     const clean = await manipulateAsync(
       params.uri,
-      [{ resize: { width: 1280 } }],
-      { compress: 0.7, format: SaveFormat.JPEG, base64: true },
+      [{ resize: { width: 140 } }],
+      { compress: 0.6, format: SaveFormat.JPEG, base64: true },
     );
     if (!clean.base64) {
       console.warn('[photos] No base64 produced from image');

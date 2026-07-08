@@ -707,10 +707,15 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
   }, [veilKey, isMe]);
   const persistVeil = (step: number) => { if (veilKey) void AsyncStorage.setItem(veilKey, String(step)); };
 
-  // Cloudinary server-side blur so the earlier layers show only a blurred image,
-  // not the original file — the raw photo URL is only used on the final layer.
+  // Cloudinary server-side blur, layered over an already-tiny (140px) asset for
+  // defence in depth. Note the reveal is soft BY DESIGN — see the native
+  // blurRadius tiers below; we never render a sharp face at any step.
   const blurred = (url: string, amount: number) =>
     url.includes('/image/upload/') ? url.replace('/image/upload/', `/image/upload/e_blur:${amount},q_auto/`) : url;
+  // Native blur that never fully reaches zero: even the final "revealed" layer
+  // keeps a gentle softness, so a screenshot is a mood, not an ID photo.
+  const nativeBlurForStep = (step: number) => (step >= 3 ? 4 : step === 2 ? 10 : 18);
+  const cloudBlurForStep = (step: number) => (step >= 3 ? 300 : step === 2 ? 1000 : 1600);
 
   const liftVeil = async () => {
     if (working || isMe || revealed || !m.photoId) return;
@@ -763,7 +768,8 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
           <PhotoVeil p={p} liftLevel={0} size={120} lang={lang} />
         ) : (
           <Image
-            source={{ uri: revealed ? photoUrl : blurred(photoUrl, veilStep === 1 ? 1600 : 1000) }}
+            source={{ uri: blurred(photoUrl, cloudBlurForStep(veilStep)) }}
+            blurRadius={nativeBlurForStep(veilStep)}
             style={{ width: 160, height: 160, borderRadius: 14 }}
             resizeMode="cover"
           />
