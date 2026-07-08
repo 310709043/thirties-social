@@ -182,7 +182,10 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         freeTimes: (dbUser as any).freeTimes ?? _state.freeTimes,
         region: dbUser.region, quote: dbUser.quote,
         loftVisible: (dbUser as any).loftVisible !== false,
-        autoFilter: (dbUser as any).autoFilter ?? true,
+        // OFF unless explicitly turned on — `?? true` here silently re-enabled
+        // the filter for every user whose doc predates the field, undoing the
+        // opt-in fix (normal venting got blocked again).
+        autoFilter: (dbUser as any).autoFilter === true,
         slowMode: (dbUser as any).slowMode ?? false,
         freeMatchesUsed: (dbUser as any).freeMatchesUsed ?? 0,
         loftFreeUsed: (dbUser as any).loftFreeUsed ?? _state.loftFreeUsed,
@@ -201,7 +204,7 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         dbUser.region ? AsyncStorage.setItem('region', dbUser.region) : Promise.resolve(),
         dbUser.quote ? AsyncStorage.setItem('quote', dbUser.quote) : Promise.resolve(),
         AsyncStorage.setItem('loftVisible', (dbUser as any).loftVisible !== false ? '1' : '0'),
-        AsyncStorage.setItem('autoFilter', (dbUser as any).autoFilter !== false ? '1' : '0'),
+        AsyncStorage.setItem('autoFilter', (dbUser as any).autoFilter === true ? '1' : '0'),
         AsyncStorage.setItem('slowMode', (dbUser as any).slowMode ? '1' : '0'),
       ]);
     } else {
@@ -225,12 +228,16 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         freeTimes: (updated as any).freeTimes ?? _state.freeTimes,
         region: updated.region, quote: updated.quote,
         loftVisible: (updated as any).loftVisible !== false,
-        autoFilter: (updated as any).autoFilter ?? true,
+        autoFilter: (updated as any).autoFilter === true, // opt-in, see above
         slowMode: (updated as any).slowMode ?? false,
         freeMatchesUsed: (updated as any).freeMatchesUsed ?? _state.freeMatchesUsed,
         loftFreeUsed: (updated as any).loftFreeUsed ?? _state.loftFreeUsed,
       };
-      AsyncStorage.setItem('wicks', String(updated.wicks));
+      // Guard: a doc missing `wicks` must not persist the string "undefined"
+      // (which parses to NaN on the next cold start and blanks the balance).
+      if (typeof updated.wicks === 'number' && Number.isFinite(updated.wicks)) {
+        AsyncStorage.setItem('wicks', String(updated.wicks));
+      }
       notify();
     });
   } catch (e) {

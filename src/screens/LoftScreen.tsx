@@ -11,7 +11,7 @@ import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber, PressableScale } from '../components/ui';
 import { useAppStore, canEnterLoft, recordLoftEntry, loftEntryIsFreeTrial, getTier } from '../hooks/useAppStore';
-import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, postRitualResponse, subscribeToTonightRitual, DbRitualResponse, fetchMyTonightLoftWhispers, DbLoftWhisper } from '../lib/db';
+import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, postRitualResponse, subscribeToTonightRitual, DbRitualResponse, fetchMyTonightLoftWhispers, DbLoftWhisper, localNightDate } from '../lib/db';
 import { getTonightRitual } from '../lib/rituals';
 import { TextInput } from 'react-native';
 import { getLoftName } from '../lib/identity';
@@ -54,14 +54,14 @@ export default function LoftScreen({ navigation }: Props) {
   useEffect(() => { hasLoftPin().then(setHasPin); }, []);
 
   // The actual entry (free-trial confirm + create the session). Gated by PIN.
-  const runEntry = async () => {
-    if (loftEntryIsFreeTrial()) {
+  const runEntry = async (isReEntry = false) => {
+    if (!isReEntry && loftEntryIsFreeTrial()) {
       const go = await new Promise<boolean>(resolve => {
         Alert.alert(
-          lang === 'en' ? 'Use your free entry?' : '使用免費體驗？',
+          lang === 'en' ? 'Use your free entry?' : '使用本週免費體驗？',
           lang === 'en'
-            ? 'This is your one free taste of the Loft. Entering now uses it up.'
-            : '這是你唯一的一次夜閣免費體驗，進入後就會用掉。確定現在進入嗎？',
+            ? 'This is your free Loft visit for the week. Entering now uses it up — tonight you can come and go freely.'
+            : '這是你本週的一次夜閣免費體驗，進入後這週就用掉了（今晚可自由進出）。確定現在進入嗎？',
           [
             { text: lang === 'en' ? 'Not yet' : '再想想', style: 'cancel', onPress: () => resolve(false) },
             { text: lang === 'en' ? 'Enter' : '進入', onPress: () => resolve(true) },
@@ -73,7 +73,11 @@ export default function LoftScreen({ navigation }: Props) {
     const nightName = getLoftName(seed, lang);
     const result = await enterLoft(nightName, loftPhoto);
     if (result.ok) {
-      await recordLoftEntry();
+      // Only a FRESH visit consumes the weekly free entry — walking back in
+      // tonight (result.reused) is free. Remember tonight locally so the
+      // upgrade gate lets re-entries straight through.
+      if (!result.reused) await recordLoftEntry();
+      AsyncStorage.setItem('loftNightEntered', localNightDate()).catch(() => {});
       hapticMedium();
       setEntering(true);
     } else if (result.error === 'already_entered_tonight') {
@@ -131,14 +135,17 @@ export default function LoftScreen({ navigation }: Props) {
       );
       return;
     }
-    // Free user who has spent their lifetime free entry → upgrade prompt.
-    if (!canEnterLoft()) {
+    // Already entered TONIGHT? Re-entry is always allowed — backing out of the
+    // Loft must never cost a second entry or slam an upgrade wall the same night.
+    const reEntry = (await AsyncStorage.getItem('loftNightEntered')) === localNightDate();
+    // Free user who has spent this week's free entry → upgrade prompt.
+    if (!reEntry && !canEnterLoft()) {
       hapticWarning();
       Alert.alert(
-        lang === 'en' ? 'Free entry used' : '免費體驗已用完',
+        lang === 'en' ? 'Free entry used' : '本週免費體驗已用過',
         lang === 'en'
-          ? 'You have used your free taste of the Loft. Go Vigil for unlimited late-night entry.'
-          : '你的夜閣免費體驗已經用過了。升級守夜人即可無限進入深夜空間。',
+          ? 'You have used this week\'s free Loft visit. Go Vigil for unlimited late-night entry.'
+          : '你本週的夜閣免費體驗已經用過了。升級守夜人即可每晚無限進入。',
         [
           { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
           { text: lang === 'en' ? 'Upgrade' : '升級守夜人', onPress: () => navigation.push('Upgrade') },
@@ -327,7 +334,7 @@ export default function LoftScreen({ navigation }: Props) {
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: '#1f1014' }}>
                 {vigil
                   ? (lang === 'en' ? 'Unlimited tonight' : '今晚無限')
-                  : (lang === 'en' ? 'Free · 1 entry tonight' : '免費 · 今晚 1 次')}
+                  : (lang === 'en' ? 'Free visit · once a week' : '免費體驗 · 每週 1 次')}
               </Text>
             </View>
           </TouchableOpacity>

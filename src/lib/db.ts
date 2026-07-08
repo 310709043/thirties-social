@@ -573,8 +573,16 @@ export function subscribeToTyping(
  * date — not UTC — so the Loft night rolls over at local midnight rather than
  * at 08:00 for UTC+8 users.
  */
-function localNightDate(): string {
-  const d = new Date();
+/**
+ * The date of the CURRENT NIGHT, rolling over at 05:00 (the Loft's closing
+ * hour) instead of midnight. With a plain calendar date, everything keyed by
+ * night broke at 00:00 — halfway through the Loft's 21:00–05:00 window:
+ * everyone who entered before midnight vanished from the list, the ritual
+ * answers reset, and a 重逢/夜信 made at 01:00 computed "tomorrow" as the
+ * night after the one the user meant. 03:20 still belongs to "last night".
+ */
+export function localNightDate(): string {
+  const d = new Date(Date.now() - 5 * 3600 * 1000);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -603,6 +611,8 @@ export async function enterLoft(
   photo?: { url: string; publicId: string } | null,
 ): Promise<{
   ok: boolean; sessionId?: string; balance?: number; error?: string;
+  /** True when tonight's existing session was reused (re-entry, not a new visit). */
+  reused?: boolean;
 }> {
   const uid = getCurrentUid();
   if (!uid) return { ok: false, error: 'not_authenticated' };
@@ -621,9 +631,22 @@ export async function enterLoft(
   const userSnap = await getDoc(doc(db, 'users', uid));
   const isVigil = userSnap.exists() ? (userSnap.data() as any).vigil : false;
 
-  // Free users: only 1 entry per night
-  if (!isVigil && !existing.empty) {
-    return { ok: false, error: 'already_entered_tonight' };
+  // Already inside tonight? Walk back into the SAME session. The old code
+  // returned an error here, which meant a free user who backed out of the Loft
+  // (or restarted the app) was met with an upgrade wall for a night they had
+  // already used their entry on.
+  if (!existing.empty) {
+    const d = existing.docs[0];
+    // Un-stamp leftAt so they show in the list again; if they brought a new
+    // photo this time, it replaces tonight's old one.
+    const patch: any = { leftAt: null };
+    if (photo?.url && (d.data() as any).photoUrl !== photo.url) {
+      patch.photoUrl = photo.url;
+      patch.photoPublicId = photo.publicId;
+    }
+    try { await updateDoc(d.ref, patch); } catch {}
+    const balance0 = userSnap.exists() ? (userSnap.data() as any).wicks : 0;
+    return { ok: true, sessionId: d.id, balance: balance0, reused: true };
   }
 
   const myGender = userSnap.exists() ? ((userSnap.data() as any).gender ?? null) : null;
@@ -1054,8 +1077,11 @@ export interface DbRekindle {
   createdAt: any;
 }
 
+/** The night AFTER the current night — derived from the same 05:00 boundary
+ *  as localNightDate, so "tomorrow night" voted at 01:00 means the coming
+ *  evening, not the day after it. */
 function nextNightDate(): string {
-  const d = new Date();
+  const d = new Date(Date.now() - 5 * 3600 * 1000);
   d.setDate(d.getDate() + 1);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -1112,10 +1138,19 @@ export async function openRekindle(rek: DbRekindle): Promise<{ conversationId: s
   const otherId = rek.userAId === uid ? rek.userBId : rek.userAId;
   const otherSeed = rek.seeds?.[otherId] ?? otherId;
   try {
-    // Re-read first — the other side may already have opened it.
+    // Re-read first — the other side may already have opened it. But only step
+    // into that conversation if it's still ALIVE: reunions are opened up to
+    // hours apart, and the room only burns 30 minutes — joining a dead one
+    // greeted the second person with "they left" the instant it opened.
     const fresh = await getDoc(doc(db, 'rekindles', rek.id));
     const freshData = fresh.exists() ? (fresh.data() as any) : null;
-    if (freshData?.conversationId) return { conversationId: freshData.conversationId, otherSeed };
+    if (freshData?.conversationId) {
+      const conv0 = await getConversation(freshData.conversationId);
+      const live = conv0 && !(conv0 as any).endedAt
+        && ((conv0 as any).expiresAt?.toMillis?.() ?? 0) > Date.now();
+      if (live) return { conversationId: freshData.conversationId, otherSeed };
+      // fall through: light a fresh room for the reunion
+    }
     const conv = await createConversation({ userBId: otherId });
     if (!conv) return null;
     await updateDoc(doc(db, 'rekindles', rek.id), { conversationId: conv.id, status: 'opened' });
