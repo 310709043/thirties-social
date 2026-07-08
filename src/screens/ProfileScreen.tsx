@@ -9,8 +9,9 @@ import { DIRECTIONS } from '../lib/theme';
 import { VaporBackground, GlassCard, Cap, WickGlyph, PhotoVeil, FadeInUp, ScreenHeader } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
+import { IdentityStylePicker } from '../components/identity/IdentityStylePicker';
 import { useAppStore, setIdentityKind, getAvailableIdentityKinds, setLoftVisible, getTier } from '../hooks/useAppStore';
-import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, IdentityKind, getLoftName } from '../lib/identity';
+import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, getLoftName } from '../lib/identity';
 import { pickImage, uploadAlbumPhoto } from '../lib/photos';
 import { getAlbum, addAlbumPhoto, removeAlbumPhoto, AlbumPhoto, fetchMyBonds, removeBond, DbBond, createConversation, getCurrentUid } from '../lib/db';
 import { getDiaryEntries, removeDiaryEntry, DiaryEntry } from '../lib/diary';
@@ -240,14 +241,15 @@ export default function ProfileScreen({ navigation }: Props) {
           </GlassCard>
           </FadeInUp>
 
-          {/* Identity kind selector */}
+          {/* Identity style selector — premium, categorised, live-preview */}
           <FadeInUp delay={120} distance={10}>
-            <IdentityKindPicker
+            <IdentityStylePicker
               current={identityKind}
+              available={getAvailableIdentityKinds()}
               vigil={vigil}
               lang={lang}
               p={p}
-              seedForPreview={seed}
+              seed={seed}
               onSelect={setIdentityKind}
               onUpgrade={() => navigation.push('Upgrade')}
             />
@@ -464,80 +466,6 @@ export default function ProfileScreen({ navigation }: Props) {
         </ScrollView>
       </SafeAreaView>
     </VaporBackground>
-  );
-}
-
-const KIND_LABELS: Record<IdentityKind, { zh: string; en: string }> = {
-  sigil:         { zh: '符印',   en: 'Sigil' },
-  silhouette:    { zh: '剪影',   en: 'Silhouette' },
-  'color+adj':   { zh: '色彩名', en: 'Color Name' },
-  character:     { zh: '文字',   en: 'Character' },
-  text:          { zh: '代號',   en: 'Text Code' },
-  flame:         { zh: '燭火',   en: 'Flame' },
-  constellation: { zh: '星圖',   en: 'Stars' },
-};
-
-const ALL_KINDS: IdentityKind[] = ['sigil', 'silhouette', 'color+adj', 'character', 'text', 'flame', 'constellation'];
-
-function IdentityKindPicker({ current, vigil, lang, p, onSelect, onUpgrade, seedForPreview }: {
-  current: IdentityKind; vigil: boolean; lang: string; p: any;
-  onSelect: (k: IdentityKind) => void; onUpgrade: () => void; seedForPreview: string;
-}) {
-  const available = getAvailableIdentityKinds();
-  return (
-    <View style={{ marginTop: 12 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 4, paddingBottom: 8 }}>
-        <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 3, textTransform: 'uppercase', color: p.muted, fontWeight: '500' }}>
-          {lang === 'en' ? 'IDENTITY STYLE' : '身份樣式'}
-        </Text>
-        <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, opacity: 0.6 }}>
-          {lang === 'en' ? '身份樣式' : 'Identity Style'}
-        </Text>
-      </View>
-      {/* Each chip carries a live mini-preview of the style, so choosing one is
-          a visible act — the old text-only chips made selection feel broken
-          (especially when the current style was already selected). */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          {ALL_KINDS.map(kind => {
-            const unlocked = available.includes(kind);
-            const selected = current === kind;
-            const label = KIND_LABELS[kind];
-            return (
-              <TouchableOpacity
-                key={kind}
-                onPress={() => unlocked ? onSelect(kind) : onUpgrade()}
-                style={{
-                  alignItems: 'center', gap: 6,
-                  paddingVertical: 10, paddingHorizontal: 12, borderRadius: 16,
-                  backgroundColor: selected ? p.accentSoft : p.surface,
-                  borderWidth: selected ? 1.5 : 0.5,
-                  borderColor: selected ? p.accent : p.line,
-                  opacity: unlocked ? 1 : 0.45,
-                  minWidth: 68,
-                }}>
-                <Identity kind={kind} seed={seedForPreview} size={34} palette={p} lang={lang as any} trust={0.3} />
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                  {!unlocked && <Text style={{ fontSize: 9 }}>🔒</Text>}
-                  <Text style={{
-                    fontFamily: 'NotoSerifTC-Regular', fontSize: 11,
-                    color: selected ? p.accent : p.ink,
-                    fontWeight: selected ? '600' : '400',
-                  }}>
-                    {lang === 'en' ? label.en : label.zh}
-                  </Text>
-                </View>
-                {selected && (
-                  <Text style={{ fontFamily: 'Inter-Regular', fontSize: 8, color: p.accent, marginTop: -2 }}>
-                    {lang === 'en' ? 'in use' : '使用中'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
-    </View>
   );
 }
 

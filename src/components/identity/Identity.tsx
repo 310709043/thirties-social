@@ -5,6 +5,10 @@ import { Sigil } from './Sigil';
 import { Palette } from '../../lib/theme';
 import { IdentityKind, getColorAdj, getCharacter, rand, SWATCHES } from '../../lib/identity';
 import { Lang } from '../../lib/copy';
+import {
+  AuroraIdentity, HaloIdentity, PrismIdentity, SmokeIdentity, InkwashIdentity,
+  OrbitIdentity, RippleIdentity, TideIdentity, MoonIdentity,
+} from './renderers';
 
 interface IdentityProps {
   kind?: IdentityKind;
@@ -31,6 +35,24 @@ export function Identity({ kind = 'sigil', seed = 'today', size = 96, palette, l
       return <FlameIdentity seed={seed} size={size} />;
     case 'constellation':
       return <ConstellationIdentity seed={seed} size={size} palette={palette} />;
+    case 'aurora':
+      return <AuroraIdentity seed={seed} size={size} palette={palette} />;
+    case 'halo':
+      return <HaloIdentity seed={seed} size={size} palette={palette} />;
+    case 'prism':
+      return <PrismIdentity seed={seed} size={size} palette={palette} />;
+    case 'smoke':
+      return <SmokeIdentity seed={seed} size={size} palette={palette} />;
+    case 'inkwash':
+      return <InkwashIdentity seed={seed} size={size} palette={palette} />;
+    case 'orbit':
+      return <OrbitIdentity seed={seed} size={size} palette={palette} />;
+    case 'ripple':
+      return <RippleIdentity seed={seed} size={size} palette={palette} />;
+    case 'tide':
+      return <TideIdentity seed={seed} size={size} palette={palette} />;
+    case 'moon':
+      return <MoonIdentity seed={seed} size={size} palette={palette} />;
     default:
       return <Sigil seed={seed} size={size} palette={palette} />;
   }

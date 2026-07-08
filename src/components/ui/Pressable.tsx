@@ -3,7 +3,7 @@
 // Drop-in replacement for TouchableOpacity across the app.
 // ============================================================
 import React, { useRef } from 'react';
-import { Animated, Pressable, ViewStyle, StyleProp } from 'react-native';
+import { Animated, Pressable, ViewStyle, StyleProp, AccessibilityRole, AccessibilityState } from 'react-native';
 import { hapticLight } from '../../lib/haptics';
 
 interface PressableScaleProps {
@@ -14,6 +14,12 @@ interface PressableScaleProps {
   scaleTo?: number;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
+  // Accessibility — forwarded to the underlying Pressable so callers can label
+  // and announce state (selected / disabled) to screen readers.
+  accessibilityRole?: AccessibilityRole;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  accessibilityState?: AccessibilityState;
 }
 
 export function PressableScale({
@@ -24,6 +30,10 @@ export function PressableScale({
   scaleTo = 0.96,
   style,
   children,
+  accessibilityRole,
+  accessibilityLabel,
+  accessibilityHint,
+  accessibilityState,
 }: PressableScaleProps) {
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -45,6 +55,10 @@ export function PressableScale({
       }}
       onLongPress={onLongPress}
       disabled={disabled}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={accessibilityState}
     >
       <Animated.View style={[style, { transform: [{ scale }] }]}>
         {children}

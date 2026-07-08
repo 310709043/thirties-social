@@ -7,6 +7,7 @@ import { IdentityKind } from '../lib/identity';
 import { ensureAnonAuth, upsertUser, updateUser, subscribeToUser, claimDailyRewardServer, spendWicks } from '../lib/db';
 import { isGuest } from '../lib/auth';
 import { safeWicks } from '../lib/num';
+import { FREE_IDENTITY_KINDS, VIGIL_IDENTITY_KINDS } from '../lib/identityStyles';
 
 let _deviceId: string | null = null;
 async function getDeviceId(): Promise<string> {
@@ -526,9 +527,9 @@ export async function recordRoomCreated() {
   notify();
 }
 
-const FREE_IDENTITY_KINDS: IdentityKind[] = ['sigil', 'color+adj', 'text', 'constellation'];
-const VIGIL_IDENTITY_KINDS: IdentityKind[] = ['sigil', 'silhouette', 'color+adj', 'character', 'text', 'flame', 'constellation'];
-
+// The catalogue (src/lib/identityStyles.ts) is the single source of truth for
+// which styles exist and how they're gated — add a style there and it flows
+// through here and the picker automatically.
 export function getAvailableIdentityKinds(): IdentityKind[] {
   return _state.vigil ? VIGIL_IDENTITY_KINDS : FREE_IDENTITY_KINDS;
 }
