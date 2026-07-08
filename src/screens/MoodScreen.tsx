@@ -548,19 +548,53 @@ export default function MoodScreen({ navigation }: Props) {
         {/* ── Bottom: Match Button ── */}
         <View style={styles.bottom}>
           {waiting ? (
-            <View style={[styles.waitingBox, { backgroundColor: p.surface, borderColor: p.line }]}>
-              <BreathDot p={p} size={6} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink }}>
-                  {lang === 'en' ? `Finding someone${waitingDots}` : `正在尋找${waitingDots}`}
-                </Text>
+            // Waiting is never a dead spinner. While we look, the night stays
+            // warm: a reassurance that we'll tell them the moment someone comes,
+            // and two doors into things that DON'T need another person online
+            // right now — a night letter, or a brazier to sit by. This is the
+            // async buffer that makes an empty 2am not feel empty.
+            <View style={[styles.waitingCard, { backgroundColor: p.surface, borderColor: p.line }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <BreathDot p={p} size={6} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink }}>
+                    {lang === 'en' ? `Finding someone${waitingDots}` : `正在為你尋找${waitingDots}`}
+                  </Text>
+                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11.5, color: p.muted, marginTop: 1 }}>
+                    {lang === 'en' ? 'we’ll tell you the moment they arrive' : '配到了會立刻告訴你'}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={handleCancelWait}
+                  style={[styles.cancelBtn, { backgroundColor: p.danger + '12', borderColor: p.danger + '25' }]}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.danger }}>
+                    {lang === 'en' ? 'cancel' : '取消'}
+                  </Text>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={handleCancelWait}
-                style={[styles.cancelBtn, { backgroundColor: p.danger + '12', borderColor: p.danger + '25' }]}>
-                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.danger }}>
-                  {lang === 'en' ? 'cancel' : '取消'}
-                </Text>
-              </TouchableOpacity>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, color: p.muted, marginTop: 12, marginBottom: 8 }}>
+                {lang === 'en' ? 'while you wait —' : '趁現在，先做點什麼 —'}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity onPress={openLetters}
+                  style={[styles.waitAction, { backgroundColor: p.glass, borderColor: p.line }]}>
+                  <Text style={{ fontSize: 13 }}>✉</Text>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, color: p.ink }}>
+                    {lang === 'en' ? 'A night letter' : '寫封夜信'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    const hottest = activeRooms[0];
+                    if (hottest) navigation.push('Room', { roomKey: hottest.roomKey ?? 'custom', roomId: hottest.id });
+                    else navigation.push('Room', { roomKey: 'new' });
+                  }}
+                  style={[styles.waitAction, { backgroundColor: p.glass, borderColor: p.line }]}>
+                  <BreathDot p={p} size={4} />
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, color: p.ink }}>
+                    {lang === 'en' ? 'Sit by a brazier' : '去火盆坐坐'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : (
             <SoftButton p={p} variant="primary" size="lg" full onPress={handleEnter}>
@@ -953,6 +987,8 @@ const styles = StyleSheet.create({
 
   bottom:        { paddingHorizontal: 20, paddingBottom: 16 },
   waitingBox:    { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, borderWidth: 0.5 },
+  waitingCard:   { padding: 14, borderRadius: 16, borderWidth: 0.5 },
+  waitAction:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 12, borderWidth: 0.5 },
   cancelBtn:     { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 0.5 },
 
   guideScrim:    { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.62)', alignItems: 'center', justifyContent: 'center', padding: 28 },
