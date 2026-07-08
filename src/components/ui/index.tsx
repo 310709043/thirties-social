@@ -8,6 +8,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path as SvgPath, Ellipse, Rect } from 'react-native-svg';
 import { Palette } from '../../lib/theme';
+import { NightAtmosphere } from './NightAtmosphere';
 
 // ── VaporBackground ──────────────────────────────────────────
 export function VaporBackground({ p, children, style }: { p: Palette; children: ReactNode; style?: ViewStyle }) {
@@ -33,6 +34,10 @@ export function VaporBackground({ p, children, style }: { p: Palette; children: 
         borderRadius: 999,
         opacity: 0.4,
       }} />
+      {/* The living night layer — a time-of-day veil + slow drifting motes,
+          shared by every screen that uses VaporBackground. Sits above the
+          gradient/orbs, below content; pointer-transparent. */}
+      <NightAtmosphere p={p} />
       {children}
     </LinearGradient>
   );
