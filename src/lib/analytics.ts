@@ -48,10 +48,13 @@ export async function trackEvent(
   if (!_enabled) return;
 
   try {
+    // The rules require userId == auth.uid, so an event fired before auth has
+    // restored can only be rejected — skip it instead of burning a write.
     const uid = getCurrentUid();
+    if (!uid) return;
     await addDoc(collection(db, 'analytics'), {
       event,
-      userId: uid ?? 'anonymous',
+      userId: uid,
       params: params ?? {},
       createdAt: serverTimestamp(),
     });

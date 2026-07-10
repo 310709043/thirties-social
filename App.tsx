@@ -64,16 +64,19 @@ export default function App() {
         // Pass the user's language so an EN user doesn't get a Chinese reminder.
         scheduleNightlyReminder(getStoreLang());
       });
-      analytics.appOpen();
     });
     configureGoogle();
 
     // Listen for auth state changes
+    let openLogged = false;
     const unsubscribeAuth = onAuthChange(user => {
       setAuthUser(user);
       setAuthChecked(true);
       // RevenueCat appUserID = Firebase uid, so the webhook maps purchases back.
       if (user) initPurchases(user.uid);
+      // app_open only counts once auth is up — the analytics rules require a
+      // real uid, so an earlier fire could only be rejected.
+      if (user && !openLogged) { openLogged = true; analytics.appOpen(); }
     });
 
     // Handle notification taps. One route for both paths (foreground/background

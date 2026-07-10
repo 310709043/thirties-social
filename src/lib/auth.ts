@@ -112,6 +112,12 @@ export async function login(email: string, password: string): Promise<{
     if (code === 'auth/wrong-password') {
       return { ok: false, error: '密碼錯誤' };
     }
+    // Newer Firebase collapses wrong-password/user-not-found into one code
+    // (anti-enumeration) — without this mapping users saw a raw
+    // "Firebase: Error (auth/invalid-credential)" string.
+    if (code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
+      return { ok: false, error: '帳號或密碼錯誤' };
+    }
     if (code === 'auth/invalid-email') {
       return { ok: false, error: 'Email 格式不正確' };
     }

@@ -1187,6 +1187,9 @@ export async function voteRekindle(params: {
           nightDate: nextNightDate(),
           seeds: { [uid]: params.mySeed, [otherId]: params.otherSeed },
           conversationId: null,
+          // Proof of mutuality: the rules getAfter() this conversation's
+          // rekindleVotes, so a forged rekindle can't be planted on someone.
+          srcConversationId: params.conversationId,
           status: 'pending',
           createdAt: serverTimestamp(),
         });
@@ -1277,6 +1280,9 @@ export async function voteBond(params: {
     await addDoc(collection(db, 'bonds'), {
       users: [userAId, userBId],
       seeds: { [uid]: params.mySeed, [otherId]: params.otherSeed },
+      // Proof of mutuality: rules check this conversation's bondVotes, so a
+      // permanent bond can't be forged onto someone who never agreed.
+      srcConversationId: params.conversationId,
       createdAt: serverTimestamp(),
     });
     return 'confirmed';

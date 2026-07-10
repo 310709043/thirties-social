@@ -24,12 +24,18 @@ export const RITUAL_PROMPTS: RitualPrompt[] = [
 ];
 
 /** Days since epoch in local time — rotates the prompt once per local night. */
-function localDayNumber(now: Date = new Date()): number {
-  const local = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+/** Nights since epoch, on the SAME 05:00 boundary as getCurrentNightSession —
+ *  a night session runs 21:00→05:00, so rotating on the plain calendar date
+ *  swapped the prompt at midnight, mid-session: after 00:00 the Loft showed a
+ *  new question above answers that were written to the old one. */
+function nightNumber(now: Date = new Date()): number {
+  const shifted = new Date(now.getTime() - 5 * 3600 * 1000);
+  const local = new Date(shifted.getFullYear(), shifted.getMonth(), shifted.getDate());
   return Math.floor(local.getTime() / 86400000);
 }
 
-/** Tonight's ritual prompt — deterministic, so the whole Loft sees the same one. */
+/** Tonight's ritual prompt — deterministic, so the whole Loft sees the same one
+ *  for the entire 21:00–05:00 window. */
 export function getTonightRitual(now: Date = new Date()): RitualPrompt {
-  return RITUAL_PROMPTS[localDayNumber(now) % RITUAL_PROMPTS.length];
+  return RITUAL_PROMPTS[nightNumber(now) % RITUAL_PROMPTS.length];
 }

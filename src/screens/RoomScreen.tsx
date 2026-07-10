@@ -287,9 +287,14 @@ export default function RoomScreen({ navigation, route }: Props) {
             {lang === 'en' ? 'Room' : '火盆'}
           </Text>
           <Text style={[styles.roomName, { color: p.ink }]}>
-            {room?.customTopicZh || room?.customTopicEn || t(roomKey as any, lang)}
+            {room?.customTopicZh || room?.customTopicEn
+              // t() falls back to the raw key for unknown keys, so 'custom'/'new'
+              // flashed as the literal title while the room loaded.
+              || (roomKey && !['new', 'custom'].includes(roomKey)
+                  ? t(roomKey as any, lang)
+                  : (lang === 'en' ? 'a quiet brazier' : '一個火盆'))}
           </Text>
-          {room?.customTopicZh || room?.customTopicEn ? null : (
+          {room?.customTopicZh || room?.customTopicEn || ['new', 'custom'].includes(roomKey) ? null : (
             <Text style={[styles.roomNameAlt, { color: p.muted }]}>{tAlt(roomKey as any, lang)}</Text>
           )}
 

@@ -161,9 +161,17 @@ service cloud.firestore {
       allow read:   if request.auth != null
                     && (resource.data.userAId == request.auth.uid
                         || resource.data.userBId == request.auth.uid);
+      // Same mutuality proof as bonds: a rekindle puts a "someone is waiting
+      // for you" banner on the other person's home screen. It is created in
+      // the SAME transaction as the confirming vote, so getAfter() sees both
+      // votes. Legacy shape (no srcConversationId) stays allowed until v16 is
+      // out — tighten afterwards.
       allow create: if request.auth != null
                     && (request.resource.data.userAId == request.auth.uid
-                        || request.resource.data.userBId == request.auth.uid);
+                        || request.resource.data.userBId == request.auth.uid)
+                    && (!('srcConversationId' in request.resource.data)
+                        || (getAfter(/databases/$(database)/documents/conversations/$(request.resource.data.srcConversationId)).data.rekindleVotes[request.resource.data.userAId] == true
+                            && getAfter(/databases/$(database)/documents/conversations/$(request.resource.data.srcConversationId)).data.rekindleVotes[request.resource.data.userBId] == true));
       // Only opening the reunion may be written (conversationId + status).
       allow update: if request.auth != null
                     && (resource.data.userAId == request.auth.uid
@@ -178,7 +186,15 @@ service cloud.firestore {
     // ── 熟人 Bonds（留下彼此）────────────────────────────
     match /bonds/{bondId} {
       allow read:   if request.auth != null && request.auth.uid in resource.data.users;
-      allow create: if request.auth != null && request.auth.uid in request.resource.data.users;
+      // A bond is permanent and shows on the other person's profile, so it must
+      // be provably mutual: docs carrying srcConversationId are validated
+      // against that conversation's bondVotes (both agreed). Docs WITHOUT the
+      // field keep the legacy participant-only check so v15-and-earlier builds
+      // don't break mid-test — tighten to validated-only once v16 is rolled out.
+      allow create: if request.auth != null && request.auth.uid in request.resource.data.users
+                    && (!('srcConversationId' in request.resource.data)
+                        || (get(/databases/$(database)/documents/conversations/$(request.resource.data.srcConversationId)).data.bondVotes[request.resource.data.users[0]] == true
+                            && get(/databases/$(database)/documents/conversations/$(request.resource.data.srcConversationId)).data.bondVotes[request.resource.data.users[1]] == true));
       allow update: if false;
       allow delete: if request.auth != null && request.auth.uid in resource.data.users;
     }
@@ -223,12 +239,17 @@ service cloud.firestore {
       allow read:   if request.auth != null
                     && (resource.data.toId == request.auth.uid
                         || resource.data.fromId == request.auth.uid);
+      // The echo must come out of a conversation the sender and recipient
+      // actually shared — without this check any client could push an echo
+      // onto ANY user's home screen (a harassment vector in an anonymous app).
       allow create: if request.auth != null
                     && request.resource.data.fromId == request.auth.uid
                     && request.resource.data.content is string
                     && request.resource.data.content.size() <= 200
                     && request.resource.data.read == false
-                    && notBanned();
+                    && notBanned()
+                    && (get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)).data.userAId in [request.resource.data.fromId, request.resource.data.toId])
+                    && (get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)).data.userBId in [request.resource.data.fromId, request.resource.data.toId]);
       allow update: if request.auth != null
                     && resource.data.toId == request.auth.uid
                     && request.resource.data.diff(resource.data).affectedKeys()
@@ -253,10 +274,13 @@ service cloud.firestore {
     // ── Loft Ritual Responses (今夜之題) ─────────────────
     match /loftRitualResponses/{responseId} {
       allow read:   if request.auth != null;
+      // notBanned: the ritual answer broadcasts to everyone in the Loft — the
+      // one place a banned user could still reach an audience without it.
       allow create: if request.auth != null
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.content is string
-                    && request.resource.data.content.size() <= 280;
+                    && request.resource.data.content.size() <= 280
+                    && notBanned();
       allow update: if false;
       allow delete: if request.auth != null
                     && resource.data.userId == request.auth.uid;
@@ -270,11 +294,19 @@ service cloud.firestore {
       allow create: if request.auth != null
                     && request.resource.data.userAId == request.auth.uid;
       // Only allow updating fields that legitimately change during a chat session.
+      // veils tracks PAID veil-lift progress per viewer — each participant may
+      // only touch their own key, or the other side could lower (or free-up)
+      // progress that was bought with wicks.
       allow update: if request.auth != null
                     && (resource.data.userAId == request.auth.uid
                         || resource.data.userBId == request.auth.uid)
                     && request.resource.data.diff(resource.data).affectedKeys()
-                       .hasOnly(['messageCount', 'endedAt', 'endedReason', 'veils']);
+                       .hasOnly(['messageCount', 'endedAt', 'endedReason', 'veils'])
+                    && (!request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['veils'])
+                        || request.resource.data.get('veils', {})
+                             .diff(resource.data.get('veils', {})).affectedKeys()
+                             .hasOnly([request.auth.uid]));
       allow delete: if request.auth != null
                     && (resource.data.userAId == request.auth.uid
                         || resource.data.userBId == request.auth.uid);
@@ -323,6 +355,20 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if request.auth != null
                     && resource.data.senderId == request.auth.uid;
+    }
+
+    // ── Analytics ───────────────────────────────────────
+    // Write-only event log. This section was MISSING entirely, so every client
+    // trackEvent() has been silently permission-denied since launch — the
+    // product was flying blind. Create-only: nobody reads analytics from the
+    // client (the dashboard uses the Admin SDK).
+    match /analytics/{eventId} {
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.event is string
+                    && request.resource.data.event.size() <= 40
+                    && request.resource.data.params is map;
+      allow read, update, delete: if false;
     }
 
     // ── Admin collections ───────────────────────────────
