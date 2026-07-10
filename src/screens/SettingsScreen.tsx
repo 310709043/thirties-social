@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Linking,
 } from 'react-native';
@@ -11,7 +11,7 @@ import { VaporBackground, GlassCard, Cap, Toggle, Logo, FadeInUp, ScreenHeader }
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setLang, setAutoFilter, setSlowMode } from '../hooks/useAppStore';
-import { deleteAccount } from '../lib/db';
+import { deleteAccount, getUser, getCurrentUid, unblockUser } from '../lib/db';
 import { logout, isGuest } from '../lib/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -22,6 +22,30 @@ export default function SettingsScreen({ navigation }: Props) {
   const unlimitedChats = vigil || gender === 'female';
   const p = DIRECTIONS[direction];
   const guest = isGuest();
+
+  // Blocked list — blocking existed but there was NO way to see or undo it.
+  const [blocked, setBlocked] = useState<string[]>([]);
+  const [showBlocked, setShowBlocked] = useState(false);
+  useEffect(() => {
+    const uid = getCurrentUid();
+    if (!uid) return;
+    getUser(uid).then(u => { if (u) setBlocked(u.blockedUsers ?? []); });
+  }, []);
+  const handleUnblock = (targetId: string) => {
+    Alert.alert(
+      lang === 'en' ? 'Unblock this person?' : '解除封鎖？',
+      lang === 'en'
+        ? 'They may appear in the Loft and matching again.'
+        : '之後他們可能再次出現在夜閣與配對裡。',
+      [
+        { text: lang === 'en' ? 'Keep blocked' : '維持封鎖', style: 'cancel' },
+        { text: lang === 'en' ? 'Unblock' : '解除', style: 'destructive', onPress: async () => {
+          setBlocked(b => b.filter(id => id !== targetId));
+          await unblockUser(targetId);
+        }},
+      ],
+    );
+  };
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
@@ -90,6 +114,43 @@ export default function SettingsScreen({ navigation }: Props) {
                   sub={t('setCycleSub', lang)}
                   control={<Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: p.muted }}>03:00</Text>}
                 />
+                <RowDivider p={p} />
+                <SettingRow p={p}
+                  title={lang === 'en' ? 'Blocked' : '封鎖名單'}
+                  alt={lang === 'en' ? '封鎖名單' : 'Blocked'}
+                  sub={blocked.length === 0
+                    ? (lang === 'en' ? 'No one is blocked.' : '目前沒有封鎖任何人。')
+                    : (lang === 'en'
+                        ? `${blocked.length} blocked · they can't reach you anywhere`
+                        : `已封鎖 ${blocked.length} 人 · 對方在任何地方都找不到你`)}
+                  control={blocked.length > 0 ? (
+                    <TouchableOpacity onPress={() => setShowBlocked(s => !s)}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>
+                        {showBlocked ? (lang === 'en' ? 'hide' : '收起') : (lang === 'en' ? 'manage' : '管理')}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : undefined}
+                />
+                {showBlocked && blocked.map(id => (
+                  <View key={id}>
+                    <RowDivider p={p} />
+                    <View style={{ padding: 14, paddingLeft: 18, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Identity kind="sigil" seed={id} size={28} palette={p} lang={lang} trust={0.1} />
+                      <View style={{ flex: 1 }}>
+                        <ColorAdjLabel seed={id} lang={lang} palette={p} />
+                        <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 10.5, color: p.muted, marginTop: 1 }}>
+                          {lang === 'en' ? 'anonymous · blocked' : '匿名 · 已封鎖'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={() => handleUnblock(id)}
+                        style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 0.5, borderColor: p.line }}>
+                        <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.muted }}>
+                          {lang === 'en' ? 'unblock' : '解除'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
               </GlassCard>
             </View>
           </FadeInUp>

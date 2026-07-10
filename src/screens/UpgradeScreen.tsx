@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated, Easing, Alert,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated, Easing, Alert, Linking, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -187,11 +187,26 @@ export default function UpgradeScreen({ navigation }: Props) {
                 {t('tierVigilBlurb', lang)}
               </Text>
               {vigil ? (
-                <View style={[styles.vigilActive, { backgroundColor: p.accentSoft, borderColor: p.accent + '40' }]}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.accent }}>
-                    {lang === 'en' ? '✓ Active' : '✓ 已訂閱'}
-                  </Text>
-                </View>
+                <>
+                  <View style={[styles.vigilActive, { backgroundColor: p.accentSoft, borderColor: p.accent + '40' }]}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.accent }}>
+                      {lang === 'en' ? '✓ Active' : '✓ 已訂閱'}
+                    </Text>
+                  </View>
+                  {/* Manage/cancel lives in the store — a subscription with no
+                      visible way out reads as a trap (and violates Play policy). */}
+                  <TouchableOpacity
+                    onPress={() => Linking.openURL(
+                      Platform.OS === 'android'
+                        ? `https://play.google.com/store/account/subscriptions?sku=${IAP_PRODUCT_IDS.vigil}&package=com.thirties.social`
+                        : 'https://apps.apple.com/account/subscriptions',
+                    ).catch(() => {})}
+                    style={{ alignItems: 'center', paddingTop: 12 }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted }}>
+                      {lang === 'en' ? 'Manage or cancel subscription →' : '管理／取消訂閱 →'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
               ) : (
                 <TouchableOpacity onPress={handleVigil}
                   style={[styles.vigilBtn, { backgroundColor: p.ink }]}>
