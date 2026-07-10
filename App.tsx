@@ -37,7 +37,7 @@ export default function App() {
   const [authUser, setAuthUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     'NotoSerifTC-Light':
       require('@expo-google-fonts/noto-serif-tc/300Light/NotoSerifTC_300Light.ttf'),
     'NotoSerifTC-Regular':
@@ -95,13 +95,19 @@ export default function App() {
     };
   }, []);
 
+  // Treat a font-load ERROR the same as "loaded": if a .ttf ever fails to
+  // decode on a device, we must NOT hang forever on a blank screen — better to
+  // render with system-font fallbacks than to brick the app. (Previously the
+  // error slot was ignored, so a font failure = permanent blank.)
+  const fontsReady = fontsLoaded || !!fontError;
+
   useEffect(() => {
-    if (fontsLoaded && storeReady) {
+    if (fontsReady && storeReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, storeReady]);
+  }, [fontsReady, storeReady]);
 
-  if (!fontsLoaded || !storeReady) return null;
+  if (!fontsReady || !storeReady) return null;
 
   if (showLoading) {
     return (
