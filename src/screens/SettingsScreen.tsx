@@ -175,15 +175,25 @@ export default function SettingsScreen({ navigation }: Props) {
                 />
                 <RowDivider p={p} />
                 <SettingRow p={p}
-                  title={t('setLeave', lang)}
-                  alt={tAlt('setLeave', lang)}
-                  sub={lang === 'en'
-                    ? 'Your account and all data are permanently erased. Chats already vanish on their own when they end.'
-                    : '帳號與所有資料將被永久刪除。對話本來就會在結束後自行消散。'}
+                  // A guest has no "account" to delete — for them this is
+                  // "clear everything and start over", worded honestly.
+                  title={guest
+                    ? (lang === 'en' ? 'Clear guest data' : '清除訪客資料')
+                    : t('setLeave', lang)}
+                  alt={guest ? (lang === 'en' ? '清除訪客資料' : 'Clear guest data') : tAlt('setLeave', lang)}
+                  sub={guest
+                    ? (lang === 'en'
+                        ? 'Wipes this guest session — wicks, subscription and history are gone for good. (Chats already vanish on their own.)'
+                        : '清除這個訪客身分——燭芯、訂閱與歷史都會永久消失。（對話本來就會自行消散。）')
+                    : (lang === 'en'
+                        ? 'Your account and all data are permanently erased. Chats already vanish on their own when they end.'
+                        : '帳號與所有資料將被永久刪除。對話本來就會在結束後自行消散。')}
                   danger
                   control={
                     <TouchableOpacity onPress={() => Alert.alert(
-                      lang === 'en' ? 'Delete Account' : '刪除帳號',
+                      guest
+                        ? (lang === 'en' ? 'Clear guest data' : '清除訪客資料')
+                        : (lang === 'en' ? 'Delete Account' : '刪除帳號'),
                       lang === 'en'
                         ? 'This action cannot be undone. All your data will be permanently erased.'
                         : '此操作無法撤銷。您的所有資料將被永久刪除。',
