@@ -594,6 +594,10 @@ export interface DbLiveConversation {
   otherSeed: string;
   messageCount: number;
   expiresAt: any;
+  /** True when I opened this conversation (userA). A silent conversation I did
+   *  NOT open is an unanswered invitation — the banner words it as one, which
+   *  is what gives the invited person a real choice to step in or not. */
+  iInitiated: boolean;
 }
 
 /**
@@ -625,6 +629,7 @@ export async function fetchMyLiveConversations(): Promise<DbLiveConversation[]> 
         otherSeed: c.seeds?.[otherId] ?? otherId,
         messageCount: c.messageCount ?? 0,
         expiresAt: c.expiresAt,
+        iInitiated: c.userAId === uid,
       });
     }
     // Soonest to dissolve first — those need answering now.

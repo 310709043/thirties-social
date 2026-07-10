@@ -131,8 +131,15 @@ export default function LoftScreen({ navigation }: Props) {
     // Already entered TONIGHT? Re-entry is always allowed — backing out of the
     // Loft must never cost a second entry or slam an upgrade wall the same night.
     const reEntry = (await AsyncStorage.getItem('loftNightEntered')) === localNightDate();
+    // BEING CHOSEN is never paywalled: if someone opened a live whisper with
+    // me tonight, I can walk in to answer it even with this week's free entry
+    // spent — otherwise the opener whispers into a void while the person they
+    // picked stands outside an upgrade wall. Doesn't consume the weekly entry.
+    const invited = !reEntry && !canEnterLoft()
+      ? (await fetchMyTonightLoftWhispers()).length > 0
+      : false;
     // Free user who has spent this week's free entry → upgrade prompt.
-    if (!reEntry && !canEnterLoft()) {
+    if (!reEntry && !invited && !canEnterLoft()) {
       hapticWarning();
       Alert.alert(
         lang === 'en' ? 'Free entry used' : '本週免費體驗已用過',

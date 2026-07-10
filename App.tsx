@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { initStore, useAppStore, getState } from './src/hooks/useAppStore';
@@ -168,9 +168,15 @@ function AppGate({ authUser, authChecked }: { authUser: any; authChecked: boolea
               ? (store.lang === 'en' ? `Suspension lifts: ${expiryDate}` : `預計解除：${expiryDate}`)
               : (store.lang === 'en' ? 'This suspension is permanent.' : '此封禁為永久性')}
           </Text>
-          <Text style={[bs.support, { color: 'rgba(245,226,196,0.3)' }]}>
-            {store.lang === 'en' ? 'Questions? Contact support.' : '如有疑問請聯繫客服申訴。'}
-          </Text>
+          {/* An appeal path that actually goes somewhere — "contact support"
+              with no contact was a dead end. */}
+          <TouchableOpacity onPress={() => Linking.openURL(
+            'mailto:focustown1314@gmail.com?subject=' + encodeURIComponent('燭影私語 帳號申訴'),
+          ).catch(() => {})}>
+            <Text style={[bs.support, { color: 'rgba(245,226,196,0.5)', textDecorationLine: 'underline' }]}>
+              {store.lang === 'en' ? 'Appeal — contact support' : '申訴 — 聯繫客服'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     );

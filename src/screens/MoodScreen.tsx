@@ -196,6 +196,21 @@ export default function MoodScreen({ navigation }: Props) {
   };
 
   const handleOpenRekindle = async (rek: DbRekindle) => {
+    // A reunion is an EVENING appointment (both agreed to "tomorrow night").
+    // The banner shows all day as anticipation, but opening it at 14:00 burns
+    // the 30-minute room while the other person is almost certainly away —
+    // one tap would quietly kill the date. Same 21:00–05:00 window as a night.
+    const h = new Date().getHours();
+    if (h >= 5 && h < 21) {
+      Alert.alert(
+        lang === 'en' ? 'Tonight, not yet' : '約的是今晚',
+        lang === 'en'
+          ? 'Your reunion begins at 21:00 — the room only burns 30 minutes, so wait for the night.'
+          : '重逢在今晚 21:00 開始。房間只燒 30 分鐘，等天黑再赴約吧。',
+        [{ text: lang === 'en' ? 'I\'ll wait' : '好，我等', style: 'default' }],
+      );
+      return;
+    }
     const opened = await openRekindle(rek);
     if (opened) {
       setRekindles(rs => rs.filter(r => r.id !== rek.id));
@@ -461,6 +476,10 @@ export default function MoodScreen({ navigation }: Props) {
           {liveConvs.slice(0, 2).map(conv => {
             const minsLeft = Math.max(1, Math.ceil(((conv.expiresAt?.toMillis?.() ?? 0) - Date.now()) / 60000));
             const label = getColorAdj(conv.otherSeed, lang).label;
+            // A silent window someone ELSE opened is an invitation, not "my"
+            // conversation — word it as one, so stepping in (or letting it
+            // fade) is a real choice. This is where the invite's consent lives.
+            const isInvite = !conv.iInitiated && conv.messageCount === 0;
             return (
               <TouchableOpacity key={conv.id} activeOpacity={0.85}
                 onPress={() => navigation.push('Chat', { otherSeed: conv.otherSeed, conversationId: conv.id, matchCharge: false })}
@@ -468,16 +487,24 @@ export default function MoodScreen({ navigation }: Props) {
                 <BreathDot p={p} size={6} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
-                    {lang === 'en' ? 'A conversation is still burning' : '有一段對話還亮著'}
+                    {isInvite
+                      ? (lang === 'en' ? 'Someone opened a window for you' : '有人為你開了一扇窗')
+                      : (lang === 'en' ? 'A conversation is still burning' : '有一段對話還亮著')}
                   </Text>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.muted, marginTop: 2 }}>
-                    {lang === 'en'
-                      ? `with "${label}" · fades in ${minsLeft}m`
-                      : `和「${label}」· ${minsLeft} 分鐘後消散`}
+                    {isInvite
+                      ? (lang === 'en'
+                          ? `"${label}" is waiting · closes in ${minsLeft}m · ignoring it is fine`
+                          : `「${label}」在等 · ${minsLeft} 分鐘後自動關上 · 不理會也沒關係`)
+                      : (lang === 'en'
+                          ? `with "${label}" · fades in ${minsLeft}m`
+                          : `和「${label}」· ${minsLeft} 分鐘後消散`)}
                   </Text>
                 </View>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>
-                  {lang === 'en' ? 'return →' : '回去 →'}
+                  {isInvite
+                    ? (lang === 'en' ? 'look →' : '看看 →')
+                    : (lang === 'en' ? 'return →' : '回去 →')}
                 </Text>
               </TouchableOpacity>
             );
