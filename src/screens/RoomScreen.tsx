@@ -34,7 +34,10 @@ export default function RoomScreen({ navigation, route }: Props) {
   const [identitySeed, setIdentitySeed] = useState(seed);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [room, setRoom] = useState<DbRoom | null>(null);
-  const [messages, setMessages] = useState<DbRoomMessage[]>([]);
+  const [liveMessages, setLiveMessages] = useState<DbRoomMessage[]>([]);
+  // Pages loaded via "scroll up for older" live apart from the subscription —
+  // each live snapshot REPLACES liveMessages, and older pages must survive that.
+  const [olderMessages, setOlderMessages] = useState<DbRoomMessage[]>([]);
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -94,7 +97,7 @@ export default function RoomScreen({ navigation, route }: Props) {
     if (older.length === 0) {
       setHasMore(false);
     } else {
-      setMessages(prev => [...older, ...prev]);
+      setOlderMessages(prev => [...older, ...prev]);
     }
     setLoadingOlder(false);
   };
@@ -140,8 +143,17 @@ export default function RoomScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (!roomId) return;
-    return subscribeToRoomMessages(roomId, setMessages);
+    setOlderMessages([]);
+    return subscribeToRoomMessages(roomId, setLiveMessages);
   }, [roomId]);
+
+  // What the feed renders: older pages + the live window, deduped by id (the
+  // live window shifts as new messages arrive and can overlap a loaded page).
+  const messages = React.useMemo(() => {
+    const seen = new Set<string>();
+    return [...olderMessages, ...liveMessages].filter(m =>
+      seen.has(m.id) ? false : (seen.add(m.id), true));
+  }, [olderMessages, liveMessages]);
 
   // Join presence on entry (unless the room is already full), heartbeat while
   // here, and clear our slot on leave.

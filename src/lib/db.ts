@@ -3,7 +3,7 @@
 // ============================================================
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
-  collection, query, where, orderBy, limit,
+  collection, query, where, orderBy, limit, limitToLast, startAfter,
   onSnapshot, runTransaction, serverTimestamp,
   Timestamp, getDocs, increment, arrayUnion, arrayRemove,
   getCountFromServer,
@@ -424,30 +424,32 @@ export async function fetchOlderRoomMessages(
   roomId: string,
   beforeTimestamp: any,
 ): Promise<DbRoomMessage[]> {
+  // Real cursor pagination. The old version re-fetched the same newest 30 and
+  // filtered client-side — since those 30 were already on screen, the filter
+  // always produced an empty page and "load older" could never load anything.
   const q = query(
     collection(db, 'rooms', roomId, 'messages'),
     orderBy('createdAt', 'desc'),
+    startAfter(beforeTimestamp),
     limit(30),
   );
   const snap = await getDocs(q);
-  const older = snap.docs
+  return snap.docs
     .map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage)
-    .filter(m => {
-      const t = m.createdAt?.toDate?.()?.getTime?.();
-      const before = beforeTimestamp?.toDate?.()?.getTime?.();
-      return t && before && t < before;
-    });
-  return older.reverse();
+    .reverse();
 }
 
 export function subscribeToRoomMessages(
   roomId: string,
   onMessage: (msgs: DbRoomMessage[]) => void,
 ): () => void {
+  // limitToLast: the NEWEST 100 in ascending order. A plain asc+limit pinned
+  // the window to the room's oldest 100 messages — once a brazier crossed 100,
+  // fresh messages never appeared for anyone.
   const q = query(
     collection(db, 'rooms', roomId, 'messages'),
     orderBy('createdAt', 'asc'),
-    limit(100),
+    limitToLast(100),
   );
   return onSnapshot(q, snap => {
     onMessage(snap.docs.map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage));
@@ -917,10 +919,11 @@ export function subscribeToLoftMessages(
   loftConversationId: string,
   onUpdate: (msgs: DbLoftMessage[]) => void,
 ): () => void {
+  // limitToLast: window pins to the newest messages (see subscribeToRoomMessages).
   const q = query(
     collection(db, 'loftConversations', loftConversationId, 'messages'),
     orderBy('createdAt', 'asc'),
-    limit(200),
+    limitToLast(200),
   );
   return onSnapshot(q, snap => {
     onUpdate(snap.docs.map(d => ({
@@ -1780,10 +1783,11 @@ export function subscribeToConversationMessages(
   conversationId: string,
   onUpdate: (msgs: DbConvMessage[]) => void,
 ) {
+  // limitToLast: window pins to the newest messages (see subscribeToRoomMessages).
   const q = query(
     collection(db, 'conversations', conversationId, 'messages'),
     orderBy('createdAt', 'asc'),
-    limit(200),
+    limitToLast(200),
   );
   return onSnapshot(q, snap => {
     onUpdate(snap.docs.map(d => ({
