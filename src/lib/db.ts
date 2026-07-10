@@ -541,13 +541,17 @@ export function subscribeToRoomPresence(
 }
 
 // ── Typing Indicator ─────────────────────────────────────
+// Lives in a typing/{uid} SUBDOC, not on the conversation doc. The old
+// typing_{uid} fields never passed the conversation-update rules' hasOnly
+// whitelist — every typing write was permission-denied and silently swallowed,
+// so the indicator simply never worked. As a subdoc it also stops every
+// keystroke from re-triggering both sides' conversation-doc subscriptions.
 export function setTyping(conversationId: string, isTyping: boolean): Promise<void> {
   const uid = getCurrentUid();
   if (!uid) return Promise.resolve();
-  const field = `typing_${uid}`;
-  return updateDoc(doc(db, 'conversations', conversationId), {
-    [field]: isTyping,
-    [`${field}_at`]: serverTimestamp(),
+  return setDoc(doc(db, 'conversations', conversationId, 'typing', uid), {
+    isTyping,
+    at: serverTimestamp(),
   }).catch(() => {});
 }
 
@@ -556,12 +560,11 @@ export function subscribeToTyping(
   otherUserId: string,
   onTyping: (isTyping: boolean) => void,
 ): () => void {
-  const field = `typing_${otherUserId}`;
-  return onSnapshot(doc(db, 'conversations', conversationId), snap => {
+  return onSnapshot(doc(db, 'conversations', conversationId, 'typing', otherUserId), snap => {
     if (!snap.exists()) { onTyping(false); return; }
     const data = snap.data();
-    const isTyping = data[field] === true;
-    const typedAt = data[`${field}_at`]?.toDate?.();
+    const isTyping = data.isTyping === true;
+    const typedAt = data.at?.toDate?.();
     // Auto-expire after 5 seconds
     if (isTyping && typedAt) {
       const elapsed = Date.now() - typedAt.getTime();
@@ -569,6 +572,64 @@ export function subscribeToTyping(
     }
     onTyping(isTyping);
   });
+}
+
+// ── Conversation seeds（讓「回到對話」能顯示對方的身份）────
+/** Stamp my display seed onto the conversation so the OTHER side can render my
+ *  sigil/name outside the chat (home-screen "still burning" banner, push deep
+ *  links). Each participant may only write their own key (enforced by rules). */
+export async function stampConversationSeed(conversationId: string, seed: string): Promise<void> {
+  const uid = getCurrentUid();
+  if (!uid) return;
+  try {
+    await updateDoc(doc(db, 'conversations', conversationId), { [`seeds.${uid}`]: seed });
+  } catch { /* older conversations may predate the rules change */ }
+}
+
+/** A 1:1 conversation of mine that is still burning, shaped for the home banner. */
+export interface DbLiveConversation {
+  id: string;
+  otherId: string;
+  /** The other person's stamped seed, or their uid as a stable fallback. */
+  otherSeed: string;
+  messageCount: number;
+  expiresAt: any;
+}
+
+/**
+ * My still-live 1:1 conversations (not ended, not expired), both directions.
+ * This is the road BACK into a conversation after leaving the app — without
+ * it, a push notification was the only way back, and a tap that landed on
+ * home was a dead end for the core loop.
+ */
+export async function fetchMyLiveConversations(): Promise<DbLiveConversation[]> {
+  const uid = getCurrentUid();
+  if (!uid) return [];
+  try {
+    const [a, b] = await Promise.all([
+      getDocs(query(collection(db, 'conversations'), where('userAId', '==', uid), limit(20))),
+      getDocs(query(collection(db, 'conversations'), where('userBId', '==', uid), limit(20))),
+    ]);
+    const seen = new Set<string>();
+    const out: DbLiveConversation[] = [];
+    for (const d of [...a.docs, ...b.docs]) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      const c = d.data() as any;
+      if (c.endedAt) continue;
+      if ((c.expiresAt?.toMillis?.() ?? 0) <= Date.now()) continue;
+      const otherId = c.userAId === uid ? c.userBId : c.userAId;
+      out.push({
+        id: d.id,
+        otherId,
+        otherSeed: c.seeds?.[otherId] ?? otherId,
+        messageCount: c.messageCount ?? 0,
+        expiresAt: c.expiresAt,
+      });
+    }
+    // Soonest to dissolve first — those need answering now.
+    return out.sort((x, y) => (x.expiresAt?.toMillis?.() ?? 0) - (y.expiresAt?.toMillis?.() ?? 0));
+  } catch { return []; }
 }
 
 // ── Loft ─────────────────────────────────────────────────

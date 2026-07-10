@@ -60,9 +60,13 @@ service cloud.firestore {
                       && request.resource.data.content is string
                       && request.resource.data.content.size() <= 280
                       && notBanned();
-        // Only resonance reaction counts may be updated (by anyone).
+        // Only resonance reaction counts may be updated (by anyone). Rules
+        // can't verify per-key ±1 increments, so exact counts stay client-
+        // driven (accepted: visual only); at least require a map so the field
+        // can't be replaced with junk.
         allow update: if request.auth != null
-                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+                      && request.resource.data.reactions is map;
         allow delete: if false;
 
         // One resonance reaction per user, keyed by uid.
@@ -99,11 +103,18 @@ service cloud.firestore {
                     && request.resource.data.diff(resource.data).affectedKeys()
                        .hasOnly(['messageCount', 'endedAt', 'endedReason',
                                  'extendVotes', 'expiresAt', 'extended',
-                                 'rekindleVotes', 'bondVotes'])
+                                 'rekindleVotes', 'bondVotes', 'seeds'])
                     && (!request.resource.data.diff(resource.data).affectedKeys()
                           .hasAny(['expiresAt', 'extended'])
                         || (resource.data.get('extended', false) == false
-                            && request.resource.data.get('extended', false) == true));
+                            && request.resource.data.get('extended', false) == true))
+                    // seeds: each participant may only stamp their OWN display
+                    // seed — never rewrite the other person's.
+                    && (!request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['seeds'])
+                        || request.resource.data.get('seeds', {})
+                             .diff(resource.data.get('seeds', {})).affectedKeys()
+                             .hasOnly([request.auth.uid]));
       allow delete: if request.auth != null
                     && (resource.data.userAId == request.auth.uid
                         || resource.data.userBId == request.auth.uid);
@@ -121,6 +132,19 @@ service cloud.firestore {
         allow delete: if request.auth != null
                       && (get(/databases/$(database)/documents/conversations/$(convId)).data.userAId == request.auth.uid
                           || get(/databases/$(database)/documents/conversations/$(convId)).data.userBId == request.auth.uid);
+      }
+
+      // Typing indicator — one doc per participant. Kept OFF the conversation
+      // doc so keystrokes don't churn both sides' main subscription (and the
+      // old typing_{uid} fields never passed the update whitelist anyway).
+      match /typing/{typingUid} {
+        allow read:  if request.auth != null
+                     && (get(/databases/$(database)/documents/conversations/$(convId)).data.userAId == request.auth.uid
+                         || get(/databases/$(database)/documents/conversations/$(convId)).data.userBId == request.auth.uid);
+        allow write: if request.auth != null
+                     && request.auth.uid == typingUid
+                     && (get(/databases/$(database)/documents/conversations/$(convId)).data.userAId == request.auth.uid
+                         || get(/databases/$(database)/documents/conversations/$(convId)).data.userBId == request.auth.uid);
       }
     }
 

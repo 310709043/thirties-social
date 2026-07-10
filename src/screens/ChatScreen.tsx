@@ -13,7 +13,7 @@ import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch } from '../hooks/useAppStore';
-import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationDoc, voteExtendConversation, voteRekindle, voteBond } from '../lib/db';
+import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationDoc, voteExtendConversation, voteRekindle, voteBond, stampConversationSeed } from '../lib/db';
 import { scheduleRekindleReminder } from '../lib/notifications';
 import { filterMessage } from '../lib/filter';
 import { analytics } from '../lib/analytics';
@@ -38,24 +38,6 @@ export default function ChatScreen({ navigation, route }: Props) {
   const conversationId = (route.params as any)?.conversationId as string | undefined;
   const matchCharge = (route.params as any)?.matchCharge as boolean | undefined;
   const chargedRef = useRef(false);
-
-  // Guard: navigate back if required params are missing
-  if (!otherSeed || !conversationId) {
-    return (
-      <VaporBackground p={p} style={{ flex: 1 }}>
-        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.muted }}>
-            {lang === 'en' ? 'Conversation not found' : '找不到對話'}
-          </Text>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
-            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.accent }}>
-              {lang === 'en' ? 'Go back' : '返回'}
-            </Text>
-          </TouchableOpacity>
-        </SafeAreaView>
-      </VaporBackground>
-    );
-  }
 
   ScreenCapture.usePreventScreenCapture();
 
@@ -99,6 +81,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (!conversationId) return;
     trackConversation(conversationId);
     analytics.conversationStart(conversationId);
+    // Stamp my display seed on the conversation so the other side's home
+    // banner / push deep link can show who is still burning here.
+    void stampConversationSeed(conversationId, seed);
     return subscribeToConversationMessages(conversationId, msgs => {
       msgCountRef.current = msgs.length;
       setRealMessages(msgs);
@@ -252,9 +237,36 @@ export default function ChatScreen({ navigation, route }: Props) {
     setBondBusy(false);
   };
 
+  // Always points at this render's sendMessage (fresh inputText for the
+  // slow-mode timer); assigned right after sendMessage is defined below.
+  const sendMessageRef = useRef<() => void>(() => {});
+
+  // Clear the slow-mode timer if the chat unmounts mid-pause.
+  useEffect(() => () => { if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current); }, []);
+
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
   const ss = String(remaining % 60).padStart(2, '0');
   const progress = Math.min(1, remaining / TOTAL_SECONDS);
+
+  // Guard AFTER every hook (a conditional early-return above them is a latent
+  // hooks-order violation): if the route somehow lacks its params, offer a
+  // clean exit instead of rendering a broken chat.
+  if (!otherSeed || !conversationId) {
+    return (
+      <VaporBackground p={p} style={{ flex: 1 }}>
+        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.muted }}>
+            {lang === 'en' ? 'Conversation not found' : '找不到對話'}
+          </Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
+            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.accent }}>
+              {lang === 'en' ? 'Go back' : '返回'}
+            </Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </VaporBackground>
+    );
+  }
 
   // Debounced typing indicator
   const handleInputChange = (text: string) => {
@@ -332,13 +344,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
-  // Always points at this render's sendMessage (fresh inputText for the
-  // slow-mode timer above).
-  const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
-
-  // Clear the slow-mode timer if the chat unmounts mid-pause.
-  useEffect(() => () => { if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current); }, []);
 
   const displayMessages = realMessages.map(msg => ({
     from: msg.senderId === getCurrentUid() ? 'me' : 'other',

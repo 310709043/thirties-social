@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { navigationRef } from '../lib/navigationRef';
+import { navigationRef, flushPendingNavigation } from '../lib/navigationRef';
 
 import AuthScreen from '../screens/AuthScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
@@ -43,7 +43,7 @@ interface NavigationProps {
 
 export default function Navigation({ initialRoute = 'Onboarding' }: NavigationProps) {
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} onReady={flushPendingNavigation}>
       <Stack.Navigator
         initialRouteName={initialRoute as any}
         screenOptions={{ headerShown: false, animation: 'fade' }}

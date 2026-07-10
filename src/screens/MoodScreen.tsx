@@ -17,7 +17,7 @@ import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, MATCH_WICK_COST } from '../hooks/useAppStore';
-import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchTonightRekindles, openRekindle, DbRekindle, sendNightLetter, hasSentTonightLetter, claimTonightLetter, replyToLetter, fetchMyLetterReplies, DbLetter, fetchArrivedEchoes, markEchoRead, DbEcho, createConversation } from '../lib/db';
+import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchTonightRekindles, openRekindle, DbRekindle, sendNightLetter, hasSentTonightLetter, claimTonightLetter, replyToLetter, fetchMyLetterReplies, DbLetter, fetchArrivedEchoes, markEchoRead, DbEcho, createConversation, fetchMyLiveConversations, DbLiveConversation } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
 import { analytics } from '../lib/analytics';
 import { addDiaryEntry } from '../lib/diary';
@@ -89,6 +89,11 @@ export default function MoodScreen({ navigation }: Props) {
   const activeRooms = rooms.filter(
     r => (r.messageCount ?? 0) > 0 || roomAgeMs(r) < ROOM_FRESH_MS,
   );
+  // The waiting-timeout dialog fires minutes after its effect ran — read the
+  // room list through a ref so "sit by a brazier" opens a room that still
+  // exists, not a snapshot from when the search began.
+  const activeRoomsRef = useRef(activeRooms);
+  activeRoomsRef.current = activeRooms;
 
   useEffect(() => { return subscribeToActiveRooms(setRooms); }, []);
 
@@ -96,14 +101,19 @@ export default function MoodScreen({ navigation }: Props) {
   // awake (honest number), and surface any reunion waiting for me tonight.
   const [awakeCount, setAwakeCount] = useState<number | null>(null);
   const [rekindles, setRekindles] = useState<DbRekindle[]>([]);
+  // Conversations of mine still burning — the road back in after leaving the
+  // app (a message push routes to this screen; without this banner it was a
+  // dead end).
+  const [liveConvs, setLiveConvs] = useState<DbLiveConversation[]>([]);
   useEffect(() => {
     void ensureOfficialRooms();
-    // Reunions ride the same beat: a rekindle that turns live at 21:00 must
-    // surface while the user is sitting on this screen, not only on remount.
+    // Reunions and live conversations ride the same beat: something that turns
+    // live at 21:00 must surface while the user sits on this screen.
     const beat = () => {
       void heartbeatAwake();
       fetchAwakeCount().then(setAwakeCount);
       fetchTonightRekindles().then(setRekindles);
+      fetchMyLiveConversations().then(setLiveConvs);
     };
     beat();
     const id = setInterval(beat, 5 * 60 * 1000);
@@ -230,7 +240,7 @@ export default function MoodScreen({ navigation }: Props) {
             onPress: () => {
               // Stay in the queue; another timeout round runs in the background.
               matchTimeoutRef.current = setTimeout(onTimeout, 180000);
-              const hottest = activeRooms[0];
+              const hottest = activeRoomsRef.current[0];
               if (hottest) navigation.push('Room', { roomKey: hottest.roomKey ?? 'custom', roomId: hottest.id });
               else navigation.push('Room', { roomKey: 'new' });
             },
@@ -442,6 +452,32 @@ export default function MoodScreen({ navigation }: Props) {
                 </View>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>
                   {lang === 'en' ? 'meet →' : '赴約 →'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          {/* Conversations still burning — the way back in after leaving the app. */}
+          {liveConvs.slice(0, 2).map(conv => {
+            const minsLeft = Math.max(1, Math.ceil(((conv.expiresAt?.toMillis?.() ?? 0) - Date.now()) / 60000));
+            const label = getColorAdj(conv.otherSeed, lang).label;
+            return (
+              <TouchableOpacity key={conv.id} activeOpacity={0.85}
+                onPress={() => navigation.push('Chat', { otherSeed: conv.otherSeed, conversationId: conv.id, matchCharge: false })}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.accent + '55' }}>
+                <BreathDot p={p} size={6} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
+                    {lang === 'en' ? 'A conversation is still burning' : '有一段對話還亮著'}
+                  </Text>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.muted, marginTop: 2 }}>
+                    {lang === 'en'
+                      ? `with "${label}" · fades in ${minsLeft}m`
+                      : `和「${label}」· ${minsLeft} 分鐘後消散`}
+                  </Text>
+                </View>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>
+                  {lang === 'en' ? 'return →' : '回去 →'}
                 </Text>
               </TouchableOpacity>
             );

@@ -4,7 +4,7 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { initStore, useAppStore, getState } from './src/hooks/useAppStore';
 import { initPurchases } from './src/lib/purchases';
-import { registerForPushNotifications, addNotificationListener, scheduleNightlyReminder } from './src/lib/notifications';
+import { registerForPushNotifications, addNotificationListener, scheduleNightlyReminder, getInitialNotificationResponse } from './src/lib/notifications';
 import { analytics } from './src/lib/analytics';
 import { navigationRef, resetAndNavigate } from './src/lib/navigationRef';
 import { RootStackParamList } from './src/navigation';
@@ -76,18 +76,24 @@ export default function App() {
       if (user) initPurchases(user.uid);
     });
 
-    // Handle notification taps
-    const removeListeners = addNotificationListener(
-      (notification) => {},
-      (response) => {
-        // A tap always signals intent to open the app somewhere. Use the
-        // explicit screen when present, otherwise fall back to home (Mood) —
-        // notifications used to carry only `type`, so taps did nothing at all.
-        const data = response.notification.request.content.data;
-        const screen = (data?.screen as keyof RootStackParamList) ?? 'Mood';
-        resetAndNavigate(screen, data ?? {});
-      },
-    );
+    // Handle notification taps. One route for both paths (foreground/background
+    // listener AND the cold-start pickup below), deduped by notification id so
+    // the cold-start check can't re-fire a tap the listener already handled.
+    const handledTaps = new Set<string>();
+    const routeTap = (response: { notification: { request: { identifier: string; content: { data?: any } } } }) => {
+      const id = response.notification.request.identifier;
+      if (handledTaps.has(id)) return;
+      handledTaps.add(id);
+      // A tap always signals intent to open the app somewhere. Use the
+      // explicit screen when present, otherwise fall back to home (Mood).
+      const data = response.notification.request.content.data;
+      const screen = (data?.screen as keyof RootStackParamList) ?? 'Mood';
+      resetAndNavigate(screen, data ?? {});
+    };
+    const removeListeners = addNotificationListener(() => {}, routeTap);
+    // Cold start: the tap that LAUNCHED the app often never reaches the
+    // listener (especially on Android) — pick it up explicitly.
+    getInitialNotificationResponse().then(r => { if (r) routeTap(r); }).catch(() => {});
 
     return () => {
       removeListeners();

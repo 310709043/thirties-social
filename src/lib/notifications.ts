@@ -154,6 +154,13 @@ export async function scheduleRekindleReminder(lang: 'zh' | 'en' = 'zh'): Promis
   }
 }
 
+/** The notification tap that launched the app (cold start), if any. On Android
+ *  a cold-start tap often never reaches the response listener — it has to be
+ *  picked up here once the app is up. */
+export function getInitialNotificationResponse(): Promise<Notifications.NotificationResponse | null> {
+  return Notifications.getLastNotificationResponseAsync();
+}
+
 export function addNotificationListener(
   onReceive: (notification: Notifications.Notification) => void,
   onInteract: (response: Notifications.NotificationResponse) => void,
