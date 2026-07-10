@@ -25,14 +25,49 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
 
+/**
+ * Self-ticking 03:00 countdown. Isolated in its own component so the 1-second
+ * tick re-renders THIS text only — as top-level state it re-rendered the whole
+ * home screen (rooms, banners, letters) sixty times a minute.
+ */
+function ResetCountdown({ color }: { color: string }) {
+  const [timeStr, setTimeStr] = useState('');
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      // Next 03:00 — today's if we're before it (e.g. 01:00), otherwise tomorrow's.
+      const reset = new Date(now);
+      reset.setHours(3, 0, 0, 0);
+      if (reset.getTime() <= now.getTime()) reset.setDate(reset.getDate() + 1);
+      const diff = (reset.getTime() - now.getTime()) / 1000;
+      const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+      const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+      const s = String(Math.floor(diff % 60)).padStart(2, '0');
+      setTimeStr(`${h}:${m}:${s}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <Text style={[styles.countdown, { color }]}>{timeStr}</Text>;
+}
+
+/** Self-animating "…" so the 600ms dot cycle doesn't re-render the screen. */
+function WaitingDots({ style, prefix }: { style: any; prefix: string }) {
+  const [dots, setDots] = useState('');
+  useEffect(() => {
+    const id = setInterval(() => setDots(d => (d.length >= 3 ? '' : d + '.')), 600);
+    return () => clearInterval(id);
+  }, []);
+  return <Text style={style}>{prefix}{dots}</Text>;
+}
+
 export default function MoodScreen({ navigation }: Props) {
   const { seed, direction, lang, identityKind, wicks, gender, ageBracket, userId } = useAppStore();
   const p = DIRECTIONS[direction];
   const [text, setText] = useState('');
-  const [timeStr, setTimeStr] = useState('');
   const [rooms, setRooms] = useState<DbRoom[]>([]);
   const [waiting, setWaiting] = useState(false);
-  const [waitingDots, setWaitingDots] = useState('');
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tonightMode, setTonightMode] = useState<TonightMode | null>(null);
   const [showModePicker, setShowModePicker] = useState(false);
@@ -174,32 +209,6 @@ export default function MoodScreen({ navigation }: Props) {
   }, []);
 
   useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      // Next 03:00 — today's if we're before it (e.g. 01:00), otherwise tomorrow's.
-      const reset = new Date(now);
-      reset.setHours(3, 0, 0, 0);
-      if (reset.getTime() <= now.getTime()) reset.setDate(reset.getDate() + 1);
-      const diff = (reset.getTime() - now.getTime()) / 1000;
-      const h = String(Math.floor(diff / 3600)).padStart(2, '0');
-      const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
-      const s = String(Math.floor(diff % 60)).padStart(2, '0');
-      setTimeStr(`${h}:${m}:${s}`);
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    if (!waiting) return;
-    const id = setInterval(() => {
-      setWaitingDots(d => d.length >= 3 ? '' : d + '.');
-    }, 600);
-    return () => clearInterval(id);
-  }, [waiting]);
-
-  useEffect(() => {
     if (!waiting) return;
     let matched = false;
 
@@ -293,8 +302,15 @@ export default function MoodScreen({ navigation }: Props) {
       );
       return;
     }
-    // Show the tonight-mode picker on first match attempt each session.
+    // Show the tonight-mode picker on first match attempt each session; picking
+    // a mode continues straight into matching (no second tap on the button).
     if (!tonightMode) { setShowModePicker(true); return; }
+    proceedToMatch(tonightMode);
+  };
+
+  // The quota check + confirm + queue-join, shared by the button (mode already
+  // chosen) and the mode picker (mode chosen just now).
+  const proceedToMatch = (mode: TonightMode) => {
     // Free user out of free matches and out of wicks.
     if (getTier() !== 'guest' && !canMatch()) {
       Alert.alert(
@@ -317,18 +333,20 @@ export default function MoodScreen({ navigation }: Props) {
         : (lang === 'en' ? 'You can cancel before a match is found.' : '配對成功前可以取消。'),
       [
         { text: lang === 'en' ? 'Cancel' : '取消', style: 'cancel' },
-        { text: lang === 'en' ? 'Start' : '開始', onPress: () => startMatching() },
+        { text: lang === 'en' ? 'Start' : '開始', onPress: () => startMatching(mode) },
       ],
     );
   };
 
-  const startMatching = async () => {
+  // Mode passed explicitly: when the picker triggers this, the tonightMode
+  // state update may not have landed yet.
+  const startMatching = async (mode: TonightMode) => {
     setWaiting(true);
     analytics.matchSearch(text.length);
     // Whatever they wrote tonight is kept for them — it becomes a diary entry
     // (local-only) they can reread on their profile page.
     if (text.trim()) void addDiaryEntry(text);
-    const joined = await joinMatchQueue({ moodText: text || undefined, seed, gender, ageBracket, tonightMode });
+    const joined = await joinMatchQueue({ moodText: text || undefined, seed, gender, ageBracket, tonightMode: mode });
     if (!joined) {
       setWaiting(false);
       Alert.alert(lang === 'en' ? 'Connection issue' : '連線問題', lang === 'en' ? 'Try again.' : '請再試一次。', [{ text: 'OK' }]);
@@ -370,7 +388,7 @@ export default function MoodScreen({ navigation }: Props) {
               <WickGlyph size={10} color={p.accent} />
               <AnimatedNumber value={wicks} style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: p.accent }} />
             </TouchableOpacity>
-            <Text style={[styles.countdown, { color: p.muted }]}>{timeStr}</Text>
+            <ResetCountdown color={p.muted} />
           </View>
         </View>
 
@@ -566,9 +584,9 @@ export default function MoodScreen({ navigation }: Props) {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <BreathDot p={p} size={6} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink }}>
-                    {lang === 'en' ? `Finding someone${waitingDots}` : `正在為你尋找${waitingDots}`}
-                  </Text>
+                  <WaitingDots
+                    style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink }}
+                    prefix={lang === 'en' ? 'Finding someone' : '正在為你尋找'} />
                   <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11.5, color: p.muted, marginTop: 1 }}>
                     {lang === 'en' ? 'we’ll tell you the moment they arrive' : '配到了會立刻告訴你'}
                   </Text>
@@ -797,7 +815,7 @@ export default function MoodScreen({ navigation }: Props) {
               ['want_to_talk', '💬', 'modeWantToTalk',  'modeWantToTalkDesc'],
               ['open_to_more', '🌊', 'modeOpenToMore',  'modeOpenToMoreDesc'],
             ] as const).map(([mode, icon, titleKey, descKey]) => (
-              <TouchableOpacity key={mode} onPress={() => { setTonightMode(mode); setShowModePicker(false); }}
+              <TouchableOpacity key={mode} onPress={() => { setTonightMode(mode); setShowModePicker(false); proceedToMatch(mode); }}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 14, marginBottom: 8, backgroundColor: tonightMode === mode ? p.accentSoft : p.glass, borderWidth: 1, borderColor: tonightMode === mode ? p.accent : p.line }}>
                 <Text style={{ fontSize: 22 }}>{icon}</Text>
                 <View style={{ flex: 1 }}>

@@ -347,9 +347,10 @@ export default function LoftChatScreen({ navigation, route }: Props) {
                     returnKeyType="send"
                   />
                   <TouchableOpacity
-                    style={[styles.sendBtn, { backgroundColor: '#e8a557' }]}
-                    onPress={sendText}>
-                    <Text style={{ color: '#1f1014', fontSize: 16 }}>{'\u2191'}</Text>
+                    style={[styles.sendBtn, { backgroundColor: message.trim() ? '#e8a557' : 'rgba(232,165,87,0.25)' }]}
+                    onPress={sendText}
+                    disabled={!message.trim()}>
+                    <Text style={{ color: message.trim() ? '#1f1014' : 'rgba(31,16,20,0.5)', fontSize: 16 }}>{'\u2191'}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
