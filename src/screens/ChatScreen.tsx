@@ -289,7 +289,10 @@ export default function ChatScreen({ navigation, route }: Props) {
       pauseTimerRef.current = setTimeout(() => {
         pauseReadyRef.current = true;
         setPausing(false);
-        sendMessage();
+        // Call through the ref: the closure captured 3s ago holds the OLD
+        // inputText — if they edited during the breath, the stale version
+        // would have been sent and their edit silently discarded.
+        sendMessageRef.current();
       }, 3000);
       return;
     }
@@ -328,6 +331,11 @@ export default function ChatScreen({ navigation, route }: Props) {
     setInputText('');
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
+
+  // Always points at this render's sendMessage (fresh inputText for the
+  // slow-mode timer above).
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
 
   // Clear the slow-mode timer if the chat unmounts mid-pause.
   useEffect(() => () => { if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current); }, []);
@@ -652,7 +660,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                         });
                         hapticMedium();
                         setVeilSent(true);
-                        analytics.loftVeilLift(0);
+                        analytics.photoVeilSend(conversationId);
                       }
                       setVeilSending(false);
                     }}

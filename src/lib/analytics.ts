@@ -21,6 +21,7 @@ export type AnalyticsEvent =
   | 'loft_pulse'
   | 'loft_gift'
   | 'loft_veil_lift'
+  | 'photo_veil_send'
   | 'wick_purchase'
   | 'vigil_subscribe'
   | 'vigil_restore'
@@ -78,6 +79,7 @@ export const analytics = {
   loftPulse: () => trackEvent('loft_pulse'),
   loftGift: () => trackEvent('loft_gift'),
   loftVeilLift: (level: number) => trackEvent('loft_veil_lift', { level }),
+  photoVeilSend: (conversationId: string) => trackEvent('photo_veil_send', { conversationId }),
   wickPurchase: (amount: number) => trackEvent('wick_purchase', { amount }),
   vigilSubscribe: () => trackEvent('vigil_subscribe'),
   vigilRestore: () => trackEvent('vigil_restore'),

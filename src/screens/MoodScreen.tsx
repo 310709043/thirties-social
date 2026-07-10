@@ -63,10 +63,15 @@ export default function MoodScreen({ navigation }: Props) {
   const [rekindles, setRekindles] = useState<DbRekindle[]>([]);
   useEffect(() => {
     void ensureOfficialRooms();
-    const beat = () => { void heartbeatAwake(); fetchAwakeCount().then(setAwakeCount); };
+    // Reunions ride the same beat: a rekindle that turns live at 21:00 must
+    // surface while the user is sitting on this screen, not only on remount.
+    const beat = () => {
+      void heartbeatAwake();
+      fetchAwakeCount().then(setAwakeCount);
+      fetchTonightRekindles().then(setRekindles);
+    };
     beat();
     const id = setInterval(beat, 5 * 60 * 1000);
-    fetchTonightRekindles().then(setRekindles);
     return () => clearInterval(id);
   }, []);
 

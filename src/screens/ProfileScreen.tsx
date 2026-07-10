@@ -459,7 +459,7 @@ export default function ProfileScreen({ navigation }: Props) {
           <FadeInUp delay={640} distance={8}>
             <Text style={[styles.footer, { color: p.muted }]}>
             {lang === 'en'
-              ? 'Your page is invisible in the Park. Only the Loft can see it — and only what you allow.'
+              ? 'Your page is invisible by the braziers. Only the Loft can see it — and only what you allow.'
               : '火盆裡沒有人看得到你的頁面。只有夜閣看得到——而且只有你允許的部分。'}
           </Text>
           </FadeInUp>

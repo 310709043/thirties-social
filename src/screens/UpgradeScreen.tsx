@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated, Easing, Alert,
 } from 'react-native';
@@ -26,6 +26,9 @@ export default function UpgradeScreen({ navigation }: Props) {
   const { direction, lang, wicks, vigil } = useAppStore();
   const p = DIRECTIONS[direction];
   const wickGlow = useRef(new Animated.Value(0.8)).current;
+  // One purchase at a time — a second tap while the store sheet is opening
+  // could stack two native purchase dialogs.
+  const [buying, setBuying] = useState(false);
 
   useEffect(() => {
     Animated.loop(
@@ -76,7 +79,7 @@ export default function UpgradeScreen({ navigation }: Props) {
   };
 
   const handleBuyPack = async (amount: number) => {
-    if (requireAccount()) return;
+    if (buying || requireAccount()) return;
     const productMap: Record<number, string> = {
       10: IAP_PRODUCT_IDS.wick10,
       30: IAP_PRODUCT_IDS.wick30,
@@ -85,9 +88,20 @@ export default function UpgradeScreen({ navigation }: Props) {
     const productId = productMap[amount];
     if (!productId) return;
 
+    setBuying(true);
     const result = await buyWickPack(productId);
+    setBuying(false);
     if (result.ok) {
       hapticSuccess();
+      // The wicks are granted by the backend webhook, so the balance updates a
+      // beat later — say so, or the quiet pause reads as "nothing happened".
+      Alert.alert(
+        lang === 'en' ? 'Thank you' : '完成了',
+        lang === 'en'
+          ? 'Your wicks are on their way — the balance updates in a few seconds.'
+          : '燭芯正在送達，餘額幾秒內就會更新。',
+        [{ text: 'OK', style: 'default' }],
+      );
     } else {
       const msg = purchaseErrorText(result.error);
       if (msg) Alert.alert(lang === 'en' ? 'Purchase failed' : '購買失敗', msg, [{ text: 'OK', style: 'cancel' }]);
@@ -95,8 +109,10 @@ export default function UpgradeScreen({ navigation }: Props) {
   };
 
   const handleVigil = async () => {
-    if (requireAccount()) return;
+    if (buying || requireAccount()) return;
+    setBuying(true);
     const result = await buyVigilSubscription();
+    setBuying(false);
     if (result.ok) {
       hapticSuccess();
       navigation.goBack();
@@ -253,8 +269,8 @@ export default function UpgradeScreen({ navigation }: Props) {
             <View style={[styles.wickNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.inkSoft, lineHeight: 20 }}>
                 {lang === 'en'
-                  ? 'Wicks are spent on: sending a veiled photo (2 wicks), lifting each layer of a veil (1 wick per layer), and each new match once your free matches run out (1 wick). Conversations and rooms are free.'
-                  : '燭芯用於：傳送帶紗照片（2 芯）、揭開面紗每層（1 芯）、免費配對用完後每次新配對（1 芯）。對話與火盆都是免費的。'}
+                  ? 'Wicks are spent on the closer moments: a veiled photo (2), lifting a veil layer (1), relighting a chat +30 min (2 each), meeting again tomorrow (3 each), a Loft pulse (1), a second room in one day (2), and each match past the daily free ones (1). Talking itself is always free.'
+                  : '燭芯用在更靠近的時刻：帶紗照片（2）、揭一層面紗（1）、續燭 +30 分（各 2）、約明晚重逢（各 3）、夜閣心跳（1）、一天內開第二個火盆（2）、免費額度用完後的配對（1）。說話本身，永遠免費。'}
               </Text>
             </View>
           </FadeInUp>
