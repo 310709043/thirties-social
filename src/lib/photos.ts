@@ -205,9 +205,3 @@ export async function deleteVeiledPhoto(photoId: string): Promise<boolean> {
     return false;
   }
 }
-
-// ── Delete All Photos for Conversation ──────────────────
-export async function deleteConversationPhotos(conversationId: string): Promise<void> {
-  // Photos are deleted individually when revealed, or on account deletion.
-  // Full per-conversation cleanup runs server-side if needed.
-}

@@ -29,19 +29,11 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Loft'>;
 
 const L = LOFT_PALETTE;
 
-const BROKE_LINES = [
-  { zh: '燭芯都沒有，就想進來取暖？', en: 'Not even a wick, and you want the warmth?' },
-  { zh: '夜閣的門很重。誠意太輕，推不開。', en: 'This door is heavy. Light intentions won\'t move it.' },
-  { zh: '想被想念，先點得起一根燭。', en: 'To be wanted, first afford a candle.' },
-  { zh: '這裡不施捨浪漫。', en: 'Romance is not given away here.' },
-];
-
 export default function LoftScreen({ navigation }: Props) {
   const { lang, wicks, seed, vigil } = useAppStore();
   const [inside, setInside] = useState(false);
   const [entering, setEntering] = useState(false);
   const [showBroke, setShowBroke] = useState(false);
-  const [brokeLine] = useState(() => BROKE_LINES[Math.floor(Math.random() * BROKE_LINES.length)]);
   // Optional photo brought into the Loft for the night (others see it blurred).
   const [loftPhotoUri, setLoftPhotoUri] = useState<string | null>(null);
   const [loftPhoto, setLoftPhoto] = useState<{ url: string; publicId: string } | null>(null);

@@ -12,7 +12,6 @@ import { hash } from './identity';
 import { safeWicks } from './num';
 import { signInAnonymously, onAuthStateChanged, deleteUser } from 'firebase/auth';
 import { auth, db } from './firebase';
-import { sendPushToUser } from './notifications';
 
 // ── Auth ──────────────────────────────────────────────────
 export function ensureAnonAuth(): Promise<string> {
@@ -181,17 +180,15 @@ export function subscribeToUser(userId: string, onChange: (u: DbUser) => void) {
 }
 
 // ── Block List ──────────────────────────────────────────
+// arrayUnion/arrayRemove: atomic, so two near-simultaneous blocks (e.g. block
+// from the chat while a background sync writes the user doc) can't clobber
+// each other the way a read-modify-write did.
 export async function blockUser(targetUserId: string): Promise<boolean> {
   const uid = getCurrentUid();
   if (!uid) return false;
   try {
-    const userRef = doc(db, 'users', uid);
-    const snap = await getDoc(userRef);
-    if (!snap.exists()) return false;
-    const blocked = snap.data().blockedUsers ?? [];
-    if (blocked.includes(targetUserId)) return true;
-    await updateDoc(userRef, {
-      blockedUsers: [...blocked, targetUserId],
+    await updateDoc(doc(db, 'users', uid), {
+      blockedUsers: arrayUnion(targetUserId),
       lastActiveAt: serverTimestamp(),
     });
     return true;
@@ -202,12 +199,8 @@ export async function unblockUser(targetUserId: string): Promise<boolean> {
   const uid = getCurrentUid();
   if (!uid) return false;
   try {
-    const userRef = doc(db, 'users', uid);
-    const snap = await getDoc(userRef);
-    if (!snap.exists()) return false;
-    const blocked = snap.data().blockedUsers ?? [];
-    await updateDoc(userRef, {
-      blockedUsers: blocked.filter((id: string) => id !== targetUserId),
+    await updateDoc(doc(db, 'users', uid), {
+      blockedUsers: arrayRemove(targetUserId),
       lastActiveAt: serverTimestamp(),
     });
     return true;
@@ -475,10 +468,12 @@ export async function sendRoomMessage(params: {
       content: params.content,
       createdAt: serverTimestamp(),
     });
+    // Keep the brazier alive: every message resets its life to a full 24h. (The
+    // old +12h reset could SHORTEN a fresh room's 24h — the first message cut
+    // its remaining life in half, contradicting "each brazier burns 24 hours".)
     await updateDoc(doc(db, 'rooms', params.roomId), {
       messageCount: increment(1),
-      // Keep the brazier alive while it's active; it fades 12h after the last message.
-      closesAt: Timestamp.fromDate(new Date(Date.now() + 43200 * 1000)),
+      closesAt: Timestamp.fromDate(new Date(Date.now() + ROOM_LIFETIME_MS)),
     });
     return true;
   } catch {
@@ -647,9 +642,7 @@ export async function enterLoft(
   );
   const existing = await getDocs(q);
 
-  // Get user to check vigil status
   const userSnap = await getDoc(doc(db, 'users', uid));
-  const isVigil = userSnap.exists() ? (userSnap.data() as any).vigil : false;
 
   // Already inside tonight? Walk back into the SAME session. The old code
   // returned an error here, which meant a free user who backed out of the Loft
@@ -858,7 +851,6 @@ export async function createLoftConversation(params: {
     // loftConversation, so an `in [me, them]` query would try to read docs I'm
     // not part of and fail with permission-denied — which made every tap silently
     // do nothing (returned null). Worst case we create a fresh (ephemeral) doc.
-    const tonight = new Date().toISOString().slice(0, 10);
     // BOTH directions: if THEY opened a whisper with me tonight, tapping their
     // card must drop me into that same conversation — the old userAId-only
     // check made B create a silent duplicate, so A and B talked past each
@@ -871,12 +863,14 @@ export async function createLoftConversation(params: {
       const data = d.data();
       const involves = (data.userAId === uid && data.userBId === params.otherUserId)
         || (data.userAId === params.otherUserId && data.userBId === uid);
-      const isTonight = data.createdAt?.toDate?.()?.toISOString?.()?.slice(0, 10) === tonight;
       // Must still be live — reusing an already-expired conversation would drop the
       // user into a chat that instantly closes itself (remaining <= 0 → goBack),
-      // which looks exactly like "tapping does nothing". Expired → make a fresh one.
+      // which looks exactly like "tapping does nothing". The 58-minute expiry is
+      // also what bounds "tonight": comparing createdAt against a UTC calendar
+      // date (the old check) split one night session across the UTC midnight and
+      // recreated the duplicate-room bug in other timezones.
       const notExpired = (data.expiresAt?.toMillis?.() ?? 0) > Date.now();
-      return involves && isTonight && !data.endedAt && notExpired;
+      return involves && !data.endedAt && notExpired;
     });
     if (existing) return { id: existing.id, ...existing.data() } as DbLoftConversation;
 
@@ -1103,7 +1097,10 @@ function nextNightDate(): string {
   return getCurrentNightSession(1);
 }
 
-/** Vote to meet again tomorrow. Returns 'voted' | 'confirmed' | null on failure. */
+/** Vote to meet again tomorrow. Returns 'voted' | 'confirmed' | null on failure.
+ *  Runs as a transaction: with a plain read-then-write, two second-votes landing
+ *  at the same moment could each see the other as "not voted yet" — both sides
+ *  paid, but the rekindle doc was never created. */
 export async function voteRekindle(params: {
   conversationId: string; mySeed: string; otherSeed: string;
 }): Promise<'voted' | 'confirmed' | null> {
@@ -1111,23 +1108,27 @@ export async function voteRekindle(params: {
   if (!uid) return null;
   try {
     const ref = doc(db, 'conversations', params.conversationId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return null;
-    const data = snap.data() as any;
-    const otherId = data.userAId === uid ? data.userBId : data.userAId;
-    const bothVoted = !!(data.rekindleVotes ?? {})[otherId];
-    await updateDoc(ref, { [`rekindleVotes.${uid}`]: true });
-    if (!bothVoted) return 'voted';
-    await addDoc(collection(db, 'rekindles'), {
-      userAId: data.userAId,
-      userBId: data.userBId,
-      nightDate: nextNightDate(),
-      seeds: { [uid]: params.mySeed, [otherId]: params.otherSeed },
-      conversationId: null,
-      status: 'pending',
-      createdAt: serverTimestamp(),
+    let confirmed = false;
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('gone');
+      const data = snap.data() as any;
+      const otherId = data.userAId === uid ? data.userBId : data.userAId;
+      confirmed = !!(data.rekindleVotes ?? {})[otherId];
+      tx.update(ref, { [`rekindleVotes.${uid}`]: true });
+      if (confirmed) {
+        tx.set(doc(collection(db, 'rekindles')), {
+          userAId: data.userAId,
+          userBId: data.userBId,
+          nightDate: nextNightDate(),
+          seeds: { [uid]: params.mySeed, [otherId]: params.otherSeed },
+          conversationId: null,
+          status: 'pending',
+          createdAt: serverTimestamp(),
+        });
+      }
     });
-    return 'confirmed';
+    return confirmed ? 'confirmed' : 'voted';
   } catch { return null; }
 }
 
@@ -1183,7 +1184,9 @@ export interface DbBond {
   createdAt: any;
 }
 
-/** Vote to keep each other. Returns 'voted' | 'confirmed' | null. */
+/** Vote to keep each other. Returns 'voted' | 'confirmed' | null.
+ *  Transactional for the same reason as voteRekindle: two simultaneous second
+ *  votes must not both read "other hasn't voted" and drop the bond on the floor. */
 export async function voteBond(params: {
   conversationId: string; mySeed: string; otherSeed: string;
 }): Promise<'voted' | 'confirmed' | null> {
@@ -1191,18 +1194,24 @@ export async function voteBond(params: {
   if (!uid) return null;
   try {
     const ref = doc(db, 'conversations', params.conversationId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return null;
-    const data = snap.data() as any;
-    const otherId = data.userAId === uid ? data.userBId : data.userAId;
-    const bothVoted = !!(data.bondVotes ?? {})[otherId];
-    await updateDoc(ref, { [`bondVotes.${uid}`]: true });
-    if (!bothVoted) return 'voted';
-    // Don't create the same pair twice.
+    let confirmed = false;
+    let otherId = '';
+    let userAId = '', userBId = '';
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('gone');
+      const data = snap.data() as any;
+      otherId = data.userAId === uid ? data.userBId : data.userAId;
+      userAId = data.userAId; userBId = data.userBId;
+      confirmed = !!(data.bondVotes ?? {})[otherId];
+      tx.update(ref, { [`bondVotes.${uid}`]: true });
+    });
+    if (!confirmed) return 'voted';
+    // Don't create the same pair twice (queries can't run inside the transaction).
     const mine = await getDocs(query(collection(db, 'bonds'), where('users', 'array-contains', uid)));
     if (mine.docs.some(d => (d.data().users as string[]).includes(otherId))) return 'confirmed';
     await addDoc(collection(db, 'bonds'), {
-      users: [data.userAId, data.userBId],
+      users: [userAId, userBId],
       seeds: { [uid]: params.mySeed, [otherId]: params.otherSeed },
       createdAt: serverTimestamp(),
     });
@@ -1581,43 +1590,10 @@ export async function fileReport(params: {
   } catch { return false; }
 }
 
-// ── Daily Reward ──────────────────────────────────────────
-export async function claimDailyReward(): Promise<{
-  ok: boolean;
-  rewarded: boolean;
-  amount?: number;
-  balance?: number;
-  error?: string;
-}> {
-  const uid = getCurrentUid();
-  if (!uid) return { ok: false, rewarded: false, error: 'not_authenticated' };
-  try {
-    const today = new Date().toISOString().slice(0, 10);
-    let rewarded = false;
-    let amount = 0;
-    let newBalance = 0;
-    await runTransaction(db, async tx => {
-      const userRef = doc(db, 'users', uid);
-      const snap = await tx.get(userRef);
-      if (!snap.exists()) throw new Error('user_not_found');
-      const data = snap.data();
-      if (data.lastRewardDate === today) { newBalance = safeWicks(data.wicks); return; }
-      // Free: +2/day, Vigil: +5/day
-      amount = data.vigil ? 5 : 2;
-      newBalance = safeWicks(data.wicks) + amount;
-      rewarded = true;
-      tx.update(userRef, { wicks: newBalance, lastRewardDate: today, lastActiveAt: serverTimestamp() });
-      tx.set(doc(collection(db, 'wicksTransactions')), {
-        userId: uid, amount, balanceAfter: newBalance, type: 'daily_reward',
-        referenceId: today, note: data.vigil ? '守夜每日燭芯 ×5' : '每日燭芯 +2',
-        createdAt: serverTimestamp(),
-      });
-    });
-    return { ok: true, rewarded, amount: amount || undefined, balance: newBalance };
-  } catch (e: any) {
-    return { ok: false, rewarded: false, error: e.message };
-  }
-}
+// (The old client-side claimDailyReward was removed: wick grants are issued
+// exclusively by the backend — see claimDailyRewardServer — and the Firestore
+// rules forbid a client increasing its own balance, so the function could only
+// ever fail. Keeping it around invited someone to "fix" a bug by calling it.)
 
 // ── Subscribe to Active Rooms ─────────────────────────────
 // Polls instead of holding a live listener. The lobby list doesn't need to be
@@ -1711,20 +1687,24 @@ export async function voteExtendConversation(conversationId: string): Promise<bo
   const uid = getCurrentUid();
   if (!uid) return false;
   try {
-    const snap = await getDoc(doc(db, 'conversations', conversationId));
-    if (!snap.exists()) return false;
-    const data = snap.data() as any;
-    if (data.extended) return true; // already extended — nothing to do
-    const votes: Record<string, boolean> = { ...(data.extendVotes ?? {}), [uid]: true };
-    const otherId = data.userAId === uid ? data.userBId : data.userAId;
-    const bothVoted = !!votes[otherId];
-    const patch: any = { [`extendVotes.${uid}`]: true };
-    if (bothVoted) {
-      const baseMs = data.expiresAt?.toMillis?.() ?? Date.now();
-      patch.expiresAt = Timestamp.fromMillis(baseMs + 30 * 60 * 1000);
-      patch.extended = true;
-    }
-    await updateDoc(doc(db, 'conversations', conversationId), patch);
+    // Transactional: two second-votes landing together must not both read
+    // "other hasn't voted" — that left both sides charged with no extension.
+    await runTransaction(db, async tx => {
+      const ref = doc(db, 'conversations', conversationId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('gone');
+      const data = snap.data() as any;
+      if (data.extended) return; // already extended — nothing to do
+      const otherId = data.userAId === uid ? data.userBId : data.userAId;
+      const bothVoted = !!(data.extendVotes ?? {})[otherId];
+      const patch: any = { [`extendVotes.${uid}`]: true };
+      if (bothVoted) {
+        const baseMs = data.expiresAt?.toMillis?.() ?? Date.now();
+        patch.expiresAt = Timestamp.fromMillis(baseMs + 30 * 60 * 1000);
+        patch.extended = true;
+      }
+      tx.update(ref, patch);
+    });
     return true;
   } catch { return false; }
 }
@@ -1901,6 +1881,28 @@ export async function deleteAccount(): Promise<{ ok: boolean; error?: string }> 
     const rrQ = query(collection(db, 'loftRitualResponses'), where('userId', '==', uid));
     const rrSnap = await getDocs(rrQ);
     await Promise.all(rrSnap.docs.map(d => deleteDoc(d.ref)));
+
+    // 8c. Delete everything else that carries this user's words or identity:
+    // night letters I sent, echoes (either direction), bonds, rekindles, and
+    // the public awake-presence heartbeat. "刪除帳號" must not leave letters
+    // signed with their name floating in other people's nights. (Letters I
+    // RECEIVED belong to their sender — the rules only let the sender delete
+    // them — and carry nothing of mine but a one-night seed label.)
+    // Best-effort per doc: one denied delete must not abort the whole teardown.
+    const [lettersFrom, echoesFrom, echoesTo, myBonds, rekA, rekB] = await Promise.all([
+      getDocs(query(collection(db, 'letters'), where('fromId', '==', uid))),
+      getDocs(query(collection(db, 'echoes'), where('fromId', '==', uid))),
+      getDocs(query(collection(db, 'echoes'), where('toId', '==', uid))),
+      getDocs(query(collection(db, 'bonds'), where('users', 'array-contains', uid))),
+      getDocs(query(collection(db, 'rekindles'), where('userAId', '==', uid))),
+      getDocs(query(collection(db, 'rekindles'), where('userBId', '==', uid))),
+    ]);
+    await Promise.all([
+      ...lettersFrom.docs,
+      ...echoesFrom.docs, ...echoesTo.docs,
+      ...myBonds.docs, ...rekA.docs, ...rekB.docs,
+    ].map(d => deleteDoc(d.ref).catch(() => {})));
+    await deleteDoc(doc(db, 'presence', uid)).catch(() => {});
 
     // 9. Delete the Firebase Auth account itself (not just the data), so the
     //    email/Google credential is gone and a stale "auth exists but no profile"

@@ -79,7 +79,7 @@ export default function CloseScreen({ navigation, route }: Props) {
 
             <FadeInUp delay={250} distance={10}>
               <Text style={[styles.titleAlt, { color: p.ink }]}>
-                {lang === 'en' ? '今天的窗口關了' : "Today's window is closed"}
+                {lang === 'en' ? "Today's window is closed" : '今天的窗口關了'}
               </Text>
             </FadeInUp>
 

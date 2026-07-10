@@ -74,6 +74,11 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [bondVotes, setBondVotes] = useState<Record<string, boolean>>({});
   const [rekindleBusy, setRekindleBusy] = useState(false);
   const [bondBusy, setBondBusy] = useState(false);
+  // Once I've paid for a vote, hold the door until the snapshot confirms it —
+  // the votes arrive via subscription with a delay, and a second tap inside
+  // that window used to charge the wicks a second time.
+  const paidExtendRef = useRef(false);
+  const paidRekindleRef = useRef(false);
   const rekindleScheduledRef = useRef(false);
   const [realMessages, setRealMessages] = useState<DbConvMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -172,7 +177,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const iVotedExtend = !!(myUid && extendVotes[myUid]);
   const otherVotedExtend = Object.keys(extendVotes).some(k => k !== myUid && extendVotes[k]);
   const handleExtend = async () => {
-    if (extendBusy || extended || iVotedExtend || !conversationId) return;
+    if (extendBusy || extended || iVotedExtend || paidExtendRef.current || !conversationId) return;
     if (wicks < EXTEND_WICK_COST) {
       Alert.alert(
         lang === 'en' ? 'Not enough wicks' : '燭芯不足',
@@ -183,6 +188,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     setExtendBusy(true);
     const paid = await spendWicks(EXTEND_WICK_COST, 'extend', conversationId);
     if (paid.ok) {
+      paidExtendRef.current = true;
       const ok = await voteExtendConversation(conversationId);
       if (!ok) {
         // Vote write failed after payment — extremely rare; tell the user.
@@ -198,7 +204,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const otherVotedRekindle = Object.keys(rekindleVotes).some(k => k !== myUid && rekindleVotes[k]);
   const rekindleConfirmed = iVotedRekindle && otherVotedRekindle;
   const handleRekindle = async () => {
-    if (rekindleBusy || iVotedRekindle || !conversationId || !otherSeed) return;
+    if (rekindleBusy || iVotedRekindle || paidRekindleRef.current || !conversationId || !otherSeed) return;
     if (wicks < REKINDLE_WICK_COST) {
       Alert.alert(
         lang === 'en' ? 'Not enough wicks' : '燭芯不足',
@@ -209,6 +215,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     setRekindleBusy(true);
     const paid = await spendWicks(REKINDLE_WICK_COST, 'rekindle', conversationId);
     if (paid.ok) {
+      paidRekindleRef.current = true;
       const r = await voteRekindle({ conversationId, mySeed: seed, otherSeed });
       if (r === 'confirmed') {
         hapticMedium();
@@ -370,8 +377,10 @@ export default function ChatScreen({ navigation, route }: Props) {
                 <ColorAdjLabel seed={otherSeed} lang={lang} palette={p} />
               </View>
 
-              {/* Safety */}
-              <TouchableOpacity onPress={() => navigation.push('Safety', { reportedUserId: otherSeed, conversationId })} style={styles.safetyBtn}>
+              {/* Safety — report/block needs the other person's real uid (from the
+                  conversation doc), NOT their display seed: a report filed against
+                  a seed can't be traced to any account, so moderation couldn't act. */}
+              <TouchableOpacity onPress={() => navigation.push('Safety', { reportedUserId: otherUidRef.current ?? undefined, conversationId })} style={styles.safetyBtn}>
                 <Text style={{ color: p.muted, fontSize: 18 }}>ⓘ</Text>
               </TouchableOpacity>
             </View>
@@ -498,7 +507,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               <FadeInUp key={i} distance={10} duration={260} delay={Math.min(i * 25, 150)}>
                 <ChatBubble p={p} m={m} lang={lang} wicks={wicks} conversationId={conversationId}
                   canRevealVeil={displayMessages.length >= VEIL_MIN_MESSAGES}
-                  onReport={m.from !== 'me' ? () => navigation.push('Safety', { reportedUserId: otherSeed, conversationId }) : undefined} />
+                  onReport={m.from !== 'me' ? () => navigation.push('Safety', { reportedUserId: otherUidRef.current ?? undefined, conversationId }) : undefined} />
               </FadeInUp>
             ))}
 

@@ -1,7 +1,8 @@
 // notifications.ts — Push notification service
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { getCurrentUid, getCurrentNightSession } from './db';
 
@@ -32,8 +33,11 @@ export async function registerForPushNotifications(): Promise<string | null> {
       return null;
     }
 
-    // Get push token
-    const tokenData = await Notifications.getExpoPushTokenAsync();
+    // Get push token. Pass the EAS projectId explicitly — auto-detection from
+    // app config works today, but an explicit id can't silently break in a
+    // future SDK and take every message push down with it.
+    const projectId = (Constants.expoConfig?.extra as any)?.eas?.projectId;
+    const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
     const pushToken = tokenData.data;
 
     // Save to Firestore
@@ -62,38 +66,9 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 }
 
-export async function sendPushToUser(userId: string, params: {
-  title: string;
-  body: string;
-  data?: Record<string, any>;
-}): Promise<boolean> {
-  try {
-    const userSnap = await getDoc(doc(db, 'users', userId));
-    if (!userSnap.exists()) return false;
-    const pushToken = userSnap.data().pushToken;
-    if (!pushToken) return false;
-
-    // Send via Expo push notification service
-    const response = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: pushToken,
-        title: params.title,
-        body: params.body,
-        data: params.data ?? {},
-        sound: 'default',
-      }),
-    });
-
-    return response.ok;
-  } catch (e) {
-    console.warn('[Notifications] Send failed:', e);
-    return false;
-  }
-}
+// (sendPushToUser was removed: it read the OTHER user's doc for their pushToken,
+// which the Firestore rules forbid — it could only ever fail. Cross-user pushes
+// go through the backend /api/notify/message, which holds the Admin SDK.)
 
 export async function scheduleLocalNotification(params: {
   title: string;

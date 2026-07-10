@@ -178,22 +178,26 @@ export default function RoomScreen({ navigation, route }: Props) {
     return () => clearInterval(id);
   }, [roomId]);
 
-  // When invite sent, create a real conversation → go to Chat
+  // Opening a window: create the conversation and step in right away. There is
+  // no accept step on the other side (they're notified when you speak), so the
+  // old fake 2.4s "waiting for them to accept…" theater promised a consent
+  // mechanic that didn't exist.
   useEffect(() => {
     if (inviteSent) {
-      const id = setTimeout(async () => {
+      let alive = true;
+      (async () => {
         const conv = await createConversation({ userBId: inviting!.senderId, roomId: roomId ?? undefined });
+        if (!alive) return;
         // Room invites draw from the same daily free-connection quota as random
         // matches; charge on first message sent (matchCharge).
         navigation.push('Chat', { otherSeed: inviting!.seed, conversationId: conv?.id, matchCharge: true });
-      }, 2400);
-      return () => clearTimeout(id);
+      })();
+      return () => { alive = false; };
     }
   }, [inviteSent]);
 
   const handleSend = async () => {
     if (!inputText.trim()) return;
-    console.log('[RoomScreen] handleSend called, roomId:', roomId, 'uid:', uid);
     if (!roomId) {
       Alert.alert(
         lang === 'en' ? 'Still loading' : '載入中',
@@ -331,7 +335,12 @@ export default function RoomScreen({ navigation, route }: Props) {
               )}
               {messages.map((msg, i) => (
                 <FadeInUp key={msg.id} distance={10} delay={Math.min(i * 30, 180)}>
-                  <TouchableOpacity onPress={() => { if (isGuestUser) return promptRegister(); setInviting({ senderId: msg.senderId, seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 }); }} activeOpacity={0.8}>
+                  <TouchableOpacity onPress={() => {
+                    if (isGuestUser) return promptRegister();
+                    // Tapping your own message must not open an invite to yourself.
+                    if (msg.senderId === uid) return;
+                    setInviting({ senderId: msg.senderId, seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 });
+                  }} activeOpacity={0.8}>
                     <View style={{ flexDirection: 'row', gap: 12 }}>
                       <Identity kind={identityKind === 'character' ? 'sigil' : identityKind} seed={msg.senderSeed} size={32} palette={p} lang={lang} trust={0.15} />
                       <View style={{ flex: 1 }}>
@@ -447,7 +456,13 @@ export default function RoomScreen({ navigation, route }: Props) {
         {showCreateRoom && (
           <KeyboardAvoidingView behavior="padding"
             style={[styles.sheetOverlay, { backgroundColor: p.dark ? 'rgba(10,12,28,0.7)' : 'rgba(160,150,170,0.4)' }]}>
-            <TouchableOpacity style={{ flex: 1 }} onPress={() => { if (!roomCreated) setShowCreateRoom(false); }} />
+            <TouchableOpacity style={{ flex: 1 }} onPress={() => {
+              if (roomCreated) return;
+              setShowCreateRoom(false);
+              // Arrived here just to open a room and changed their mind — a
+              // roomless Room screen is a dead end, so step back out.
+              if (roomKey === 'new' && !roomId) navigation.goBack();
+            }} />
             <View style={[styles.sheet, { backgroundColor: p.bgSolid, borderColor: p.line }]}>
               <View style={[styles.sheetHandle, { backgroundColor: p.line }]} />
               {!roomCreated ? (
@@ -508,7 +523,10 @@ export default function RoomScreen({ navigation, route }: Props) {
                         : (lang === 'en' ? 'Open the room' : '開啟火盆')}
                     </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setShowCreateRoom(false)} style={styles.cancelBtn}>
+                  <TouchableOpacity onPress={() => {
+                    setShowCreateRoom(false);
+                    if (roomKey === 'new' && !roomId) navigation.goBack();
+                  }} style={styles.cancelBtn}>
                     <Text style={[styles.cancelText, { color: p.muted }]}>{lang === 'en' ? 'cancel' : '取消'}</Text>
                   </TouchableOpacity>
                 </>
@@ -557,8 +575,8 @@ export default function RoomScreen({ navigation, route }: Props) {
                   </View>
                   <Text style={[styles.inviteHint, { color: p.muted }]}>
                     {lang === 'en'
-                      ? 'They will see your sigil and tonight\'s line — nothing else. 30-minute window if they accept.'
-                      : '對方只會看到你的識別與今晚寫的那句話。同意後開啟 30 分鐘窗口。'}
+                      ? 'A 30-minute window opens. They see your sigil — nothing else — and get a knock when you speak.'
+                      : '會開啟一段 30 分鐘的窗口。對方只看到你的識別，你開口時他們會收到輕輕的一聲敲門。'}
                   </Text>
                   <TouchableOpacity
                     onPress={() => {
@@ -593,10 +611,10 @@ export default function RoomScreen({ navigation, route }: Props) {
               ) : (
                 <View style={{ alignItems: 'center', paddingVertical: 12 }}>
                   <Text style={[styles.waitingText, { color: p.ink }]}>
-                    {lang === 'en' ? 'Invitation sent · waiting…' : '邀請已送出 · 等待對方⋯⋯'}
+                    {lang === 'en' ? 'Opening the window…' : '正在開啟窗口⋯'}
                   </Text>
                   <Text style={[styles.waitingHint, { color: p.muted }]}>
-                    {lang === 'en' ? "we'll open the window if they say yes" : '對方同意時窗口會自動開啟'}
+                    {lang === 'en' ? 'say something first — they get a knock' : '先開口說點什麼，對方會收到敲門聲'}
                   </Text>
                 </View>
               )}

@@ -206,7 +206,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               {/* Safety — block / report the person you're whispering with. */}
-              <TouchableOpacity onPress={() => navigation.push('Safety', { reportedUserId: otherSeed, conversationId: loftConversationId })}
+              <TouchableOpacity onPress={() => navigation.push('Safety', { reportedUserId: otherSeed, conversationId: loftConversationId, isLoft: true })}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Text style={{ fontSize: 16, color: L.muted }}>&#x2691;</Text>
               </TouchableOpacity>

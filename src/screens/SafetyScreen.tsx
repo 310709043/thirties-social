@@ -7,7 +7,7 @@ import { DIRECTIONS } from '../lib/theme';
 import { t } from '../lib/copy';
 import { VaporBackground, GlassCard, SoftButton, FadeInUp, ScreenHeader } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
-import { fileReport, endConversation, blockUser } from '../lib/db';
+import { fileReport, endConversation, endLoftConversation, blockUser } from '../lib/db';
 import { analytics } from '../lib/analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Safety'>;
@@ -20,6 +20,14 @@ export default function SafetyScreen({ navigation, route }: Props) {
 
   const reportedUserId = route.params?.reportedUserId;
   const conversationId = route.params?.conversationId;
+  // Loft whispers live in a different collection — ending one with the 1:1
+  // endConversation silently did nothing, so a blocked Loft chat stayed open.
+  const isLoft = route.params?.isLoft === true;
+  const endThisConversation = async (reason: string) => {
+    if (!conversationId) return;
+    if (isLoft) await endLoftConversation(conversationId);
+    else await endConversation(conversationId, reason);
+  };
 
   useEffect(() => {
     Animated.loop(
@@ -45,7 +53,7 @@ export default function SafetyScreen({ navigation, route }: Props) {
       ]);
     }
     if (conversationId) {
-      await endConversation(conversationId, 'blocked');
+      await endThisConversation('blocked');
       analytics.safetyBlock(conversationId);
     }
     setSubmitting(false);
@@ -64,7 +72,7 @@ export default function SafetyScreen({ navigation, route }: Props) {
       });
     }
     if (conversationId) analytics.safetyReport(conversationId);
-    if (conversationId) await endConversation(conversationId, 'reported');
+    await endThisConversation('reported');
     setSubmitting(false);
     Alert.alert(
       lang === 'en' ? 'Report submitted' : '\u6AA2\u8209\u5DF2\u9001\u51FA',
@@ -74,7 +82,7 @@ export default function SafetyScreen({ navigation, route }: Props) {
   };
 
   const handleLeave = async () => {
-    if (conversationId) await endConversation(conversationId, 'user_left');
+    await endThisConversation('user_left');
     navigation.replace('Close');
   };
 

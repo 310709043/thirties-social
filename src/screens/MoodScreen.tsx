@@ -159,7 +159,11 @@ export default function MoodScreen({ navigation }: Props) {
     checkAndClaimDailyReward().then(r => {
       if (r.rewarded && r.amount) {
         hapticSuccess();
-        Alert.alert('', `🕯 每日燭芯 +${r.amount}`, [{ text: '收下', style: 'default' }]);
+        Alert.alert(
+          '',
+          lang === 'en' ? `🕯 Daily wicks +${r.amount}` : `🕯 每日燭芯 +${r.amount}`,
+          [{ text: lang === 'en' ? 'Take them' : '收下', style: 'default' }],
+        );
       }
     });
   }, []);
