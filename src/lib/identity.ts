@@ -20,15 +20,20 @@ export function rand(seed: string, n: number = 1): number[] {
   return out;
 }
 
-export const COLOR_NAMES_ZH = ['霧灰','青墨','砂金','苔綠','焦糖','沉藍','木棕','蘆白','炭','茶','杏','玫','靛','梅','雲','槐','琥珀','琉璃','薄荷','湖水','薰衣草','珊瑚','翡翠','象牙','胭脂','橄欖','栗子','松綠','檸檬','巧克力','米色','玫瑰'];
-export const COLOR_NAMES_EN = ['slate','umber','fawn','moss','caramel','indigo','walnut','reed','charcoal','tea','apricot','rose','mulberry','cloud','sage','ash','amber','lapis','mint','teal','lavender','coral','jade','ivory','rouge','olive','chestnut','pine','lemon','chocolate','beige','blush'];
-export const ADJ_ZH = ['漂木','靜物','夜雨','舊書','空房','清晨','末班','長椅','回音','走廊','抽屜','燈下','落葉','微光','深海','星空','潮汐','燭火','晨霧','暮色','微風','細雨','殘月','流雲','浮萍','苔蘚','藤蔓','櫻花','楓葉','雪花','露珠','星辰'];
-export const ADJ_EN = ['driftwood','still-life','night-rain','old-book','empty-room','early-hour','last-train','long-bench','echo','corridor','drawer','lamp-light','fallen-leaf','glimmer','deep-sea','starry','tide','candlelight','dawn-mist','dusk','breeze','drizzle','waning-moon','floating-cloud','duckweed','moss','vine','cherry-blossom','maple','snowflake','dewdrop','starlight'];
+// 48 colours × 48 adjectives = 2304 combos. With ~1024 (32×32) a list of 38
+// people already had a 50% chance of a duplicate name; 2304 pushes that to
+// ~60 people, and visual identity (sigil/colour/style) covers the rest.
+// The three colour arrays index-align: SWATCHES[i] is the hex for name [i].
+export const COLOR_NAMES_ZH = ['霧灰','青墨','砂金','苔綠','焦糖','沉藍','木棕','蘆白','炭','茶','杏','玫','靛','梅','雲','槐','琥珀','琉璃','薄荷','湖水','薰衣草','珊瑚','翡翠','象牙','胭脂','橄欖','栗子','松綠','檸檬','巧克力','米色','玫瑰','黛','赭','月白','鴉青','駝','藕荷','秋香','黎','緗','天青','絳','鐵鏽','煙紫','蒼','暮金','石綠'];
+export const COLOR_NAMES_EN = ['slate','umber','fawn','moss','caramel','indigo','walnut','reed','charcoal','tea','apricot','rose','mulberry','cloud','sage','ash','amber','lapis','mint','teal','lavender','coral','jade','ivory','rouge','olive','chestnut','pine','lemon','chocolate','beige','blush','graphite','ochre','moonlight','raven','camel','lotus','khaki','dun','straw','celadon','crimson','rust','smoke-violet','glaucous','dusk-gold','verdigris'];
+export const ADJ_ZH = ['漂木','靜物','夜雨','舊書','空房','清晨','末班','長椅','回音','走廊','抽屜','燈下','落葉','微光','深海','星空','潮汐','燭火','晨霧','暮色','微風','細雨','殘月','流雲','浮萍','苔蘚','藤蔓','櫻花','楓葉','雪花','露珠','星辰','舊信','琴鍵','紙船','風鈴','屋簷','渡口','霜','簷雨','爐火','山嵐','沙洲','夜燈','薄暮','蟬鳴','木屑','餘燼'];
+export const ADJ_EN = ['driftwood','still-life','night-rain','old-book','empty-room','early-hour','last-train','long-bench','echo','corridor','drawer','lamp-light','fallen-leaf','glimmer','deep-sea','starry','tide','candlelight','dawn-mist','dusk','breeze','drizzle','waning-moon','floating-cloud','duckweed','moss','vine','cherry-blossom','maple','snowflake','dewdrop','starlight','old-letter','piano-key','paper-boat','wind-chime','eaves','ferry-crossing','frost','eave-rain','hearth','mountain-haze','sandbar','night-lamp','half-light','cicada-song','wood-shaving','ember'];
 export const SWATCHES = [
   '#7c7e84','#5d4a3a','#c8a87a','#7d8d6e','#a86c44',
   '#3f4a6a','#6b4a3a','#dcd2bd','#3a3a3a','#9c7a64',
   '#dab28a','#a87082','#5a4070','#7a4060','#c4c6cc','#94a482',
   '#b8860b','#4a6fa5','#98d4bb','#4a8f8f','#9370db','#ff7f7f','#50c878','#fffff0','#b05a6a','#808000','#a0522d','#4a6b57','#fff44f','#8b4513','#f5f5dc','#ff6b6b',
+  '#4a4e59','#9c6b30','#e8ecef','#42505c','#b08a5e','#9a7f9e','#8a8a52','#5a5248','#d9c27a','#7ba8a0','#8c3041','#8f5340','#6e5a72','#7e93a0','#c9a05a','#5f8575',
 ];
 
 export const CHAR_POOL = '靜默霧雨夜冷暮歸潮影空惘茫渺渙寂晦悄忱忐悠寥曠淡涼涔淳潤湫渝沉惻悒愀慍憮憫黯沓徬徨惘徘徊靄';
@@ -63,8 +68,8 @@ const LOFT_TIME_ZH = ['凌晨三點','末班車','天亮前','午夜','破曉前
 const LOFT_TIME_EN = ['3 a.m.','last-train','before-dawn','midnight','pre-daybreak','late-night','small-hours','before-sunrise','after-sunset','sunday-night','witching-hour','daybreak','rainy-night','sleepless-night','full-moon-night','nights-end'];
 const LOFT_ROLE_ZH = ['守夜人','旅人','聽眾','乘客','訪客','夜貓','說書人','擺渡人','點燈人','陌生人','過客','守燈人','拾荒者','吟遊者','漂流者','尋光者','夜歸人','收信人','看海人','趕路人'];
 const LOFT_ROLE_EN = ['night-watch','traveler','listener','passenger','visitor','night-owl','storyteller','ferryman','lamplighter','stranger','passerby','lamp-keeper','gleaner','wanderer','drifter','light-seeker','night-returner','letter-receiver','sea-watcher','road-hastener'];
-const LOFT_SOLO_ZH = ['還沒睡的城市','睡不著的海','等天亮的人','夜裡的回聲','數羊的人','看月亮的貓','未寄出的信','熄不掉的燈','聽雨的人','迷路的星','深夜便利商店','最後一班船','沒有終點的散步','凌晨的潮聲','一個人的電影院','關不上的窗','忘了關的收音機','空蕩的月台','沒回的訊息','守著電話的人','沒說完的話','忘了名字的歌','飄很遠的風箏','等不到的人','沒寫完的日記','快沒電的手機','沒有回音的山谷','亮到天明的燈'];
-const LOFT_SOLO_EN = ['the sleepless city','the restless sea','one who waits for dawn','an echo in the night','counting sheep','a cat watching the moon','an unsent letter','a light that won’t go out','one who hears the rain','a lost star','a midnight store','the last boat','a walk with no end','the dawn tide','a cinema for one','a window that won’t close','a radio left on','an empty platform','an unanswered message','one waiting by the phone','words left unsaid','a song whose name is lost','a kite drifting far','someone who never came','an unfinished diary','a phone almost dead','a valley with no echo','a lamp lit till dawn'];
+const LOFT_SOLO_ZH = ['還沒睡的城市','睡不著的海','等天亮的人','夜裡的回聲','數羊的人','看月亮的貓','未寄出的信','熄不掉的燈','聽雨的人','迷路的星','深夜便利商店','最後一班船','沒有終點的散步','凌晨的潮聲','一個人的電影院','關不上的窗','忘了關的收音機','空蕩的月台','沒回的訊息','守著電話的人','沒說完的話','忘了名字的歌','飄很遠的風箏','等不到的人','沒寫完的日記','快沒電的手機','沒有回音的山谷','亮到天明的燈','折了一半的紙鶴','沒拆封的包裹','留到最後的一塊蛋糕','走錯站的乘客','記得所有事的枕頭','不敢按下的傳送鍵','半夜的洗衣機','沒澆水的仙人掌','多出來的那副碗筷','過期的電影票','還亮著的辦公室','忘在傘架的傘','凌晨四點的鳥叫','沒人接的頂樓','寫了又刪的簡訊','慢半拍的時鐘','留一盞的玄關燈','冰箱裡的最後一罐','沒對上的時差','醒著的守夜蠟燭'];
+const LOFT_SOLO_EN = ['the sleepless city','the restless sea','one who waits for dawn','an echo in the night','counting sheep','a cat watching the moon','an unsent letter','a light that won’t go out','one who hears the rain','a lost star','a midnight store','the last boat','a walk with no end','the dawn tide','a cinema for one','a window that won’t close','a radio left on','an empty platform','an unanswered message','one waiting by the phone','words left unsaid','a song whose name is lost','a kite drifting far','someone who never came','an unfinished diary','a phone almost dead','a valley with no echo','a lamp lit till dawn','a half-folded paper crane','an unopened parcel','the last slice saved','a passenger past their stop','a pillow that remembers','a send button never pressed','a washing machine at midnight','an unwatered cactus','the extra set of chopsticks','an expired movie ticket','an office still lit','an umbrella left behind','birdsong at 4 a.m.','a rooftop no one visits','a message typed and deleted','a clock running slow','a hallway lamp left on','the last can in the fridge','a time zone out of sync','a vigil candle still awake'];
 // A short mood prefix multiplies the name space so names stay distinct even with
 // hundreds of people online at once (see getLoftName pattern 3).
 const LOFT_PREFIX_ZH = ['霧','夜','月','潮','星','風','雨','雪','火','海','煙','晨','暮','燈','影','光'];
@@ -75,15 +80,18 @@ export function getLoftName(seed: string, lang: 'zh' | 'en' = 'zh'): string {
   const zh = lang !== 'en';
   const adj = (zh ? LOFT_ADJ_ZH : LOFT_ADJ_EN)[Math.floor(r[0] * LOFT_ADJ_ZH.length)];
   const noun = (zh ? LOFT_NOUN_ZH : LOFT_NOUN_EN)[Math.floor(r[1] * LOFT_NOUN_ZH.length)];
-  const pick = Math.floor(r[3] * 5);
-  if (pick === 0) return zh ? `${adj}的${noun}` : `${adj} ${noun}`;
-  if (pick === 1) {
+  // Weights favour the big combinatorial spaces: the solo pool is the smallest
+  // (48 fixed sentences), so it only gets 1/8 of users — at 28 names × 20% it
+  // used to guarantee duplicate names in a busy Loft.
+  const pick = Math.floor(r[3] * 8);
+  if (pick === 0 || pick === 1) return zh ? `${adj}的${noun}` : `${adj} ${noun}`;
+  if (pick === 2) {
     const tm = (zh ? LOFT_TIME_ZH : LOFT_TIME_EN)[Math.floor(r[0] * LOFT_TIME_ZH.length)];
     const ro = (zh ? LOFT_ROLE_ZH : LOFT_ROLE_EN)[Math.floor(r[1] * LOFT_ROLE_ZH.length)];
     return zh ? `${tm}的${ro}` : `${tm} ${ro}`;
   }
-  if (pick === 2) return (zh ? LOFT_SOLO_ZH : LOFT_SOLO_EN)[Math.floor(r[0] * LOFT_SOLO_ZH.length)];
-  // pick 3 or 4 (~40% of names): a short mood prefix + adj-noun. This is the big
+  if (pick === 3) return (zh ? LOFT_SOLO_ZH : LOFT_SOLO_EN)[Math.floor(r[0] * LOFT_SOLO_ZH.length)];
+  // pick 4-7 (50% of names): a short mood prefix + adj-noun. This is the big
   // combinatorial space (prefix × adj × noun ≈ 16k) that keeps names distinct at
   // scale — collisions stay rare even with several hundred people online.
   const pre = (zh ? LOFT_PREFIX_ZH : LOFT_PREFIX_EN)[Math.floor(r[2] * LOFT_PREFIX_ZH.length)];
