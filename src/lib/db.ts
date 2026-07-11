@@ -801,6 +801,23 @@ export interface DbLoftSession {
   enteredAt: any;
 }
 
+// Shared post-processing for tonight's Loft sessions: hide departed/invisible/
+// blocked/self, newest arrivals first (sorted in JS to avoid a composite index
+// on nightDate + enteredAt), and one card per person (Vigil re-entries leave
+// several session docs behind).
+function processLoftSessions(
+  docs: { id: string; data: () => any }[],
+  uid: string | null,
+  myBlocked: string[],
+): DbLoftSession[] {
+  const list = docs
+    .map(d => ({ id: d.id, ...d.data() }) as DbLoftSession)
+    .filter(s => !(s as any).leftAt && (s as any).visible !== false && s.userId !== uid && !myBlocked.includes(s.userId))
+    .sort((a, b) => ((b as any).enteredAt?.toMillis?.() ?? 0) - ((a as any).enteredAt?.toMillis?.() ?? 0));
+  const seen = new Set<string>();
+  return list.filter(s => (seen.has(s.userId) ? false : (seen.add(s.userId), true)));
+}
+
 // Returns everyone in the Loft tonight (minus me + blocked). Gender/age are
 // included so the client can filter by the viewer's own chosen preference —
 // no forced opposite-gender restriction.
@@ -817,16 +834,29 @@ export async function fetchTonightLoftSessions(): Promise<DbLoftSession[]> {
     uid ? getDoc(doc(db, 'users', uid)) : Promise.resolve(null),
   ]);
   const myBlocked: string[] = myUserSnap?.exists() ? (myUserSnap.data().blockedUsers ?? []) : [];
-  const list = snap.docs
-    .map(d => ({ id: d.id, ...d.data() }) as DbLoftSession)
-    .filter(s => !(s as any).leftAt && (s as any).visible !== false && s.userId !== uid && !myBlocked.includes(s.userId))
-    // Newest arrivals first — most likely to still be around (sorted in JS to
-    // avoid a composite index on nightDate + enteredAt).
-    .sort((a, b) => ((b as any).enteredAt?.toMillis?.() ?? 0) - ((a as any).enteredAt?.toMillis?.() ?? 0));
-  // One card per person: Vigil users can re-enter and leave several session docs
-  // behind, which showed up as the same name repeated — keep only the latest.
-  const seen = new Set<string>();
-  return list.filter(s => (seen.has(s.userId) ? false : (seen.add(s.userId), true)));
+  return processLoftSessions(snap.docs, uid, myBlocked);
+}
+
+/** Realtime version of fetchTonightLoftSessions — replaces the 25s poll, so a
+ *  night with N people costs one listener instead of N×(200 reads/25s). The
+ *  blocked list is read once at subscribe time (a mid-night block takes effect
+ *  on re-entry, same as the old poll's practical behaviour). */
+export function subscribeTonightLoftSessions(cb: (sessions: DbLoftSession[]) => void): () => void {
+  const uid = getCurrentUid();
+  const tonight = localNightDate();
+  const q = query(
+    collection(db, 'loftSessions'),
+    where('nightDate', '==', tonight),
+    limit(200),
+  );
+  let myBlocked: string[] | null = null;
+  const blockedReady = (uid ? getDoc(doc(db, 'users', uid)) : Promise.resolve(null))
+    .then(s => { myBlocked = s?.exists() ? ((s.data() as any).blockedUsers ?? []) : []; })
+    .catch(() => { myBlocked = []; });
+  return onSnapshot(q,
+    snap => { blockedReady.then(() => cb(processLoftSessions(snap.docs, uid, myBlocked ?? []))); },
+    () => cb([]),
+  );
 }
 
 // ── Loft Ritual (今夜之題) ────────────────────────────────
@@ -1086,6 +1116,44 @@ export async function fetchMyTonightLoftWhispers(): Promise<DbLoftWhisper[]> {
     // Soonest-to-fade first — those are the ones to answer now.
     return out.sort((a, b) => (a.expiresAt?.toMillis?.() ?? 0) - (b.expiresAt?.toMillis?.() ?? 0));
   } catch { return []; }
+}
+
+/** Realtime version of fetchMyTonightLoftWhispers — this is how the person who
+ *  was PICKED learns a conversation exists, so latency matters: the old 25s
+ *  poll meant up to 25s before the invite appeared. Two listeners (userAId /
+ *  userBId) merge into one list; a local 30s re-filter drops expired whispers
+ *  without any reads (docs don't re-emit just because time passed). */
+export function subscribeMyTonightLoftWhispers(cb: (whispers: DbLoftWhisper[]) => void): () => void {
+  const uid = getCurrentUid();
+  if (!uid) { cb([]); return () => {}; }
+  let aDocs: any[] = [];
+  let bDocs: any[] = [];
+  const emit = () => {
+    const seen = new Set<string>();
+    const out: DbLoftWhisper[] = [];
+    for (const d of [...aDocs, ...bDocs]) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      const c = d.data() as any;
+      if (c.endedAt) continue;
+      if ((c.expiresAt?.toMillis?.() ?? 0) <= Date.now()) continue;
+      const iAmA = c.userAId === uid;
+      out.push({
+        id: d.id,
+        otherId: iAmA ? c.userBId : c.userAId,
+        otherName: (iAmA ? c.userBName : c.userAName) ?? '',
+        messageCount: c.messageCount ?? 0,
+        expiresAt: c.expiresAt,
+      });
+    }
+    cb(out.sort((a, b) => (a.expiresAt?.toMillis?.() ?? 0) - (b.expiresAt?.toMillis?.() ?? 0)));
+  };
+  const unsubA = onSnapshot(query(collection(db, 'loftConversations'), where('userAId', '==', uid), limit(20)),
+    s => { aDocs = s.docs; emit(); }, () => {});
+  const unsubB = onSnapshot(query(collection(db, 'loftConversations'), where('userBId', '==', uid), limit(20)),
+    s => { bDocs = s.docs; emit(); }, () => {});
+  const tick = setInterval(emit, 30_000);
+  return () => { unsubA(); unsubB(); clearInterval(tick); };
 }
 
 // ── Official braziers (cold-start warmth) ─────────────────

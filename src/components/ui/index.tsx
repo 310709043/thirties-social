@@ -311,6 +311,7 @@ export function ScreenHeader({
   return (
     <View style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 20, minHeight: 40 }, style]}>
       <TouchableOpacity onPress={onBack} activeOpacity={0.7}
+        accessibilityRole="button" accessibilityLabel="返回"
         style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line, alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ color: p.muted, fontSize: 19, marginTop: -2 }}>‹</Text>
       </TouchableOpacity>

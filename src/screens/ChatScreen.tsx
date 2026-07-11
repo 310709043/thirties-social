@@ -587,6 +587,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               />
               <TouchableOpacity
                 onPress={sendMessage}
+                  accessibilityRole="button" accessibilityLabel="送出"
                 disabled={pausing}
                 style={[styles.sendBtn, { backgroundColor: p.ink, opacity: pausing ? 0.4 : 1 }]}
               >

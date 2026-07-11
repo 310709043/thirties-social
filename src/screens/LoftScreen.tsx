@@ -11,7 +11,7 @@ import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber, PressableScale } from '../components/ui';
 import { useAppStore, canEnterLoft, recordLoftEntry, loftEntryIsFreeTrial, getTier } from '../hooks/useAppStore';
-import { enterLoft, fetchTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, postRitualResponse, subscribeToTonightRitual, DbRitualResponse, fetchMyTonightLoftWhispers, DbLoftWhisper, localNightDate } from '../lib/db';
+import { enterLoft, subscribeTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, postRitualResponse, subscribeToTonightRitual, DbRitualResponse, fetchMyTonightLoftWhispers, subscribeMyTonightLoftWhispers, DbLoftWhisper, localNightDate } from '../lib/db';
 import { getTonightRitual } from '../lib/rituals';
 import { TextInput } from 'react-native';
 import { getLoftName } from '../lib/identity';
@@ -515,30 +515,26 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const dismissLoftGuide = () => { setShowLoftGuide(false); AsyncStorage.setItem('loftGuideSeen', '1'); };
 
   React.useEffect(() => {
+    // Realtime: new arrivals appear the moment they enter (the old 25s poll
+    // re-read the whole list every tick — N people cost N×200 reads/25s and
+    // still felt laggy). Whispers ride their own subscription: that's how the
+    // person who was PICKED ever learns a conversation exists.
     let alive = true;
-    const load = () => {
-      fetchTonightLoftSessions().then(s => {
-        if (!alive) return;
-        setSessions(s);
-        setLoading(false);
-      });
-      // Ongoing whispers ride the same poll: this is how the person who was
-      // PICKED ever learns a conversation exists (and how anyone re-enters).
-      fetchMyTonightLoftWhispers().then(async ws => {
-        if (!alive) return;
-        setWhispers(ws);
-        const entries = await Promise.all(ws.map(async w => {
-          const v = await AsyncStorage.getItem(`loftSeen:${w.id}`);
-          return [w.id, Number(v ?? 0)] as const;
-        }));
-        if (alive) setSeenCounts(Object.fromEntries(entries));
-      });
-    };
-    load();
-    // Re-poll so people who arrive after you actually show up (a one-shot fetch
-    // made the Loft feel empty). 25s keeps reads bounded.
-    const id = setInterval(load, 25000);
-    return () => { alive = false; clearInterval(id); };
+    const unsubSessions = subscribeTonightLoftSessions(s => {
+      if (!alive) return;
+      setSessions(s);
+      setLoading(false);
+    });
+    const unsubWhispers = subscribeMyTonightLoftWhispers(async ws => {
+      if (!alive) return;
+      setWhispers(ws);
+      const entries = await Promise.all(ws.map(async w => {
+        const v = await AsyncStorage.getItem(`loftSeen:${w.id}`);
+        return [w.id, Number(v ?? 0)] as const;
+      }));
+      if (alive) setSeenCounts(Object.fromEntries(entries));
+    });
+    return () => { alive = false; unsubSessions(); unsubWhispers(); };
   }, []);
 
   React.useEffect(() => subscribeToTonightRitual(setResponses), []);

@@ -440,6 +440,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                 <TouchableOpacity
                   style={[styles.sendBtn, { backgroundColor: inputText.trim() ? p.ink : p.line }]}
                   onPress={handleSend}
+                  accessibilityRole="button" accessibilityLabel="送出"
                   disabled={!inputText.trim() || sending}
                 >
                   <Text style={{ color: inputText.trim() ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontSize: 16 }}>↑</Text>

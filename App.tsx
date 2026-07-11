@@ -16,6 +16,7 @@ import { LOFT_PALETTE } from './src/lib/theme';
 import { ToastProvider } from './src/components/ui/Toast';
 import { ErrorBoundary } from './src/components/ui/ErrorBoundary';
 import { configureGoogle } from './src/lib/googleAuth';
+import { installCrashHandler, flushCrashQueue } from './src/lib/crash';
 
 // Cap OS font-scaling so an accessibility "huge text" setting can't overflow the
 // app's tight fixed-height rows/buttons (same failure mode as text overlap, but
@@ -57,8 +58,11 @@ export default function App() {
   });
 
   useEffect(() => {
+    installCrashHandler();
     initStore().then(() => {
       setStoreReady(true);
+      // Crash reports whose write lost the race with the crash go out now.
+      flushCrashQueue();
       registerForPushNotifications().then(() => {
         // Re-engagement: one local reminder a night when the window opens.
         // Pass the user's language so an EN user doesn't get a Chinese reminder.

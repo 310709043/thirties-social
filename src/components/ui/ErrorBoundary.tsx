@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { reportCrash } from '../../lib/crash';
 
 interface Props {
   children: ReactNode;
@@ -20,6 +21,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.warn('[ErrorBoundary]', error.message);
+    reportCrash(error, false, 'boundary');
   }
 
   handleRetry = () => {
