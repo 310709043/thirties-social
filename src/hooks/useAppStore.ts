@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'expo-crypto';
 import { getDailySeed } from '../lib/identity';
 import { Direction, DEFAULT_DIRECTION } from '../lib/theme';
 import { Lang } from '../lib/copy';
@@ -14,7 +15,9 @@ async function getDeviceId(): Promise<string> {
   if (_deviceId) return _deviceId;
   const stored = await AsyncStorage.getItem('device_id');
   if (stored) { _deviceId = stored; return stored; }
-  const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  // Full-entropy id: the seed digest broadcast to others is only as strong as
+  // this preimage, and Math.random()+timestamp (~57 bits) is GPU-guessable.
+  const id = Crypto.randomUUID();
   await AsyncStorage.setItem('device_id', id);
   _deviceId = id;
   return id;
@@ -100,7 +103,7 @@ function notify() { _listeners.forEach(fn => fn()); }
 
 export async function initStore() {
   const deviceId = await getDeviceId();
-  const seed = getDailySeed(deviceId);
+  const seed = await getDailySeed(deviceId);
   const [storedDir, storedDone, storedSetup, storedWicks, storedVigil, storedLang, storedGender, storedAge, storedRelation, storedShape, storedSeeking, storedBoundary, storedFreeTimes, storedRegion, storedQuote, storedLoftVisible, storedAutoFilter, storedSlowMode, storedConvToday, storedPeopleToday, storedIdentityKind, storedFreeMatches, storedLoftFree, storedConnToday, storedRoomsToday, storedLoftFreeWeek, storedGuestMatchUsed] = await Promise.all([
     AsyncStorage.getItem('direction') as Promise<Direction | null>,
     AsyncStorage.getItem('onboarding_done'),
