@@ -13,6 +13,7 @@ import { VaporBackground, GlassCard, SoftButton, FadeInUp, Logo } from '../compo
 import { useAppStore } from '../hooks/useAppStore';
 import { register, login, resetPassword } from '../lib/auth';
 import { signInWithGoogle, isGoogleAvailable } from '../lib/googleAuth';
+import { analytics } from '../lib/analytics';
 import { ensureAnonAuth } from '../lib/db';
 import { hapticMedium, hapticSuccess } from '../lib/haptics';
 
@@ -80,7 +81,9 @@ export default function AuthScreen({ navigation, route }: Props) {
       hapticSuccess();
       navigation.replace(setupDone ? 'Mood' : 'Setup');
     } else if (result.error !== 'cancelled') {
-      // Surface the real error for diagnosis (revert to a generic message later).
+      // Surface the real error for diagnosis (revert to a generic message later),
+      // and record it server-side so diagnosis doesn't depend on screenshots.
+      analytics.authGoogleError(result.error ?? '?');
       setError((lang === 'en' ? 'Google sign-in failed: ' : 'Google 登入失敗：') + (result.error ?? '?'));
     }
   };

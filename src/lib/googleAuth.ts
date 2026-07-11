@@ -75,6 +75,26 @@ export async function signInWithGoogle(): Promise<{ ok: boolean; linked?: boolea
     if (isErrWithCode && codes && isErrWithCode(e) && e.code === codes.SIGN_IN_CANCELLED) {
       return { ok: false, error: 'cancelled' };
     }
-    return { ok: false, error: e?.message ?? 'google_signin_failed' };
+    return { ok: false, error: describeGoogleError(e) };
   }
+}
+
+// Build a diagnostic string that survives a tester's screenshot: the raw code
+// plus what that code actually means. DEVELOPER_ERROR (status 10) in a Play
+// build almost always means the GCP project lacks an Android OAuth client for
+// com.thirties.social + the Play App Signing SHA-1 — not a client-side bug.
+function describeGoogleError(e: any): string {
+  const code = e?.code ?? '';
+  const msg = e?.message ?? '';
+  const hints: Record<string, string> = {
+    DEVELOPER_ERROR: 'OAuth Android client/SHA-1 設定不符',
+    '10': 'OAuth Android client/SHA-1 設定不符',
+    PLAY_SERVICES_NOT_AVAILABLE: '這台裝置缺少 Google Play 服務',
+    SIGN_IN_REQUIRED: '需要先登入 Google 帳號',
+    IN_PROGRESS: '上一個登入還在進行中',
+    NETWORK_ERROR: '網路問題，請重試',
+  };
+  const hint = hints[String(code)] ?? (msg.includes('DEVELOPER_ERROR') ? hints.DEVELOPER_ERROR : '');
+  const parts = [`code=${code || '?'}`, msg && msg !== String(code) ? msg : '', hint].filter(Boolean);
+  return parts.join(' · ') || 'google_signin_failed';
 }

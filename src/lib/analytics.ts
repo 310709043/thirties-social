@@ -29,7 +29,8 @@ export type AnalyticsEvent =
   | 'settings_view'
   | 'safety_report'
   | 'safety_block'
-  | 'account_delete';
+  | 'account_delete'
+  | 'auth_google_error';
 
 interface AnalyticsParams {
   [key: string]: string | number | boolean | undefined;
@@ -91,4 +92,5 @@ export const analytics = {
   safetyReport: (conversationId: string) => trackEvent('safety_report', { conversationId }),
   safetyBlock: (conversationId: string) => trackEvent('safety_block', { conversationId }),
   accountDelete: () => trackEvent('account_delete'),
+  authGoogleError: (error: string) => trackEvent('auth_google_error', { error: error.slice(0, 300) }),
 };
