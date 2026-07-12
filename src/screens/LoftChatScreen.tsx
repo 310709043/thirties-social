@@ -16,7 +16,7 @@ import {
   endLoftConversation, getCurrentUid, DbLoftMessage,
   subscribeToLoftConversationEnded, fetchLoftVeilLevel, bumpLoftVeilLevel,
 } from '../lib/db';
-import { hapticMedium } from '../lib/haptics';
+import { hapticMedium, hapticWarning } from '../lib/haptics';
 import { filterMessage } from '../lib/filter';
 import * as ScreenCapture from 'expo-screen-capture';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -32,6 +32,12 @@ const PULSES = [
   { key: 'loftPulse3', em: '\u263E' },
   { key: 'loftPulse4', em: '\u2299' },
 ];
+// The symbols are deliberately abstract, so the words carry the meaning \u2014
+// testers who saw a bare \u2933 arrive read it as "nothing happened".
+const pulseLabel = (em: string, lang: 'zh' | 'en'): string => {
+  const p = PULSES.find(x => x.em === em);
+  return p ? t(p.key as any, lang) : '';
+};
 
 // Lifting a veil costs wicks for everyone, including Vigil (intimacy is paid).
 const VEIL_LIFT_COST = 1;
@@ -163,13 +169,28 @@ export default function LoftChatScreen({ navigation, route }: Props) {
   // hammering the button before the first write finished.
   const pulseBusyRef = useRef(false);
   const sendPulse = async (emoji: string) => {
-    if (pulseBusyRef.current) return;
+    if (pulseBusyRef.current || !loftConversationId) return;
     pulseBusyRef.current = true;
     try {
       const result = await spendWicks(1, 'pulse', loftConversationId);
-      if (result.ok && loftConversationId) {
-        hapticMedium();
-        await sendLoftMessage({ loftConversationId, content: emoji, messageType: 'pulse' });
+      if (!result.ok) {
+        // Testers read a silent failure as a dead button — say why it failed.
+        hapticWarning();
+        Alert.alert(
+          lang === 'en' ? 'Not enough wicks' : '燭芯不夠了',
+          lang === 'en'
+            ? 'A pulse costs 1 wick. You can get more in the shop.'
+            : '悸動需要 1 燭芯。可以到商店補一些。',
+        );
+        return;
+      }
+      hapticMedium();
+      const ok = await sendLoftMessage({ loftConversationId, content: emoji, messageType: 'pulse' });
+      if (!ok) {
+        Alert.alert(
+          lang === 'en' ? 'Failed to send' : '送出失敗',
+          lang === 'en' ? 'Please try again.' : '請稍後再試一次。',
+        );
       }
     } finally {
       pulseBusyRef.current = false;
@@ -243,9 +264,17 @@ export default function LoftChatScreen({ navigation, route }: Props) {
             {messages.map((m, i) => {
               const isMe = m.senderId === uid;
               if (m.messageType === 'pulse') {
+                const label = pulseLabel(m.content, lang);
                 return (
                   <View key={m.id} style={{ alignItems: 'center', marginVertical: 4 }}>
-                    <Text style={{ fontSize: 24, opacity: 0.7 }}>{m.content}</Text>
+                    <Text style={{ fontSize: 24, opacity: 0.7, color: L.candle }}>{m.content}</Text>
+                    {label ? (
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: L.muted, marginTop: 2 }}>
+                        {isMe
+                          ? (lang === 'en' ? `you whispered: ${label}` : `你悄悄說：${label}`)
+                          : (lang === 'en' ? `they whispered: ${label}` : `對方悄悄說：${label}`)}
+                      </Text>
+                    ) : null}
                   </View>
                 );
               }
@@ -324,9 +353,13 @@ export default function LoftChatScreen({ navigation, route }: Props) {
                 </Text>
                 {PULSES.map(pulse => (
                   <TouchableOpacity key={pulse.key} onPress={() => sendPulse(pulse.em)}
+                    accessibilityRole="button" accessibilityLabel={t(pulse.key as any, lang)}
                     style={styles.pulseBtn}>
                     <Text style={{ fontSize: 16, color: L.candle }}>{pulse.em}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 9, color: L.muted, marginTop: 1 }} numberOfLines={1}>
+                      {t(pulse.key as any, lang)}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 1 }}>
                       <WickGlyph size={7} color={L.candle} />
                       <Text style={{ fontFamily: 'Inter-Regular', fontSize: 8, color: 'rgba(232,165,87,0.7)' }}>1</Text>
                     </View>
