@@ -17,6 +17,7 @@ import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, MATCH_WICK_COST } from '../hooks/useAppStore';
+import { useIsForeground } from '../lib/appState';
 import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchTonightRekindles, openRekindle, DbRekindle, sendNightLetter, hasSentTonightLetter, claimTonightLetter, replyToLetter, fetchMyLetterReplies, DbLetter, fetchArrivedEchoes, markEchoRead, DbEcho, createConversation, fetchMyLiveConversations, DbLiveConversation } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
 import { analytics } from '../lib/analytics';
@@ -105,8 +106,13 @@ export default function MoodScreen({ navigation }: Props) {
   // app (a message push routes to this screen; without this banner it was a
   // dead end).
   const [liveConvs, setLiveConvs] = useState<DbLiveConversation[]>([]);
+  const foreground = useIsForeground();
   useEffect(() => {
     void ensureOfficialRooms();
+    // A backgrounded phone must NOT keep beating "awake" — it inflates the
+    // tonight-in-here count and burns Firestore quota. The beat resumes when
+    // the user returns to foreground (foreground is in the dep list).
+    if (!foreground) return;
     // Reunions and live conversations ride the same beat: something that turns
     // live at 21:00 must surface while the user sits on this screen.
     const beat = () => {
@@ -118,7 +124,7 @@ export default function MoodScreen({ navigation }: Props) {
     beat();
     const id = setInterval(beat, 5 * 60 * 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [foreground]);
 
   // ── 夜信 & 回聲 state ──
   const [showLetters, setShowLetters] = useState(false);

@@ -17,6 +17,7 @@ import { RESONANCE_SYMBOLS, resonanceLabel } from '../lib/resonance';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
 import { filterMessage } from '../lib/filter';
+import { useIsForeground } from '../lib/appState';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Room'>;
 
@@ -58,6 +59,7 @@ export default function RoomScreen({ navigation, route }: Props) {
   // Guests can watch the room chat, but not participate — any action nudges them
   // to create an account.
   const isGuestUser = getTier() === 'guest';
+  const foreground = useIsForeground();
   // readOnly is set only when we entered an already-full room (never joined).
   const canSend = !readOnly && !!uid && !isGuestUser;
 
@@ -158,7 +160,11 @@ export default function RoomScreen({ navigation, route }: Props) {
   // Join presence on entry (unless the room is already full), heartbeat while
   // here, and clear our slot on leave.
   useEffect(() => {
-    if (!roomId || !uid) return;
+    if (!roomId || !uid || !foreground) return;
+    // Backgrounded phones must stop pinging: the 30s heartbeat + realtime
+    // subscription would otherwise leave "still here" presence to everyone
+    // else in the room and burn Firestore quota. Re-entering foreground
+    // simply re-runs this effect (foreground is in the dep list).
     let active = true;
     let hbId: ReturnType<typeof setInterval> | undefined;
     setReadOnly(false);
@@ -181,7 +187,7 @@ export default function RoomScreen({ navigation, route }: Props) {
       leaveRoomPresence(roomId);
       unsub();
     };
-  }, [roomId, uid]);
+  }, [roomId, uid, foreground]);
 
   // Recompute the live count as heartbeats age out even without new snapshots.
   useEffect(() => {
@@ -200,9 +206,20 @@ export default function RoomScreen({ navigation, route }: Props) {
       (async () => {
         const conv = await createConversation({ userBId: inviting!.senderId, roomId: roomId ?? undefined });
         if (!alive) return;
+        if (!conv?.id) {
+          // Without an id ChatScreen has nothing to open — a silent nav.push
+          // landed the tester in a broken empty chat.
+          Alert.alert(
+            lang === 'en' ? 'Could not start' : '沒能開始對話',
+            lang === 'en' ? 'Please try again in a moment.' : '請稍後再試一次。',
+          );
+          setInviteSent(false);
+          setInviting(null);
+          return;
+        }
         // Room invites draw from the same daily free-connection quota as random
         // matches; charge on first message sent (matchCharge).
-        navigation.push('Chat', { otherSeed: inviting!.seed, conversationId: conv?.id, matchCharge: true });
+        navigation.push('Chat', { otherSeed: inviting!.seed, conversationId: conv.id, matchCharge: true });
       })();
       return () => { alive = false; };
     }
@@ -688,7 +705,7 @@ const styles = StyleSheet.create({
   liveText:     { fontFamily: 'Inter-Regular', fontSize: 11 },
   liveDot:      { fontFamily: 'Inter-Regular', fontSize: 11, opacity: 0.4 },
   feed:         { flex: 1 },
-  bubble:       { borderRadius: 22, borderWidth: 0.5, padding: 14 },
+  bubble:       { borderRadius: 22, borderWidth: 0.5, padding: 14, alignSelf: 'flex-start', maxWidth: '92%' },
   bubbleText:   { fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 24 },
   divider:      { flexDirection: 'row', alignItems: 'center', gap: 10, opacity: 0.5, marginVertical: 6 },
   dividerText:  { fontFamily: 'EBGaramond-Italic', fontSize: 11 },

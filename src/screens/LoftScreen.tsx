@@ -11,6 +11,7 @@ import { LOFT_PALETTE } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { WickGlyph, Cap, Flame, LoftTransition, AnimatedNumber, PressableScale } from '../components/ui';
 import { useAppStore, canEnterLoft, recordLoftEntry, loftEntryIsFreeTrial, getTier } from '../hooks/useAppStore';
+import { useIsForeground } from '../lib/appState';
 import { enterLoft, subscribeTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, postRitualResponse, subscribeToTonightRitual, DbRitualResponse, fetchMyTonightLoftWhispers, subscribeMyTonightLoftWhispers, DbLoftWhisper, localNightDate } from '../lib/db';
 import { getTonightRitual } from '../lib/rituals';
 import { TextInput } from 'react-native';
@@ -490,6 +491,7 @@ function ritualAgo(ms: number, lang: string): string {
 
 function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const { seed, identityKind } = useAppStore();
+  const foreground = useIsForeground();
   const myName = getLoftName(seed, lang);
   const [sessions, setSessions] = React.useState<DbLoftSession[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -519,6 +521,11 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
     // re-read the whole list every tick — N people cost N×200 reads/25s and
     // still felt laggy). Whispers ride their own subscription: that's how the
     // person who was PICKED ever learns a conversation exists.
+    //
+    // Backgrounding tears the listeners down — snapshot streams keep pulling
+    // updates otherwise, draining battery and Firestore quota; returning to
+    // foreground re-subscribes and the callbacks fire with the current state.
+    if (!foreground) return;
     let alive = true;
     const unsubSessions = subscribeTonightLoftSessions(s => {
       if (!alive) return;
@@ -535,9 +542,12 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
       if (alive) setSeenCounts(Object.fromEntries(entries));
     });
     return () => { alive = false; unsubSessions(); unsubWhispers(); };
-  }, []);
+  }, [foreground]);
 
-  React.useEffect(() => subscribeToTonightRitual(setResponses), []);
+  React.useEffect(() => {
+    if (!foreground) return;
+    return subscribeToTonightRitual(setResponses);
+  }, [foreground]);
 
   const submitRitual = async () => {
     const c = ritualText.trim();
