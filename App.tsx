@@ -43,8 +43,6 @@ export default function App() {
       require('@expo-google-fonts/noto-serif-tc/300Light/NotoSerifTC_300Light.ttf'),
     'NotoSerifTC-Regular':
       require('@expo-google-fonts/noto-serif-tc/400Regular/NotoSerifTC_400Regular.ttf'),
-    'NotoSerifTC-Medium':
-      require('@expo-google-fonts/noto-serif-tc/500Medium/NotoSerifTC_500Medium.ttf'),
     'NotoSerifTC-Bold':
       require('@expo-google-fonts/noto-serif-tc/700Bold/NotoSerifTC_700Bold.ttf'),
     'EBGaramond-Regular':
@@ -53,8 +51,6 @@ export default function App() {
       require('@expo-google-fonts/eb-garamond/400Regular_Italic/EBGaramond_400Regular_Italic.ttf'),
     'Inter-Regular':
       require('@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf'),
-    'Inter-Medium':
-      require('@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf'),
   });
 
   useEffect(() => {
@@ -175,7 +171,7 @@ function AppGate({ authUser, authChecked }: { authUser: any; authChecked: boolea
           {/* An appeal path that actually goes somewhere — "contact support"
               with no contact was a dead end. */}
           <TouchableOpacity onPress={() => Linking.openURL(
-            'mailto:focustown1314@gmail.com?subject=' + encodeURIComponent('燭影私語 帳號申訴'),
+            'mailto:privacy@lowbatterytown.com?subject=' + encodeURIComponent('燭影私語 帳號申訴'),
           ).catch(() => {})}>
             <Text style={[bs.support, { color: 'rgba(245,226,196,0.5)', textDecorationLine: 'underline' }]}>
               {store.lang === 'en' ? 'Appeal — contact support' : '申訴 — 聯繫客服'}

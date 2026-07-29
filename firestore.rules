@@ -2,20 +2,38 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // True unless the signed-in user is explicitly banned. Used to block banned
-    // users from posting (server-side enforcement, not just the client gate).
-    // Robust to a missing user doc or an absent isBanned field: only an
-    // explicit isBanned == true blocks. A hard get() on a missing doc would
-    // otherwise error and silently deny ALL posting.
+    // Posting requires a real, non-banned profile. Treating a missing profile as
+    // "not banned" lets a user delete users/{uid} and keep posting with the same
+    // auth token, bypassing both moderation and the normal account bootstrap.
     function notBanned() {
-      return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
-             || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBanned != true;
+      return request.auth != null
+             && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBanned != true;
+    }
+
+    // Client-created profiles are allowed because first launch uses anonymous
+    // Firebase Auth, but every economy/moderation field must start at the one
+    // canonical free-account value. Admin SDK writes bypass rules, so operator
+    // personas and server-side grants are unaffected.
+    function validNewUser() {
+      return request.resource.data.wicks is int
+             && request.resource.data.wicks == 3
+             && request.resource.data.vigil == false
+             && request.resource.data.setupDone == false
+             && request.resource.data.isBanned == false
+             && request.resource.data.banReason == null
+             && request.resource.data.freeMatchesUsed is int
+             && request.resource.data.freeMatchesUsed == 0
+             && request.resource.data.loftFreeUsed is int
+             && request.resource.data.loftFreeUsed == 0;
     }
 
     // ── Users ──────────────────────────────────────────
     match /users/{userId} {
       allow read:   if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && validNewUser();
       // Monetization lock: client may only DECREASE wicks (spending stays
       // client-side). Wick increases, vigil and lastRewardDate are server-only
       // (RevenueCat webhook + daily-reward endpoint).
@@ -25,19 +43,35 @@ service cloud.firestore {
                     && !('vigil' in request.resource.data.diff(resource.data).affectedKeys())
                     && !('lastRewardDate' in request.resource.data.diff(resource.data).affectedKeys())
                     && (!('wicks' in request.resource.data.diff(resource.data).affectedKeys())
-                        || request.resource.data.wicks <= resource.data.wicks)
+                        || (request.resource.data.wicks is int
+                            && request.resource.data.wicks >= 0
+                            && request.resource.data.wicks <= resource.data.wicks))
                     && (!('freeMatchesUsed' in request.resource.data.diff(resource.data).affectedKeys())
                         || request.resource.data.freeMatchesUsed >= resource.data.freeMatchesUsed)
                     && (!('loftFreeUsed' in request.resource.data.diff(resource.data).affectedKeys())
                         || !('loftFreeUsed' in resource.data)
                         || request.resource.data.loftFreeUsed >= resource.data.loftFreeUsed);
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      // A banned account cannot delete only its profile and immediately recreate
+      // an unbanned one with the same Firebase credential. Full account erasure
+      // remains available to ordinary users through the in-app deletion flow.
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId
+                    && resource.data.isBanned != true;
     }
 
     // ── Wicks Transactions ──────────────────────────────
     match /wicksTransactions/{txId} {
       allow read:   if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // Client transactions are spend-only audit records. Wick grants are
+      // written by the Admin SDK (daily reward / RevenueCat webhook).
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.amount is int
+                    && request.resource.data.amount < 0
+                    && request.resource.data.balanceAfter is int
+                    && request.resource.data.balanceAfter >= 0
+                    && request.resource.data.type is string
+                    && request.resource.data.type.size() <= 40;
       allow update: if false;
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }

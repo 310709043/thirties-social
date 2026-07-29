@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FDF7E8"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.thirties.social",
@@ -55,7 +50,25 @@
           "color": "#e8a557"
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FDF7E8",
+          "imageWidth": 200
+        }
+      ],
+      "expo-asset"
     ],
     "owner": "simontang",
     "runtimeVersion": {
