@@ -12,6 +12,7 @@ import { VaporBackground, GlassCard, SoftButton, Logo, FadeInUp } from '../compo
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { setOnboardingDone, useAppStore } from '../hooks/useAppStore';
+import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../lib/motion';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 
@@ -27,6 +28,7 @@ export default function OnboardingScreen({ navigation }: Props) {
   const [step, setStep] = useState(0);
   const [showAgeGate, setShowAgeGate] = useState(false);
   const isPreview = step === STEPS.length;
+  const reduceMotion = useReduceMotion();
 
   const contentOpacity = useRef(new Animated.Value(1)).current;
   const contentTranslate = useRef(new Animated.Value(0)).current;
@@ -42,15 +44,21 @@ export default function OnboardingScreen({ navigation }: Props) {
   }, [step]);
 
   const animateStep = (next: number) => {
+    if (reduceMotion) {
+      setStep(next);
+      contentOpacity.setValue(1);
+      contentTranslate.setValue(0);
+      return;
+    }
     Animated.parallel([
-      Animated.timing(contentOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-      Animated.timing(contentTranslate, { toValue: -20, duration: 150, useNativeDriver: true }),
+      Animated.timing(contentOpacity, { toValue: 0, duration: MOTION.quick, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(contentTranslate, { toValue: -20, duration: MOTION.quick, useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start(() => {
       setStep(next);
       contentTranslate.setValue(20);
       Animated.parallel([
-        Animated.timing(contentOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
-        Animated.spring(contentTranslate, { toValue: 0, tension: 80, friction: 12, useNativeDriver: true }),
+        Animated.timing(contentOpacity, { toValue: 1, duration: MOTION.standard, easing: MOTION.easeOut, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.spring(contentTranslate, { toValue: 0, tension: 80, friction: 12, useNativeDriver: USE_NATIVE_DRIVER }),
       ]).start();
     });
   };
@@ -241,14 +249,21 @@ function IdentityPreview({ p, lang, identityKind, seed }: any) {
 // and life instead of a static icon.
 function BreathingMark({ children, style }: { children: React.ReactNode; style?: any }) {
   const breath = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
   useEffect(() => {
-    Animated.loop(
+    if (reduceMotion) {
+      breath.setValue(0.5);
+      return;
+    }
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(breath, { toValue: 1, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(breath, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 1, duration: 2600, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(breath, { toValue: 0, duration: 2600, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
       ]),
-    ).start();
-  }, []);
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [breath, reduceMotion]);
   const scale = breath.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1.03] });
   const opacity = breath.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] });
   return <Animated.View style={[style, { transform: [{ scale }], opacity }]}>{children}</Animated.View>;

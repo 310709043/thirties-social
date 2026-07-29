@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Rect, Line } from 'react-native-svg';
+import { USE_NATIVE_DRIVER, useReduceMotion } from '../lib/motion';
 
 interface Props {
   onDone: () => void;
@@ -13,6 +14,7 @@ const GOLD = '#d8a96a';
 const FLAME = '#E8843A';
 
 export default function LoadingScreen({ onDone }: Props) {
+  const reduceMotion = useReduceMotion();
   const bgOpacity = useRef(new Animated.Value(0)).current;
   const candleOpacity = useRef(new Animated.Value(0)).current;
   const candleScale = useRef(new Animated.Value(0.85)).current;
@@ -36,25 +38,39 @@ export default function LoadingScreen({ onDone }: Props) {
   useEffect(() => {
     let flicker: Animated.CompositeAnimation | null = null;
 
-    Animated.timing(bgOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    if (reduceMotion) {
+      bgOpacity.setValue(1);
+      candleOpacity.setValue(1);
+      candleScale.setValue(1);
+      glowOpacity.setValue(0.45);
+      flameOpacity.setValue(1);
+      flameScale.setValue(1);
+      titleOpacity.setValue(1);
+      titleTY.setValue(0);
+      subOpacity.setValue(1);
+      const reducedTimer = setTimeout(onDone, 650);
+      return () => clearTimeout(reducedTimer);
+    }
+
+    Animated.timing(bgOpacity, { toValue: 1, duration: 500, useNativeDriver: USE_NATIVE_DRIVER }).start();
 
     // Candle rises into view
     Animated.parallel([
-      Animated.timing(candleOpacity, { toValue: 1, duration: 700, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      Animated.spring(candleScale, { toValue: 1, tension: 60, friction: 9, useNativeDriver: true }),
+      Animated.timing(candleOpacity, { toValue: 1, duration: 700, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.spring(candleScale, { toValue: 1, tension: 60, friction: 9, useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start();
 
     // Flame lights up
     Animated.parallel([
-      Animated.timing(flameOpacity, { toValue: 1, duration: 500, delay: 350, useNativeDriver: true }),
-      Animated.spring(flameScale, { toValue: 1, delay: 350, tension: 80, friction: 7, useNativeDriver: true }),
-      Animated.timing(glowOpacity, { toValue: 0.55, duration: 800, delay: 350, useNativeDriver: true }),
+      Animated.timing(flameOpacity, { toValue: 1, duration: 500, delay: 350, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.spring(flameScale, { toValue: 1, delay: 350, tension: 80, friction: 7, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(glowOpacity, { toValue: 0.55, duration: 800, delay: 350, useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start(() => {
       // Gentle flicker while alive
       flicker = Animated.loop(
         Animated.sequence([
-          Animated.timing(flameScale, { toValue: 0.94, duration: 280, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(flameScale, { toValue: 1.0, duration: 320, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(flameScale, { toValue: 0.94, duration: 280, easing: Easing.inOut(Easing.sin), useNativeDriver: USE_NATIVE_DRIVER }),
+          Animated.timing(flameScale, { toValue: 1.0, duration: 320, easing: Easing.inOut(Easing.sin), useNativeDriver: USE_NATIVE_DRIVER }),
         ]),
       );
       flicker.start();
@@ -63,35 +79,35 @@ export default function LoadingScreen({ onDone }: Props) {
     // Glow breathes
     Animated.loop(
       Animated.sequence([
-        Animated.timing(glowOpacity, { toValue: 0.6, duration: 1400, delay: 600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(glowOpacity, { toValue: 0.4, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(glowOpacity, { toValue: 0.6, duration: 1400, delay: 600, easing: Easing.inOut(Easing.sin), useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(glowOpacity, { toValue: 0.4, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: USE_NATIVE_DRIVER }),
       ]),
     ).start();
 
     // Text
     Animated.parallel([
-      Animated.timing(titleOpacity, { toValue: 1, duration: 600, delay: 500, useNativeDriver: true }),
-      Animated.timing(titleTY, { toValue: 0, duration: 600, delay: 500, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(titleOpacity, { toValue: 1, duration: 600, delay: 500, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(titleTY, { toValue: 0, duration: 600, delay: 500, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start();
-    Animated.timing(subOpacity, { toValue: 1, duration: 600, delay: 800, useNativeDriver: true }).start();
+    Animated.timing(subOpacity, { toValue: 1, duration: 600, delay: 800, useNativeDriver: USE_NATIVE_DRIVER }).start();
 
     // Blow out the candle
     const blowTimer = setTimeout(() => {
       if (flicker) flicker.stop();
       Animated.parallel([
         // flame snuffs: shrink, drift aside, fade
-        Animated.timing(flameScale, { toValue: 0, duration: 260, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-        Animated.timing(flameTX, { toValue: 16, duration: 300, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-        Animated.timing(flameTY, { toValue: -8, duration: 300, useNativeDriver: true }),
-        Animated.timing(flameOpacity, { toValue: 0, duration: 280, useNativeDriver: true }),
+        Animated.timing(flameScale, { toValue: 0, duration: 260, easing: Easing.in(Easing.quad), useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(flameTX, { toValue: 16, duration: 300, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(flameTY, { toValue: -8, duration: 300, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(flameOpacity, { toValue: 0, duration: 280, useNativeDriver: USE_NATIVE_DRIVER }),
         // glow dies
-        Animated.timing(glowOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(glowOpacity, { toValue: 0, duration: 500, useNativeDriver: USE_NATIVE_DRIVER }),
         // smoke rises
         Animated.sequence([
-          Animated.timing(smokeOpacity, { toValue: 0.5, duration: 200, useNativeDriver: true }),
-          Animated.timing(smokeOpacity, { toValue: 0, duration: 700, useNativeDriver: true }),
+          Animated.timing(smokeOpacity, { toValue: 0.5, duration: 200, useNativeDriver: USE_NATIVE_DRIVER }),
+          Animated.timing(smokeOpacity, { toValue: 0, duration: 700, useNativeDriver: USE_NATIVE_DRIVER }),
         ]),
-        Animated.timing(smokeTY, { toValue: -46, duration: 900, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(smokeTY, { toValue: -46, duration: 900, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE_DRIVER }),
       ]).start();
     }, 1900);
 

@@ -4,21 +4,27 @@
 // carries a soft flame flicker (one native-driver opacity loop — negligible
 // cost, but the fire feels alive).
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, View } from 'react-native';
+import { Animated, View } from 'react-native';
 import Svg, { Path, Circle, Line, Rect } from 'react-native-svg';
+import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../../lib/motion';
 
 function useFlicker(duration = 1400): Animated.Value {
   const v = useRef(new Animated.Value(0.75)).current;
+  const reduceMotion = useReduceMotion();
   useEffect(() => {
+    if (reduceMotion) {
+      v.setValue(0.9);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(v, { toValue: 1, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(v, { toValue: 0.75, duration: duration * 0.8, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(v, { toValue: 1, duration, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(v, { toValue: 0.75, duration: duration * 0.8, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
       ]),
     );
     loop.start();
     return () => loop.stop();
-  }, []);
+  }, [duration, reduceMotion, v]);
   return v;
 }
 

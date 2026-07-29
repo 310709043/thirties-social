@@ -384,6 +384,8 @@ export default function ChatScreen({ navigation, route }: Props) {
             {/* Back */}
             <View style={styles.headerRow}>
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={lang === 'en' ? 'End conversation and leave' : '結束對話並離開'}
                 onPress={() => {
                   iLeftRef.current = true;
                   if (conversationId) {
@@ -406,7 +408,12 @@ export default function ChatScreen({ navigation, route }: Props) {
               {/* Safety — report/block needs the other person's real uid (from the
                   conversation doc), NOT their display seed: a report filed against
                   a seed can't be traced to any account, so moderation couldn't act. */}
-              <TouchableOpacity onPress={() => navigation.push('Safety', { reportedUserId: otherUidRef.current ?? undefined, conversationId })} style={styles.safetyBtn}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={lang === 'en' ? 'Safety, report or block' : '安全、檢舉或封鎖'}
+                onPress={() => navigation.push('Safety', { reportedUserId: otherUidRef.current ?? undefined, conversationId })}
+                style={styles.safetyBtn}
+              >
                 <Text style={{ color: p.muted, fontSize: 18 }}>ⓘ</Text>
               </TouchableOpacity>
             </View>
@@ -504,10 +511,6 @@ export default function ChatScreen({ navigation, route }: Props) {
             contentContainerStyle={{ padding: 20, gap: 14 }}
             onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
           >
-            <Text style={[styles.openNote, { color: p.muted }]}>
-              {lang === 'en' ? 'messages dissolve when the timer ends' : '\u8A08\u6642\u7D50\u675F\u5F8C\u8A0A\u606F\u6703\u5168\u90E8\u6D88\u6563'}
-            </Text>
-
             {displayMessages.length === 0 && (
               <FadeInUp delay={120} distance={10}>
                 <View style={styles.emptyState}>
@@ -603,19 +606,18 @@ export default function ChatScreen({ navigation, route }: Props) {
                 </Text>
               </View>
             )}
-            {/* Photo veil bar */}
-            <TouchableOpacity onPress={() => setShowVeilSheet(true)}
-              style={[styles.veilBar, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
-              <WickGlyph size={12} color={p.accent} />
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.inkSoft, flex: 1 }}>
-                {lang === 'en' ? 'send a veiled photo — they reveal it with wicks' : '傳送帶紗照片，對方用燭芯揭開'}
-              </Text>
-              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted }}>
-                {lang === 'en' ? '2 wicks' : '2 芯'}
-              </Text>
-            </TouchableOpacity>
             <GlassCard p={p} padding={6} radius={28}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => setShowVeilSheet(true)}
+                accessibilityRole="button"
+                accessibilityLabel={lang === 'en' ? 'Send a veiled photo, 2 wicks' : '傳送帶紗照片，2 燭芯'}
+                activeOpacity={0.75}
+                style={[styles.photoComposerBtn, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}
+              >
+                <WickGlyph size={12} color={p.accent} />
+                <Text style={[styles.photoCost, { color: p.accent }]}>2</Text>
+              </TouchableOpacity>
               <TextInput
                 value={inputText}
                 onChangeText={handleInputChange}
@@ -908,15 +910,14 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
 const styles = StyleSheet.create({
   header:         { paddingTop: 8, paddingBottom: 14, paddingHorizontal: 18 },
   headerRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backBtn:        { padding: 6 },
+  backBtn:        { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   otherIdentity:  { alignItems: 'center', gap: 4 },
-  safetyBtn:      { padding: 6 },
-  countdown:      { marginTop: 14, gap: 8, paddingHorizontal: 6 },
+  safetyBtn:      { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  countdown:      { marginTop: 9, gap: 6, paddingHorizontal: 6 },
   countdownRow:   { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 },
-  timer:          { fontFamily: 'Inter-Regular', fontSize: 22, fontWeight: '300', letterSpacing: 1 },
+  timer:          { fontFamily: 'Inter-Regular', fontSize: 19, fontWeight: '300', letterSpacing: 1 },
   dissolveNote:   { fontFamily: 'EBGaramond-Italic', fontSize: 11, textAlign: 'center', opacity: 0.7 },
   messages:       { flex: 1 },
-  openNote:       { fontFamily: 'EBGaramond-Italic', fontSize: 11, textAlign: 'center', opacity: 0.7, marginBottom: 6 },
   emptyState:     { alignItems: 'center', paddingTop: 36, paddingHorizontal: 12 },
   emptyTitle:     { fontFamily: 'NotoSerifTC-Light', fontSize: 21, letterSpacing: 1, textAlign: 'center' },
   emptyBody:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5, lineHeight: 23, textAlign: 'center', marginTop: 10, maxWidth: 260 },
@@ -927,11 +928,13 @@ const styles = StyleSheet.create({
   bubbleRow:      { flexDirection: 'row' },
   bubble:         { maxWidth: '78%', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 22 },
   bubbleText:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 24 },
-  typingRow:      { flexDirection: 'row', alignItems: 'flex-end', gap: 6, opacity: 0.7, marginTop: 4 },
+  typingRow:      { flexDirection: 'row', alignItems: 'flex-end', gap: 6, opacity: 0.7, marginTop: 4, marginHorizontal: 20, marginBottom: 2 },
   typingBubble:   { borderRadius: 16, borderWidth: 0.5, overflow: 'hidden' },
-  composer:       { padding: 4, paddingHorizontal: 18, paddingBottom: 18, gap: 8 },
+  composer:       { paddingTop: 6, paddingHorizontal: 16, paddingBottom: 14, gap: 8 },
   input:          { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 15, paddingHorizontal: 14, paddingVertical: 12 },
   sendBtn:        { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  photoComposerBtn:{ width: 38, height: 38, borderRadius: 19, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+  photoCost:      { position: 'absolute', right: 3, bottom: 2, fontFamily: 'Inter-Regular', fontSize: 8, fontWeight: '700' },
   veilBar:        { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 0.5 },
   watermarkLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.04, zIndex: 1, justifyContent: 'space-around', overflow: 'hidden' },
   watermarkRow:   { flexDirection: 'row', justifyContent: 'space-around' },

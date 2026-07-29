@@ -2,13 +2,15 @@
 
 import React, { ReactNode, useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, TextInput, Animated, Easing,
+  View, Text, TouchableOpacity, Animated,
   StyleSheet, ViewStyle, TextStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path as SvgPath, Ellipse, Rect } from 'react-native-svg';
 import { Palette } from '../../lib/theme';
 import { NightAtmosphere } from './NightAtmosphere';
+import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../../lib/motion';
+import { PressableScale } from './Pressable';
 
 // ── VaporBackground ──────────────────────────────────────────
 export function VaporBackground({ p, children, style }: { p: Palette; children: ReactNode; style?: ViewStyle }) {
@@ -17,7 +19,7 @@ export function VaporBackground({ p, children, style }: { p: Palette; children: 
       colors={p.bg as any}
       start={{ x: 0.1, y: 0 }}
       end={{ x: 0.9, y: 1 }}
-      style={[{ flex: 1 }, style]}
+      style={[{ flex: 1, overflow: 'hidden' }, style]}
     >
       {/* accent orbs */}
       <View style={{
@@ -58,6 +60,7 @@ export const GlassCard = React.memo(function GlassCard({
       shadowOffset: { width: 0, height: 8 },
       shadowOpacity: p.dark ? 0.25 : 0.06,
       shadowRadius: 24,
+      elevation: p.dark ? 5 : 2,
     }, style]}>
       {children}
     </View>
@@ -92,10 +95,12 @@ export const SoftButton = React.memo(function SoftButton({
 
   const v = variants[variant];
   return (
-    <TouchableOpacity
+    <PressableScale
       onPress={onPress}
-      activeOpacity={0.85}
       disabled={disabled}
+      scaleTo={0.975}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
       style={[{
         height: sizes.height,
         paddingHorizontal: sizes.paddingH,
@@ -114,7 +119,7 @@ export const SoftButton = React.memo(function SoftButton({
       {typeof children === 'string'
         ? <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: sizes.fontSize, color: v.color, fontWeight: '500' }}>{children}</Text>
         : children}
-    </TouchableOpacity>
+    </PressableScale>
   );
 });
 
@@ -137,16 +142,22 @@ export function Cap({ children, p, style }: { children: ReactNode; p: Palette; s
 // ── BreathDot ─────────────────────────────────────────────────
 export function BreathDot({ p, size = 8, animate = true }: { p: Palette; size?: number; animate?: boolean }) {
   const breath = useRef(new Animated.Value(1)).current;
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
-    if (!animate) return;
-    Animated.loop(
+    if (!animate || reduceMotion) {
+      breath.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(breath, { toValue: 1.3, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(breath, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 1.3, duration: MOTION.breathe, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(breath, { toValue: 1, duration: MOTION.breathe, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
       ])
-    ).start();
-  }, []);
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [animate, breath, reduceMotion]);
 
   return (
     <Animated.View style={{
@@ -207,10 +218,20 @@ export function Toggle({
   p: Palette; on: boolean; onToggle?: () => void;
 }) {
   const knobX = useRef(new Animated.Value(on ? 18 : 2)).current;
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
-    Animated.spring(knobX, { toValue: on ? 18 : 2, tension: 120, friction: 10, useNativeDriver: true }).start();
-  }, [on]);
+    if (reduceMotion) {
+      knobX.setValue(on ? 18 : 2);
+      return;
+    }
+    Animated.spring(knobX, {
+      toValue: on ? 18 : 2,
+      tension: 120,
+      friction: 10,
+      useNativeDriver: USE_NATIVE_DRIVER,
+    }).start();
+  }, [knobX, on, reduceMotion]);
 
   return (
     <TouchableOpacity onPress={onToggle} activeOpacity={0.85} style={{
@@ -314,7 +335,7 @@ export function ScreenHeader({
     <View style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 20, minHeight: 40 }, style]}>
       <TouchableOpacity onPress={onBack} activeOpacity={0.7}
         accessibilityRole="button" accessibilityLabel="返回"
-        style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line, alignItems: 'center', justifyContent: 'center' }}>
+        style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line, alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ color: p.muted, fontSize: 19, marginTop: -2 }}>‹</Text>
       </TouchableOpacity>
       {title ? (
@@ -325,7 +346,7 @@ export function ScreenHeader({
           ) : null}
         </View>
       ) : <View style={{ flex: 1 }} />}
-      <View style={{ width: 38, height: 38, alignItems: 'flex-end', justifyContent: 'center' }}>
+      <View style={{ width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' }}>
         {right}
       </View>
     </View>

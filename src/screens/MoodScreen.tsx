@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, Animated, Easing, KeyboardAvoidingView,
+  StyleSheet, Alert, Animated, KeyboardAvoidingView,
 } from 'react-native';
 import Svg, { Path, Circle, Line, Defs, RadialGradient as SvgRadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,14 +23,45 @@ import { getColorAdj } from '../lib/identity';
 import { analytics } from '../lib/analytics';
 import { addDiaryEntry } from '../lib/diary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../lib/motion';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
 
 const TONIGHT_MODES = [
-  { value: 'just_here', icon: '🕯', titleKey: 'modeJustHere' },
-  { value: 'want_to_talk', icon: '💬', titleKey: 'modeWantToTalk' },
-  { value: 'open_to_more', icon: '🌊', titleKey: 'modeOpenToMore' },
+  { value: 'just_here', titleKey: 'modeJustHere' },
+  { value: 'want_to_talk', titleKey: 'modeWantToTalk' },
+  { value: 'open_to_more', titleKey: 'modeOpenToMore' },
 ] as const;
+
+function ModeGlyph({ mode, color }: { mode: TonightMode; color: string }) {
+  if (mode === 'just_here') {
+    return (
+      <Svg width={24} height={24} viewBox="0 0 24 24">
+        <Path d="M12 3 C 15 6.4, 16 8.3, 16 11 C 16 13.7, 14.2 15.7, 12 15.7 C 9.8 15.7, 8 13.7, 8 11 C 8 8.3, 9 6.4, 12 3 Z"
+          fill="none" stroke={color} strokeWidth={1.4} />
+        <Line x1={12} y1={16} x2={12} y2={21} stroke={color} strokeWidth={1.4} strokeLinecap="round" />
+      </Svg>
+    );
+  }
+  if (mode === 'want_to_talk') {
+    return (
+      <Svg width={24} height={24} viewBox="0 0 24 24">
+        <Path d="M5 5.5 H16.5 C18 5.5 19 6.5 19 8 V13 C19 14.5 18 15.5 16.5 15.5 H11 L7 19 V15.5 H5 C3.7 15.5 3 14.5 3 13 V8 C3 6.5 3.7 5.5 5 5.5 Z"
+          fill="none" stroke={color} strokeWidth={1.4} strokeLinejoin="round" />
+        <Circle cx={8} cy={10.5} r={0.8} fill={color} />
+        <Circle cx={12} cy={10.5} r={0.8} fill={color} />
+        <Circle cx={16} cy={10.5} r={0.8} fill={color} />
+      </Svg>
+    );
+  }
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24">
+      <Circle cx={9} cy={12} r={5.5} fill="none" stroke={color} strokeWidth={1.4} />
+      <Circle cx={15} cy={12} r={5.5} fill="none" stroke={color} strokeWidth={1.4} />
+      <Circle cx={12} cy={12} r={1.25} fill={color} />
+    </Svg>
+  );
+}
 
 /**
  * Self-ticking 03:00 countdown. Isolated in its own component so the 1-second
@@ -62,10 +93,15 @@ function ResetCountdown({ color }: { color: string }) {
 /** Self-animating "…" so the 600ms dot cycle doesn't re-render the screen. */
 function WaitingDots({ style, prefix }: { style: any; prefix: string }) {
   const [dots, setDots] = useState('');
+  const reduceMotion = useReduceMotion();
   useEffect(() => {
+    if (reduceMotion) {
+      setDots('…');
+      return;
+    }
     const id = setInterval(() => setDots(d => (d.length >= 3 ? '' : d + '.')), 600);
     return () => clearInterval(id);
-  }, []);
+  }, [reduceMotion]);
   return <Text style={style}>{prefix}{dots}</Text>;
 }
 
@@ -74,6 +110,7 @@ export default function MoodScreen({ navigation }: Props) {
   const p = DIRECTIONS[direction];
   const isGuestUser = getTier() === 'guest';
   const [text, setText] = useState('');
+  const [moodFocused, setMoodFocused] = useState(false);
   const [rooms, setRooms] = useState<DbRoom[]>([]);
   const [waiting, setWaiting] = useState(false);
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -404,6 +441,8 @@ export default function MoodScreen({ navigation }: Props) {
         {/* ── Top Bar ── */}
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.identityRow} activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={lang === 'en' ? 'Open profile' : '開啟個人頁'}
             onPress={() => navigation.push('Profile')}>
             <Identity kind={identityKind} seed={seed} size={32} palette={p} lang={lang} trust={0.2} />
             <View>
@@ -415,10 +454,14 @@ export default function MoodScreen({ navigation }: Props) {
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TouchableOpacity onPress={() => setLang(lang === 'en' ? 'zh' : 'en')}
+              accessibilityRole="button"
+              accessibilityLabel={lang === 'en' ? 'Switch language to Chinese' : '切換為英文'}
               style={[styles.langBtn, { backgroundColor: p.surface, borderColor: p.line }]}>
               <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: p.muted }}>{lang === 'en' ? 'EN' : '中'}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => navigation.push('Upgrade')}
+              accessibilityRole="button"
+              accessibilityLabel={lang === 'en' ? `${wicks} wicks, open plans` : `${wicks} 枚燭芯，開啟方案`}
               style={[styles.wicksBtn, { backgroundColor: p.accentSoft, borderColor: p.accent + '40' }]}>
               <WickGlyph size={10} color={p.accent} />
               <AnimatedNumber value={wicks} style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: p.accent }} />
@@ -525,78 +568,115 @@ export default function MoodScreen({ navigation }: Props) {
             );
           })}
 
-          {/* Mood Input */}
-          <View style={[styles.inputWrap, { backgroundColor: p.glass, borderColor: p.line }]}>
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              placeholder={t('moodPlaceholder', lang)}
-              placeholderTextColor={p.muted}
-              multiline
-              maxLength={280}
-              style={[styles.input, { color: p.ink }]}
-            />
-            <View style={styles.inputFooter}>
-              <Text style={{ flex: 1, marginRight: 8, fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted }}>
-                {lang === 'en' ? 'your match sees this line · kept in your diary' : '配對到的人會看到這句 · 也會留進你的日記'}
-              </Text>
-              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted }}>{text.length}/280</Text>
-            </View>
-          </View>
+          {/* The primary ritual lives in one visual container: one person,
+              one optional line, one clear intent. This keeps secondary spaces
+              from competing with the action the screen is actually for. */}
+          <FadeInUp delay={80} distance={10}>
+            <View style={[styles.ritualCard, {
+              backgroundColor: p.surface,
+              borderColor: moodFocused ? p.accent + '70' : p.line,
+              shadowColor: p.dark ? '#000' : p.ink,
+            }]}>
+              <View style={styles.ritualMeta}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                  <BreathDot p={p} size={5} animate={!waiting} />
+                  <Text style={[styles.ritualEyebrow, { color: p.accent }]}>
+                    {lang === 'en' ? 'ONE PERSON · 30 MINUTES' : '一個人 · 30 分鐘'}
+                  </Text>
+                </View>
+                <Text style={[styles.ritualPrivacy, { color: p.muted }]}>
+                  {lang === 'en' ? 'anonymous' : '匿名'}
+                </Text>
+              </View>
 
-          {/* Keep intent visible before matching. This used to live in a modal
-              after the CTA, making the primary flow feel like a confirmation
-              maze and hiding a key compatibility signal. */}
-          <View style={styles.modeSection}>
-            <View style={styles.modeHeader}>
-              <Text style={[styles.roomsLabel, { color: p.muted }]}>
-                {lang === 'en' ? 'TONIGHT I AM' : '今晚的我'}
-              </Text>
-              <Text style={[styles.modeHint, { color: p.muted }]}>
-                {lang === 'en' ? 'shown before you talk' : '配對前會讓對方知道'}
-              </Text>
+              <View style={[styles.inputWrap, {
+                backgroundColor: p.glass,
+                borderColor: moodFocused ? p.accent : p.line,
+              }]}>
+                <TextInput
+                  value={text}
+                  onChangeText={setText}
+                  onFocus={() => setMoodFocused(true)}
+                  onBlur={() => setMoodFocused(false)}
+                  placeholder={t('moodPlaceholder', lang)}
+                  placeholderTextColor={p.muted}
+                  multiline
+                  maxLength={280}
+                  style={[styles.input, { color: p.ink }]}
+                />
+                <View style={styles.inputFooter}>
+                  <Text style={{ flex: 1, marginRight: 8, fontFamily: 'NotoSerifTC-Regular', fontSize: 10.5, color: p.muted }}>
+                    {lang === 'en' ? 'visible to your match · saved only in your diary' : '配對後讓對方看見 · 只留在你的日記'}
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: text.length > 240 ? p.accent : p.muted }}>
+                    {text.length}/280
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.ritualDivider, { backgroundColor: p.line }]} />
+
+              <View style={styles.modeSection}>
+                <View style={styles.modeHeader}>
+                  <Text style={[styles.roomsLabel, { color: p.muted }]}>
+                    {lang === 'en' ? 'HOW I WANT TO BE HERE' : '今晚想怎麼待著'}
+                  </Text>
+                  <Text style={[styles.modeHint, { color: p.muted }]}>
+                    {lang === 'en' ? 'required' : '必選'}
+                  </Text>
+                </View>
+                <View style={styles.modeRow}>
+                  {TONIGHT_MODES.map(mode => {
+                    const selected = tonightMode === mode.value;
+                    return (
+                      <PressableScale
+                        key={mode.value}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        onPress={() => setTonightMode(mode.value)}
+                        scaleTo={0.97}
+                        style={[
+                          styles.modeCard,
+                          {
+                            backgroundColor: selected ? p.accentSoft : p.glass,
+                            borderColor: selected ? p.accent : p.line,
+                            borderWidth: selected ? 1.2 : 0.6,
+                          },
+                        ]}
+                      >
+                        <View style={styles.modeGlyphWrap}>
+                          <ModeGlyph mode={mode.value} color={selected ? p.accent : p.muted} />
+                          {selected ? (
+                            <View style={[styles.modeCheck, { backgroundColor: p.accent }]}>
+                              <Text style={{ color: p.dark ? '#15172e' : '#fff', fontSize: 8, fontWeight: '700' }}>✓</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        <Text
+                          numberOfLines={2}
+                          style={[styles.modeText, { color: selected ? p.accent : p.ink }]}
+                        >
+                          {t(mode.titleKey, lang)}
+                        </Text>
+                      </PressableScale>
+                    );
+                  })}
+                </View>
+              </View>
             </View>
-            <View style={styles.modeRow}>
-              {TONIGHT_MODES.map(mode => {
-                const selected = tonightMode === mode.value;
-                return (
-                  <TouchableOpacity
-                    key={mode.value}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    onPress={() => {
-                      setTonightMode(mode.value);
-                      hapticMedium();
-                    }}
-                    activeOpacity={0.82}
-                    style={[
-                      styles.modeCard,
-                      {
-                        backgroundColor: selected ? p.accentSoft : p.glass,
-                        borderColor: selected ? p.accent : p.line,
-                        borderWidth: selected ? 1.2 : 0.6,
-                      },
-                    ]}
-                  >
-                    <Text style={styles.modeIcon}>{mode.icon}</Text>
-                    <Text
-                      numberOfLines={2}
-                      style={[styles.modeText, { color: selected ? p.accent : p.ink }]}
-                    >
-                      {t(mode.titleKey, lang)}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
+          </FadeInUp>
 
           {/* Rooms */}
           <View style={styles.roomsSection}>
             <View style={styles.roomsHeader}>
-              <Text style={[styles.roomsLabel, { color: p.muted }]}>
-                {lang === 'en' ? 'ROOMS' : '火盆'}
-              </Text>
+              <View>
+                <Text style={[styles.roomsLabel, { color: p.muted }]}>
+                  {lang === 'en' ? 'OTHER WAYS TO STAY' : '今晚還能這樣待著'}
+                </Text>
+                <Text style={[styles.sectionHint, { color: p.muted }]}>
+                  {lang === 'en' ? 'join a group, go deeper, or write slowly' : '加入一群人、靠近一點，或慢慢寫'}
+                </Text>
+              </View>
               <TouchableOpacity onPress={() => navigation.push('Room', { roomKey: 'new' })}>
                 <Text style={[styles.openRoomLink, { color: p.accent }]}>
                   {lang === 'en' ? '+ open' : '+ 開一個'}
@@ -606,42 +686,40 @@ export default function MoodScreen({ navigation }: Props) {
 
             {activeRooms.length > 0 ? (
               <View style={styles.roomsList}>
-                {activeRooms.slice(0, 3).map((room) => (
+                {activeRooms.slice(0, 1).map((room) => (
                   <PressableScale
                     key={room.id}
                     onPress={() => navigation.push('Room', { roomKey: room.roomKey ?? 'custom', roomId: room.id })}
+                    scaleTo={0.985}
                   >
                     <View style={[styles.roomItem, { backgroundColor: p.glass, borderColor: p.line }]}>
-                      <BreathDot p={p} size={4} />
-                      <Text style={[styles.roomTopic, { color: p.ink }]} numberOfLines={1}>
-                        {room.customTopicZh || room.customTopicEn
-                          || (room.roomKey && !['new', 'custom'].includes(room.roomKey)
-                              ? t(room.roomKey as any, lang)
-                              : (lang === 'en' ? 'a quiet brazier' : '一個火盆'))}
-                      </Text>
-                      {room.roomKey?.startsWith('official') && (
-                        <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, backgroundColor: p.accentSoft }}>
-                          <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 9, color: p.accent }}>
-                            {lang === 'en' ? 'nightly' : '今夜'}
-                          </Text>
-                        </View>
-                      )}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <Text style={[styles.roomCount, { color: p.muted }]}>
-                          {room.messageCount ?? 0}
-                        </Text>
-                        <Text style={{ color: p.muted, fontSize: 15, opacity: 0.5, marginTop: -1 }}>›</Text>
+                      <View style={[styles.roomGlyph, { backgroundColor: p.accentSoft, borderColor: p.accent + '24' }]}>
+                        <BrazierGlyph c={p.ink} accent={p.accent} />
                       </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.roomTopic, { color: p.ink }]} numberOfLines={1}>
+                          {room.customTopicZh || room.customTopicEn
+                            || (room.roomKey && !['new', 'custom'].includes(room.roomKey)
+                                ? t(room.roomKey as any, lang)
+                                : (lang === 'en' ? 'a quiet brazier' : '一個火盆'))}
+                        </Text>
+                        <Text style={[styles.roomMeta, { color: p.muted }]}>
+                          {lang === 'en'
+                            ? `${room.messageCount ?? 0} messages · join quietly`
+                            : `${room.messageCount ?? 0} 則訊息 · 安靜加入`}
+                        </Text>
+                      </View>
+                      <Text style={{ color: p.accent, fontSize: 17 }}>›</Text>
                     </View>
                   </PressableScale>
                 ))}
-                {activeRooms.length > 3 && (
+                {activeRooms.length > 1 && (
                   <TouchableOpacity onPress={() => setShowAllRooms(true)}
                     style={{ alignItems: 'center', paddingVertical: 8 }}>
                     <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
                       {lang === 'en'
-                        ? `${activeRooms.length - 3} more braziers →`
-                        : `還有 ${activeRooms.length - 3} 個火盆 →`}
+                        ? `See all ${activeRooms.length} braziers →`
+                        : `查看全部 ${activeRooms.length} 個火盆 →`}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -659,46 +737,50 @@ export default function MoodScreen({ navigation }: Props) {
             )}
           </View>
 
-          {/* ── The Loft ── */}
-          <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.push('Loft')}>
-            <LinearGradient
-              colors={['#1f1014', '#2d161c', '#3a1e24']}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={styles.loftBanner}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: '#f5e2c4', fontWeight: '500' }}>
-                  {lang === 'en' ? 'The Loft' : '夜閣'}
-                </Text>
-                <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: 'rgba(245,226,196,0.6)', marginTop: 2 }}>
-                  {lang === 'en' ? 'opens 21:00 nightly · face to face · veiled' : '每晚 21:00 開啟 · 面對面 · 帶紗'}
-                </Text>
-              </View>
-              <View style={{ alignItems: 'center', gap: 4 }}>
-                <WickGlyph size={18} color="#e8a557" />
-                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 2, color: 'rgba(232,165,87,0.7)', textTransform: 'uppercase' }}>
-                  {lang === 'en' ? 'enter' : '進入'}
-                </Text>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
+          <View style={styles.secondaryRow}>
+            <PressableScale onPress={() => navigation.push('Loft')} scaleTo={0.975} style={styles.secondaryCardWrap}>
+              <LinearGradient
+                colors={['#1f1014', '#2d161c', '#3a1e24']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={styles.secondaryCard}
+              >
+                <LoftGlyph c="#f5e2c4" accent="#e8a557" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.loftTitle}>{lang === 'en' ? 'The Loft' : '夜閣'}</Text>
+                  <Text numberOfLines={2} style={styles.loftSubtitle}>
+                    {lang === 'en' ? 'veiled · face to face' : '帶紗 · 面對面'}
+                  </Text>
+                </View>
+                <Text style={styles.secondaryArrowDark}>›</Text>
+              </LinearGradient>
+            </PressableScale>
 
-          {/* 夜信 — slow mail to a stranger, delivered tomorrow night */}
-          <TouchableOpacity onPress={openLetters} activeOpacity={0.85}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, backgroundColor: p.glass, borderWidth: 0.5, borderColor: p.line }}>
-            <Text style={{ fontSize: 15 }}>✉</Text>
-            <Text style={{ flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>
-              {letterReplies.length > 0
-                ? (lang === 'en' ? 'Your letter got a reply' : '你的夜信有了回音')
-                : letterSentTonight
-                ? (lang === 'en' ? 'Your letter departs at dawn' : '你的信天亮後出發')
-                : (lang === 'en' ? 'Night letter — write to a stranger of tomorrow' : '夜信 — 寫給明晚的一個陌生人')}
-            </Text>
-            <Text style={{ color: p.muted, fontSize: 15, opacity: 0.5 }}>›</Text>
-          </TouchableOpacity>
+            <PressableScale onPress={openLetters} scaleTo={0.975} style={styles.secondaryCardWrap}>
+              <View style={[styles.secondaryCard, { backgroundColor: p.glass, borderColor: p.line }]}>
+                <LetterGlyph c={p.ink} accent={p.accent} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.secondaryTitle, { color: p.ink }]}>
+                    {letterReplies.length > 0
+                      ? (lang === 'en' ? 'A reply' : '有回信')
+                      : (lang === 'en' ? 'Night letter' : '夜信')}
+                  </Text>
+                  <Text numberOfLines={2} style={[styles.secondarySubtitle, { color: p.muted }]}>
+                    {letterSentTonight
+                      ? (lang === 'en' ? 'departs at dawn' : '天亮後出發')
+                      : (lang === 'en' ? 'for tomorrow’s stranger' : '寫給明晚的陌生人')}
+                  </Text>
+                </View>
+                <Text style={{ color: p.accent, fontSize: 17 }}>›</Text>
+              </View>
+            </PressableScale>
+          </View>
         </ScrollView>
 
         {/* ── Bottom: Match Button ── */}
-        <View style={styles.bottom}>
+        <View style={[styles.bottom, {
+          backgroundColor: p.dark ? 'rgba(13,18,36,0.88)' : 'rgba(255,250,242,0.82)',
+          borderTopColor: p.line,
+        }]}>
           {waiting ? (
             // Waiting is never a dead spinner. While we look, the night stays
             // warm: a reassurance that we'll tell them the moment someone comes,
@@ -982,16 +1064,39 @@ function LoftGlyph({ c, accent }: { c: string; accent: string }) {
   );
 }
 
+function LetterGlyph({ c, accent }: { c: string; accent: string }) {
+  return (
+    <Svg width={30} height={30} viewBox="0 0 32 32">
+      <Path d="M5.5 9.5 H26.5 V23 H5.5 Z" fill="none" stroke={c} strokeWidth={1.4} strokeLinejoin="round" />
+      <Path d="M6 10 L16 18 L26 10" fill="none" stroke={accent} strokeWidth={1.4} strokeLinejoin="round" />
+      <Path d="M6 22.5 L13 16.8 M26 22.5 L19 16.8" fill="none" stroke={c} strokeWidth={1.1} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 function FirstTimeGuide({ p, lang, onDismiss }: { p: Palette; lang: string; onDismiss: () => void }) {
   const scale = useRef(new Animated.Value(0.92)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scale, { toValue: 1, tension: 60, friction: 9, useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-    ]).start();
-  }, []);
+    if (reduceMotion) {
+      scale.setValue(1);
+      opacity.setValue(1);
+      return;
+    }
+    const intro = Animated.parallel([
+      Animated.spring(scale, { toValue: 1, tension: 60, friction: 9, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: MOTION.standard,
+        easing: MOTION.easeOut,
+        useNativeDriver: USE_NATIVE_DRIVER,
+      }),
+    ]);
+    intro.start();
+    return () => intro.stop();
+  }, [opacity, reduceMotion, scale]);
 
   const rows = [
     { Glyph: BrazierGlyph, title: lang === 'en' ? 'Brazier' : '火盆', alt: lang === 'en' ? '火盆' : 'Brazier',
@@ -1093,40 +1198,57 @@ const styles = StyleSheet.create({
   topBar:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
   identityRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
   youLabel:      { fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 1 },
-  langBtn:       { width: 28, height: 28, borderRadius: 14, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
-  wicksBtn:      { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, borderWidth: 0.5 },
+  langBtn:       { width: 36, height: 36, borderRadius: 18, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+  wicksBtn:      { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 0.5 },
   countdown:     { fontFamily: 'Inter-Regular', fontSize: 11, letterSpacing: 1 },
 
   contentScroll: { flex: 1 },
-  content:       { flexGrow: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 18, justifyContent: 'center', gap: 16 },
+  content:       { flexGrow: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 22, gap: 16 },
   heading:       { fontFamily: 'NotoSerifTC-Light', fontSize: 28, lineHeight: 36, textAlign: 'center' },
   subheading:    { fontFamily: 'NotoSerifTC-Regular', fontSize: 14, lineHeight: 22, textAlign: 'center', marginTop: -8, opacity: 0.85 },
-  loftBanner:    { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20, gap: 12 },
 
-  inputWrap:     { borderRadius: 20, borderWidth: 0.5, padding: 16 },
-  input:         { fontFamily: 'NotoSerifTC-Regular', fontSize: 16, lineHeight: 26, minHeight: 60 },
+  ritualCard:    { borderRadius: 26, borderWidth: 0.7, padding: 16, gap: 14, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 28, elevation: 3 },
+  ritualMeta:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  ritualEyebrow: { fontFamily: 'Inter-Regular', fontSize: 9.5, letterSpacing: 1.6, fontWeight: '500' },
+  ritualPrivacy: { fontFamily: 'EBGaramond-Italic', fontSize: 11.5 },
+  ritualDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 2 },
+  inputWrap:     { borderRadius: 18, borderWidth: 0.7, padding: 14 },
+  input:         { fontFamily: 'NotoSerifTC-Regular', fontSize: 16, lineHeight: 26, minHeight: 66, textAlignVertical: 'top' },
   inputFooter:   { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   modeSection:   { gap: 8 },
   modeHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   modeHint:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 10.5 },
   modeRow:       { flexDirection: 'row', gap: 7 },
-  modeCard:      { flex: 1, minHeight: 68, borderRadius: 15, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, paddingVertical: 8 },
-  modeIcon:      { fontSize: 15, marginBottom: 3 },
+  modeCard:      { flex: 1, minHeight: 78, borderRadius: 17, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, paddingVertical: 9 },
+  modeGlyphWrap: { height: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
+  modeCheck:     { position: 'absolute', right: -8, top: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   modeText:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 16, textAlign: 'center' },
 
-  roomsSection:  { gap: 8 },
-  roomsHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  roomsSection:  { gap: 10, marginTop: 2 },
+  roomsHeader:   { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   roomsLabel:    { fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 2, fontWeight: '500' },
+  sectionHint:   { fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, marginTop: 4 },
   openRoomLink:  { fontFamily: 'NotoSerifTC-Regular', fontSize: 12, fontWeight: '500' },
   roomsList:     { gap: 6 },
-  roomItem:      { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 0.5 },
-  roomTopic:     { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
+  roomItem:      { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18, borderWidth: 0.5 },
+  roomGlyph:     { width: 44, height: 44, borderRadius: 14, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+  roomTopic:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 14, fontWeight: '500' },
+  roomMeta:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 10.5, marginTop: 3 },
   roomCount:     { fontFamily: 'Inter-Regular', fontSize: 11, fontWeight: '500' },
   noRooms:       { fontFamily: 'NotoSerifTC-Regular', fontSize: 12, textAlign: 'center', paddingVertical: 8 },
   noRoomsCta:    { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 14, borderRadius: 14, borderWidth: 0.5, borderStyle: 'dashed' },
   noRoomsText:   { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
 
-  bottom:        { paddingHorizontal: 20, paddingBottom: 16 },
+  secondaryRow:  { flexDirection: 'row', gap: 10 },
+  secondaryCardWrap: { flex: 1 },
+  secondaryCard: { minHeight: 104, borderRadius: 20, borderWidth: 0.5, padding: 14, gap: 10, overflow: 'hidden' },
+  secondaryTitle:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, fontWeight: '500' },
+  secondarySubtitle:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 10.5, lineHeight: 15, marginTop: 2 },
+  secondaryArrowDark:{ position: 'absolute', right: 14, bottom: 12, color: 'rgba(245,226,196,0.72)', fontSize: 17 },
+  loftTitle:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, color: '#f5e2c4', fontWeight: '500' },
+  loftSubtitle:  { fontFamily: 'NotoSerifTC-Regular', fontSize: 10.5, lineHeight: 15, color: 'rgba(245,226,196,0.58)', marginTop: 2 },
+
+  bottom:        { paddingHorizontal: 20, paddingTop: 11, paddingBottom: 16, borderTopWidth: 0.5 },
   waitingBox:    { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, borderWidth: 0.5 },
   waitingCard:   { padding: 14, borderRadius: 16, borderWidth: 0.5 },
   waitAction:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 12, borderWidth: 0.5 },

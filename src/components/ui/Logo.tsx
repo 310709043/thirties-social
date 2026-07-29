@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, View } from 'react-native';
+import { Animated } from 'react-native';
 import Svg, { Path, Circle, Rect, Defs, RadialGradient, Stop } from 'react-native-svg';
+import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../../lib/motion';
 
 interface LogoProps {
   size?: number;
@@ -12,23 +13,36 @@ export function Logo({ size = 120, showGlow = true, animate = true }: LogoProps)
   const scale = useRef(new Animated.Value(animate ? 0.6 : 1)).current;
   const opacity = useRef(new Animated.Value(animate ? 0 : 1)).current;
   const glowPulse = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
-    if (!animate) return;
-    Animated.parallel([
-      Animated.spring(scale, { toValue: 1, tension: 50, friction: 7, useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 1, duration: 400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-    ]).start();
-
-    if (showGlow) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowPulse, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(glowPulse, { toValue: 0, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        ])
-      ).start();
+    if (!animate || reduceMotion) {
+      scale.setValue(1);
+      opacity.setValue(1);
+      glowPulse.setValue(showGlow ? 0.45 : 0);
+      return;
     }
-  }, []);
+    const intro = Animated.parallel([
+      Animated.spring(scale, { toValue: 1, tension: 50, friction: 7, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(opacity, { toValue: 1, duration: MOTION.reveal, easing: MOTION.easeOut, useNativeDriver: USE_NATIVE_DRIVER }),
+    ]);
+    intro.start();
+
+    let glow: Animated.CompositeAnimation | null = null;
+    if (showGlow) {
+      glow = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowPulse, { toValue: 1, duration: 2000, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
+          Animated.timing(glowPulse, { toValue: 0, duration: 2000, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
+        ])
+      );
+      glow.start();
+    }
+    return () => {
+      intro.stop();
+      glow?.stop();
+    };
+  }, [animate, glowPulse, opacity, reduceMotion, scale, showGlow]);
 
   const s = size / 120;
   const w = 80 * s;
@@ -111,11 +125,11 @@ export function Logo({ size = 120, showGlow = true, animate = true }: LogoProps)
   );
 }
 
+const AnimatedSvgCircle = Animated.createAnimatedComponent(Circle);
+
 function AnimatedCircle({ glowPulse }: { glowPulse: Animated.Value }) {
   const opacity = glowPulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.6] });
   return (
-    <Animated.View style={{ opacity }}>
-      <Circle cx="40" cy="42" r="32" fill="url(#logoGlow)" />
-    </Animated.View>
+    <AnimatedSvgCircle cx="40" cy="42" r="32" fill="url(#logoGlow)" opacity={opacity} />
   );
 }

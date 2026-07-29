@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, View } from 'react-native';
+import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../../lib/motion';
 
 interface TypingIndicatorProps {
   color?: string;
@@ -7,24 +8,30 @@ interface TypingIndicatorProps {
 }
 
 export function TypingIndicator({ color = 'rgba(255,255,255,0.5)', size = 6 }: TypingIndicatorProps) {
-  const dots = [
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-  ];
+  const dotA = useRef(new Animated.Value(0)).current;
+  const dotB = useRef(new Animated.Value(0)).current;
+  const dotC = useRef(new Animated.Value(0)).current;
+  const dots = useMemo(() => [dotA, dotB, dotC], [dotA, dotB, dotC]);
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
+    if (reduceMotion) {
+      dots.forEach((dot, index) => dot.setValue(0.35 + index * 0.2));
+      return;
+    }
     const animations = dots.map((dot, i) =>
       Animated.loop(
         Animated.sequence([
           Animated.delay(i * 180),
-          Animated.timing(dot, { toValue: 1, duration: 400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0, duration: 400, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 1, duration: 400, easing: MOTION.easeOut, useNativeDriver: USE_NATIVE_DRIVER }),
+          Animated.timing(dot, { toValue: 0, duration: 400, easing: MOTION.easeOut, useNativeDriver: USE_NATIVE_DRIVER }),
         ])
       )
     );
-    Animated.parallel(animations).start();
-  }, []);
+    const group = Animated.parallel(animations);
+    group.start();
+    return () => group.stop();
+  }, [dots, reduceMotion]);
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 14 }}>

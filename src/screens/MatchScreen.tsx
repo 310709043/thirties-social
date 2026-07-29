@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
@@ -12,6 +12,7 @@ import { useAppStore, matchCostsWick } from '../hooks/useAppStore';
 import { trackPerson } from '../hooks/useAppStore';
 import { leaveMatchQueue, endConversation, subscribeToConversationEnded } from '../lib/db';
 import { analytics } from '../lib/analytics';
+import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../lib/motion';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Match'>;
 
@@ -23,15 +24,16 @@ export default function MatchScreen({ navigation, route }: Props) {
     : otherGender === 'male' ? (lang === 'en' ? 'Man' : '男生')
     : otherGender === 'nonbinary' ? (lang === 'en' ? 'Non-binary' : '非二元') : null;
   const aboutLine = [genderLabel, otherAge].filter(Boolean).join(' · ');
-  const modeLabel = otherTonightMode === 'just_here' ? (lang === 'en' ? '🕯 Just here' : '🕯 只想待著')
-    : otherTonightMode === 'want_to_talk' ? (lang === 'en' ? '💬 Wants to talk' : '💬 想說說話')
-    : otherTonightMode === 'open_to_more' ? (lang === 'en' ? '🌊 Open to more' : '🌊 願意靠近一點')
+  const modeLabel = otherTonightMode === 'just_here' ? (lang === 'en' ? 'Just here' : '只想待著')
+    : otherTonightMode === 'want_to_talk' ? (lang === 'en' ? 'Wants to talk' : '想說說話')
+    : otherTonightMode === 'open_to_more' ? (lang === 'en' ? 'Open to more' : '願意靠近一點')
     : null;
   const cardScale = useRef(new Animated.Value(0.92)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const acceptPulse = useRef(new Animated.Value(1)).current;
   const haloPulse = useRef(new Animated.Value(0.6)).current;
   const [decisionBusy, setDecisionBusy] = useState(false);
+  const reduceMotion = useReduceMotion();
   // Set once I've accepted/declined, so the "they left" watcher below doesn't
   // fire off my own action or after I've navigated away.
   const iActedRef = useRef(false);
@@ -54,34 +56,59 @@ export default function MatchScreen({ navigation, route }: Props) {
   }, [conversationId]);
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(cardScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
-      Animated.timing(cardOpacity, { toValue: 1, duration: 400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-    ]).start();
+    if (reduceMotion) {
+      cardScale.setValue(1);
+      cardOpacity.setValue(1);
+      haloPulse.setValue(0.8);
+      acceptPulse.setValue(1);
+      return;
+    }
+    const intro = Animated.parallel([
+      Animated.spring(cardScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(cardOpacity, { toValue: 1, duration: MOTION.reveal, easing: MOTION.easeOut, useNativeDriver: USE_NATIVE_DRIVER }),
+    ]);
+    intro.start();
 
     // A slow glow behind the stranger's sigil — presence, warmth, "someone is here".
-    Animated.loop(
+    const halo = Animated.loop(
       Animated.sequence([
-        Animated.timing(haloPulse, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(haloPulse, { toValue: 0.6, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(haloPulse, { toValue: 1, duration: MOTION.breathe, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(haloPulse, { toValue: 0.6, duration: MOTION.breathe, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
       ])
-    ).start();
+    );
+    halo.start();
 
-    Animated.loop(
+    const cta = Animated.loop(
       Animated.sequence([
-        Animated.timing(acceptPulse, { toValue: 1.02, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(acceptPulse, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(acceptPulse, { toValue: 1.015, duration: 1400, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(acceptPulse, { toValue: 1, duration: 1400, easing: MOTION.easeInOut, useNativeDriver: USE_NATIVE_DRIVER }),
       ])
-    ).start();
-  }, []);
+    );
+    cta.start();
+    return () => {
+      intro.stop();
+      halo.stop();
+      cta.stop();
+    };
+  }, [acceptPulse, cardOpacity, cardScale, haloPulse, reduceMotion]);
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={styles.container}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
           {/* Header */}
           <FadeInUp delay={0} distance={12}>
             <View style={styles.header}>
+              <View style={[styles.encounterPill, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
+                <View style={[styles.encounterDot, { backgroundColor: p.accent }]} />
+                <Text style={[styles.encounterText, { color: p.accent }]}>
+                  {lang === 'en' ? 'A PRIVATE ENCOUNTER' : '一場私密的相遇'}
+                </Text>
+              </View>
               <Text style={[styles.title, { color: p.ink }]}>{t('matchHeader', lang)}</Text>
               <Text style={[styles.titleAlt, { color: p.ink }]}>{tAlt('matchHeader', lang)}</Text>
             </View>
@@ -107,8 +134,9 @@ export default function MatchScreen({ navigation, route }: Props) {
                   </View>
                 ) : null}
                 {modeLabel ? (
-                  <View style={{ marginTop: 6, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 999, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line }}>
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>{modeLabel}</Text>
+                  <View style={styles.modePill}>
+                    <View style={[styles.modeDot, { backgroundColor: p.accent }]} />
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, color: p.ink }}>{modeLabel}</Text>
                   </View>
                 ) : null}
               </View>
@@ -116,7 +144,7 @@ export default function MatchScreen({ navigation, route }: Props) {
               <View style={[styles.moodBox, { borderTopColor: p.line }]}>
                 <Text style={[styles.subhead, { color: p.muted }]}>{t('matchSubhead', lang)}</Text>
                 <Text style={[styles.moodText, { color: p.ink }]}>
-                  {moodText ? `「${moodText}」` : (lang === 'en' ? '(no mood shared)' : '（未分享心情）')}
+                  {moodText ? `「${moodText}」` : (lang === 'en' ? 'They came quietly, without leaving a line.' : '對方安靜地來了，沒有留下心情。')}
                 </Text>
               </View>
             </GlassCard>
@@ -125,13 +153,19 @@ export default function MatchScreen({ navigation, route }: Props) {
           {/* Time / hint */}
           <FadeInUp delay={300} distance={8}>
             <View style={styles.hints}>
-              <Text style={[styles.hint, { color: p.muted }]}>⏱ {t('matchTime', lang)}</Text>
-              <Text style={[styles.hint, { color: p.muted }]}>· {t('matchHint', lang)}</Text>
+              <View style={[styles.hintPill, { backgroundColor: p.surface, borderColor: p.line }]}>
+                <Text style={[styles.hintStrong, { color: p.ink }]}>30</Text>
+                <Text style={[styles.hint, { color: p.muted }]}>{lang === 'en' ? 'minutes' : '分鐘'}</Text>
+              </View>
+              <View style={[styles.hintPill, { backgroundColor: p.surface, borderColor: p.line }]}>
+                <Text style={[styles.hintStrong, { color: p.ink }]}>0</Text>
+                <Text style={[styles.hint, { color: p.muted }]}>{lang === 'en' ? 'names & photos' : '姓名與照片'}</Text>
+              </View>
             </View>
           </FadeInUp>
 
           {/* Reassurance — accepting & leaving are free; a match only counts when you speak */}
-          <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12.5, color: p.muted, textAlign: 'center', marginBottom: 12 }}>
+          <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12.5, lineHeight: 18, color: p.muted, textAlign: 'center', marginTop: 16, marginBottom: 12 }}>
             {!isOperator && matchCostsWick()
               ? (lang === 'en' ? 'Free to enter · a match counts only when you speak (1 wick)' : '進去免費 · 開口說話才算一次配對（1 燭芯）')
               : (lang === 'en' ? "Don't feel it? Just leave — no cost, no pressure." : '沒感覺？直接離開就好 — 不扣任何東西，沒有壓力。')}
@@ -172,6 +206,9 @@ export default function MatchScreen({ navigation, route }: Props) {
             <FadeInUp delay={500} distance={8}>
               <TouchableOpacity
                 disabled={decisionBusy}
+                accessibilityRole="button"
+                accessibilityLabel={lang === 'en' ? 'Skip this match' : '略過這次配對'}
+                accessibilityState={{ disabled: decisionBusy }}
                 onPress={async () => {
                   if (decisionBusy) return;
                   setDecisionBusy(true);
@@ -198,25 +235,32 @@ export default function MatchScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             </FadeInUp>
           </View>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </VaporBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container:    { flex: 1, padding: 28, justifyContent: 'space-between', width: '100%', maxWidth: 560, alignSelf: 'center' },
-  header:       { gap: 4, marginTop: 24 },
-  title:        { fontFamily: 'NotoSerifTC-Regular', fontSize: 32, lineHeight: 42 },
-  titleAlt:     { fontFamily: 'EBGaramond-Italic', fontSize: 14, opacity: 0.4 },
-  card:         { marginTop: 32 },
-  identityBlock:{ alignItems: 'center', gap: 16, paddingBottom: 20 },
+  container:    { flexGrow: 1, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 22, width: '100%', maxWidth: 560, alignSelf: 'center' },
+  header:       { gap: 5, alignItems: 'center' },
+  encounterPill:{ flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 0.5, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 8 },
+  encounterDot: { width: 4, height: 4, borderRadius: 2 },
+  encounterText:{ fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 1.7, fontWeight: '500' },
+  title:        { fontFamily: 'NotoSerifTC-Light', fontSize: 30, lineHeight: 40, textAlign: 'center' },
+  titleAlt:     { fontFamily: 'EBGaramond-Italic', fontSize: 13, opacity: 0.48 },
+  card:         { marginTop: 26, shadowOpacity: 0.12 },
+  identityBlock:{ alignItems: 'center', gap: 13, paddingBottom: 20 },
+  modePill:     { marginTop: 2, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  modeDot:      { width: 5, height: 5, borderRadius: 3 },
   moodBox:      { borderTopWidth: 0.5, paddingTop: 20, gap: 10 },
   subhead:      { fontFamily: 'Inter-Regular', fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' },
-  moodText:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 17, lineHeight: 28 },
-  hints:        { gap: 6, alignItems: 'center', marginTop: 24 },
-  hint:         { fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
-  actions:      { gap: 12 },
+  moodText:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 16.5, lineHeight: 28 },
+  hints:        { flexDirection: 'row', gap: 8, justifyContent: 'center', marginTop: 18 },
+  hintPill:     { minWidth: 118, borderRadius: 16, borderWidth: 0.5, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center' },
+  hintStrong:   { fontFamily: 'EBGaramond-Regular', fontSize: 18, lineHeight: 20 },
+  hint:         { fontFamily: 'NotoSerifTC-Regular', fontSize: 10.5, marginTop: 2 },
+  actions:      { gap: 10, marginTop: 12 },
   decline:      { alignItems: 'center', paddingVertical: 8 },
   declineText:  { fontFamily: 'NotoSerifTC-Regular', fontSize: 14 },
 });

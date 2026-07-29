@@ -9,10 +9,11 @@
 //
 // It lives INSIDE VaporBackground, so every main screen inherits it for free —
 // change it once, the whole app breathes together.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Animated, Easing, Dimensions, AccessibilityInfo } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, StyleSheet, Animated, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Palette } from '../../lib/theme';
+import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../../lib/motion';
 
 type Phase = 'day' | 'evening' | 'night' | 'deep' | 'dawn';
 
@@ -40,19 +41,13 @@ const MOTE_COUNT = 12;
 
 export function NightAtmosphere({ p }: { p: Palette }) {
   const [phase, setPhase] = useState<Phase>(() => currentPhase());
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const reduceMotion = useReduceMotion();
 
   // Re-evaluate the phase every few minutes so a session that spans, say,
   // 20:59→21:00 slides into night without a relaunch.
   useEffect(() => {
     const id = setInterval(() => setPhase(currentPhase()), 3 * 60 * 1000);
     return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => { (sub as any)?.remove?.(); };
   }, []);
 
   const veil = VEIL[phase];
@@ -95,8 +90,13 @@ function Motes({ tint, dim }: { tint: string; dim: boolean }) {
       Animated.loop(
         Animated.sequence([
           Animated.delay(m.delay),
-          Animated.timing(m.progress, { toValue: 1, duration: m.duration, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-          Animated.timing(m.progress, { toValue: 0, duration: 0, useNativeDriver: true }),
+          Animated.timing(m.progress, {
+            toValue: 1,
+            duration: m.duration,
+            easing: MOTION.easeInOut,
+            useNativeDriver: USE_NATIVE_DRIVER,
+          }),
+          Animated.timing(m.progress, { toValue: 0, duration: 0, useNativeDriver: USE_NATIVE_DRIVER }),
         ]),
       ),
     );
