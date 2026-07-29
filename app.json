@@ -21,7 +21,7 @@
     },
     "android": {
       "package": "com.thirties.social",
-      "versionCode": 19,
+      "versionCode": 20,
       "adaptiveIcon": {
         "backgroundColor": "#FDF7E8",
         "foregroundImage": "./assets/android-icon-foreground.png",
