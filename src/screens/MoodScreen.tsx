@@ -26,6 +26,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
 
+const TONIGHT_MODES = [
+  { value: 'just_here', icon: '🕯', titleKey: 'modeJustHere' },
+  { value: 'want_to_talk', icon: '💬', titleKey: 'modeWantToTalk' },
+  { value: 'open_to_more', icon: '🌊', titleKey: 'modeOpenToMore' },
+] as const;
+
 /**
  * Self-ticking 03:00 countdown. Isolated in its own component so the 1-second
  * tick re-renders THIS text only — as top-level state it re-rendered the whole
@@ -66,12 +72,12 @@ function WaitingDots({ style, prefix }: { style: any; prefix: string }) {
 export default function MoodScreen({ navigation }: Props) {
   const { seed, direction, lang, identityKind, wicks, gender, ageBracket, userId } = useAppStore();
   const p = DIRECTIONS[direction];
+  const isGuestUser = getTier() === 'guest';
   const [text, setText] = useState('');
   const [rooms, setRooms] = useState<DbRoom[]>([]);
   const [waiting, setWaiting] = useState(false);
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tonightMode, setTonightMode] = useState<TonightMode | null>(null);
-  const [showModePicker, setShowModePicker] = useState(false);
   // Full brazier list (only the top 3 fit on the home screen).
   const [showAllRooms, setShowAllRooms] = useState(false);
   // First-time guide so new users know what the three spaces are.
@@ -145,7 +151,7 @@ export default function MoodScreen({ navigation }: Props) {
   // Opening the letters sheet also tries to claim tonight's letter for me.
   const openLetters = async () => {
     // Letters write to a stranger — a doing-action, so guests go to sign-up.
-    if (getTier() === 'guest') {
+    if (isGuestUser) {
       Alert.alert(
         lang === 'en' ? 'Create an account to write' : '寫信需要帳號',
         lang === 'en'
@@ -333,9 +339,7 @@ export default function MoodScreen({ navigation }: Props) {
       );
       return;
     }
-    // Show the tonight-mode picker on first match attempt each session; picking
-    // a mode continues straight into matching (no second tap on the button).
-    if (!tonightMode) { setShowModePicker(true); return; }
+    if (!tonightMode) return;
     proceedToMatch(tonightMode);
   };
 
@@ -424,7 +428,12 @@ export default function MoodScreen({ navigation }: Props) {
         </View>
 
         {/* ── Main Content ── */}
-        <View style={styles.content}>
+        <ScrollView
+          style={styles.contentScroll}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Heading + reassuring subline (type hierarchy + grayscale tone) */}
           <Text style={[styles.heading, { color: p.ink }]}>{t('moodHeader', lang)}</Text>
           <Text style={[styles.subheading, { color: p.muted }]}>{t('moodPrompt', lang)}</Text>
@@ -528,10 +537,57 @@ export default function MoodScreen({ navigation }: Props) {
               style={[styles.input, { color: p.ink }]}
             />
             <View style={styles.inputFooter}>
-              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted }}>
+              <Text style={{ flex: 1, marginRight: 8, fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted }}>
                 {lang === 'en' ? 'your match sees this line · kept in your diary' : '配對到的人會看到這句 · 也會留進你的日記'}
               </Text>
               <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: p.muted }}>{text.length}/280</Text>
+            </View>
+          </View>
+
+          {/* Keep intent visible before matching. This used to live in a modal
+              after the CTA, making the primary flow feel like a confirmation
+              maze and hiding a key compatibility signal. */}
+          <View style={styles.modeSection}>
+            <View style={styles.modeHeader}>
+              <Text style={[styles.roomsLabel, { color: p.muted }]}>
+                {lang === 'en' ? 'TONIGHT I AM' : '今晚的我'}
+              </Text>
+              <Text style={[styles.modeHint, { color: p.muted }]}>
+                {lang === 'en' ? 'shown before you talk' : '配對前會讓對方知道'}
+              </Text>
+            </View>
+            <View style={styles.modeRow}>
+              {TONIGHT_MODES.map(mode => {
+                const selected = tonightMode === mode.value;
+                return (
+                  <TouchableOpacity
+                    key={mode.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => {
+                      setTonightMode(mode.value);
+                      hapticMedium();
+                    }}
+                    activeOpacity={0.82}
+                    style={[
+                      styles.modeCard,
+                      {
+                        backgroundColor: selected ? p.accentSoft : p.glass,
+                        borderColor: selected ? p.accent : p.line,
+                        borderWidth: selected ? 1.2 : 0.6,
+                      },
+                    ]}
+                  >
+                    <Text style={styles.modeIcon}>{mode.icon}</Text>
+                    <Text
+                      numberOfLines={2}
+                      style={[styles.modeText, { color: selected ? p.accent : p.ink }]}
+                    >
+                      {t(mode.titleKey, lang)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
@@ -639,7 +695,7 @@ export default function MoodScreen({ navigation }: Props) {
             </Text>
             <Text style={{ color: p.muted, fontSize: 15, opacity: 0.5 }}>›</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
 
         {/* ── Bottom: Match Button ── */}
         <View style={styles.bottom}>
@@ -693,9 +749,20 @@ export default function MoodScreen({ navigation }: Props) {
               </View>
             </View>
           ) : (
-            <SoftButton p={p} variant="primary" size="lg" full onPress={handleEnter}>
+            <SoftButton
+              p={p}
+              variant="primary"
+              size="lg"
+              full
+              onPress={handleEnter}
+              disabled={!tonightMode && !isGuestUser}
+            >
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
-                {t('moodEnter', lang)}
+                {isGuestUser
+                  ? (lang === 'en' ? 'Create an account to match' : '建立帳號，開始配對')
+                  : tonightMode
+                    ? t('moodEnter', lang)
+                    : (lang === 'en' ? 'Choose how you feel tonight' : '先選擇今晚的狀態')}
               </Text>
             </SoftButton>
           )}
@@ -870,36 +937,6 @@ export default function MoodScreen({ navigation }: Props) {
         </View>
       )}
 
-      {showModePicker && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.62)', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 32, paddingHorizontal: 20 }}>
-          <View style={{ backgroundColor: p.surfaceSolid, borderRadius: 24, padding: 24, width: '100%', borderWidth: 0.5, borderColor: p.line }}>
-            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 19, color: p.ink, textAlign: 'center', marginBottom: 4 }}>
-              {t('tonightModeTitle', lang)}
-            </Text>
-            <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12.5, color: p.muted, textAlign: 'center', marginBottom: 20 }}>
-              {t('tonightModeHint', lang)}
-            </Text>
-            {([
-              ['just_here',    '🕯', 'modeJustHere',    'modeJustHereDesc'],
-              ['want_to_talk', '💬', 'modeWantToTalk',  'modeWantToTalkDesc'],
-              ['open_to_more', '🌊', 'modeOpenToMore',  'modeOpenToMoreDesc'],
-            ] as const).map(([mode, icon, titleKey, descKey]) => (
-              <TouchableOpacity key={mode} onPress={() => { setTonightMode(mode); setShowModePicker(false); proceedToMatch(mode); }}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 14, marginBottom: 8, backgroundColor: tonightMode === mode ? p.accentSoft : p.glass, borderWidth: 1, borderColor: tonightMode === mode ? p.accent : p.line }}>
-                <Text style={{ fontSize: 22 }}>{icon}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink }}>{t(titleKey, lang)}</Text>
-                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12, color: p.muted, marginTop: 2 }}>{t(descKey, lang)}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity onPress={() => setShowModePicker(false)} style={{ alignItems: 'center', marginTop: 8 }}>
-              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: p.muted }}>{lang === 'en' ? 'cancel' : '取消'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
       {showGuide && <FirstTimeGuide p={p} lang={lang} onDismiss={dismissGuide} />}
     </VaporBackground>
   );
@@ -1060,7 +1097,8 @@ const styles = StyleSheet.create({
   wicksBtn:      { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, borderWidth: 0.5 },
   countdown:     { fontFamily: 'Inter-Regular', fontSize: 11, letterSpacing: 1 },
 
-  content:       { flex: 1, paddingHorizontal: 20, justifyContent: 'center', gap: 20 },
+  contentScroll: { flex: 1 },
+  content:       { flexGrow: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 18, justifyContent: 'center', gap: 16 },
   heading:       { fontFamily: 'NotoSerifTC-Light', fontSize: 28, lineHeight: 36, textAlign: 'center' },
   subheading:    { fontFamily: 'NotoSerifTC-Regular', fontSize: 14, lineHeight: 22, textAlign: 'center', marginTop: -8, opacity: 0.85 },
   loftBanner:    { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20, gap: 12 },
@@ -1068,6 +1106,13 @@ const styles = StyleSheet.create({
   inputWrap:     { borderRadius: 20, borderWidth: 0.5, padding: 16 },
   input:         { fontFamily: 'NotoSerifTC-Regular', fontSize: 16, lineHeight: 26, minHeight: 60 },
   inputFooter:   { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  modeSection:   { gap: 8 },
+  modeHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modeHint:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 10.5 },
+  modeRow:       { flexDirection: 'row', gap: 7 },
+  modeCard:      { flex: 1, minHeight: 68, borderRadius: 15, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, paddingVertical: 8 },
+  modeIcon:      { fontSize: 15, marginBottom: 3 },
+  modeText:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 16, textAlign: 'center' },
 
   roomsSection:  { gap: 8 },
   roomsHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

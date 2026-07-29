@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, KeyboardAvoidingView,
+  StyleSheet, Alert, KeyboardAvoidingView, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -11,10 +11,10 @@ import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, SoftButton, FadeInUp, Logo } from '../components/ui';
 import { useAppStore } from '../hooks/useAppStore';
-import { register, login, resetPassword } from '../lib/auth';
+import { register, login, resetPassword, getCurrentUser } from '../lib/auth';
 import { signInWithGoogle, isGoogleAvailable } from '../lib/googleAuth';
 import { analytics } from '../lib/analytics';
-import { ensureAnonAuth } from '../lib/db';
+import { ensureAnonAuth, getUser } from '../lib/db';
 import { hapticMedium, hapticSuccess } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
@@ -31,10 +31,27 @@ export default function AuthScreen({ navigation, route }: Props) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [focused, setFocused] = useState<'email' | 'password' | null>(null);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const routeAfterAuth = async () => {
+    try {
+      const uid = getCurrentUser()?.uid;
+      const profile = uid ? await getUser(uid) : null;
+      navigation.replace(profile?.setupDone || (!profile && setupDone) ? 'Mood' : 'Setup');
+    } catch {
+      navigation.replace(setupDone ? 'Mood' : 'Setup');
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       setError(lang === 'en' ? 'Please fill in all fields' : '請填寫所有欄位');
+      return;
+    }
+    if (!validEmail) {
+      setError(lang === 'en' ? 'Please enter a valid email' : '請輸入正確的 Email 格式');
       return;
     }
     setLoading(true);
@@ -43,7 +60,7 @@ export default function AuthScreen({ navigation, route }: Props) {
     setLoading(false);
     if (result.ok) {
       hapticSuccess();
-      navigation.replace('Mood');
+      await routeAfterAuth();
     } else {
       setError(result.error ?? '登入失敗');
     }
@@ -52,6 +69,10 @@ export default function AuthScreen({ navigation, route }: Props) {
   const handleRegister = async () => {
     if (!email.trim() || !password.trim()) {
       setError(lang === 'en' ? 'Please fill in all fields' : '請填寫所有欄位');
+      return;
+    }
+    if (!validEmail) {
+      setError(lang === 'en' ? 'Please enter a valid email' : '請輸入正確的 Email 格式');
       return;
     }
     if (password.length < 6) {
@@ -64,9 +85,7 @@ export default function AuthScreen({ navigation, route }: Props) {
     setLoading(false);
     if (result.ok) {
       hapticSuccess();
-      // A linked guest is already set up → return to the app; a brand-new
-      // account still needs onboarding.
-      navigation.replace(setupDone ? 'Mood' : 'Setup');
+      await routeAfterAuth();
     } else {
       setError(result.error ?? '註冊失敗');
     }
@@ -79,7 +98,7 @@ export default function AuthScreen({ navigation, route }: Props) {
     setLoading(false);
     if (result.ok) {
       hapticSuccess();
-      navigation.replace(setupDone ? 'Mood' : 'Setup');
+      await routeAfterAuth();
     } else if (result.error !== 'cancelled') {
       // Surface the real error for diagnosis (revert to a generic message later),
       // and record it server-side so diagnosis doesn't depend on screenshots.
@@ -91,6 +110,10 @@ export default function AuthScreen({ navigation, route }: Props) {
   const handleForgotPassword = async () => {
     if (!email.trim()) {
       setError(lang === 'en' ? 'Please enter your email' : '請輸入 Email');
+      return;
+    }
+    if (!validEmail) {
+      setError(lang === 'en' ? 'Please enter a valid email' : '請輸入正確的 Email 格式');
       return;
     }
     setLoading(true);
@@ -137,9 +160,9 @@ export default function AuthScreen({ navigation, route }: Props) {
                 </Text>
                 <Text style={[styles.subtitle, { color: p.muted }]}>
                   {mode === 'login'
-                    ? (lang === 'en' ? 'Sign in to continue' : '登入以繼續')
+                    ? (lang === 'en' ? 'Return to the conversations that still feel warm' : '回到那些還有餘溫的對話')
                     : mode === 'register'
-                    ? (lang === 'en' ? 'Create your account' : '建立你的帳號')
+                    ? (lang === 'en' ? 'Anonymous by design · adults only' : '不使用真名 · 僅限成年人')
                     : (lang === 'en' ? 'We will send you a reset link' : '我們會寄送重設連結')}
                 </Text>
               </View>
@@ -170,16 +193,46 @@ export default function AuthScreen({ navigation, route }: Props) {
                     <Text style={[styles.label, { color: p.muted }]}>
                       {lang === 'en' ? 'Password' : '密碼'}
                     </Text>
-                    <TextInput
-                      value={password}
-                      onChangeText={setPassword}
-                      onFocus={() => setFocused('password')}
-                      onBlur={() => setFocused(null)}
-                      placeholder="••••••••"
-                      placeholderTextColor={p.muted}
-                      secureTextEntry
-                      style={[styles.input, { backgroundColor: p.surface, borderColor: focused === 'password' ? p.accent : p.line, borderWidth: focused === 'password' ? 1 : 0.5, color: p.ink }]}
-                    />
+                    <View style={[
+                      styles.passwordWrap,
+                      {
+                        backgroundColor: p.surface,
+                        borderColor: focused === 'password' ? p.accent : p.line,
+                        borderWidth: focused === 'password' ? 1 : 0.5,
+                      },
+                    ]}>
+                      <TextInput
+                        value={password}
+                        onChangeText={setPassword}
+                        onFocus={() => setFocused('password')}
+                        onBlur={() => setFocused(null)}
+                        placeholder="••••••••"
+                        placeholderTextColor={p.muted}
+                        secureTextEntry={!passwordVisible}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        style={[styles.passwordInput, { color: p.ink }]}
+                      />
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={passwordVisible
+                          ? (lang === 'en' ? 'Hide password' : '隱藏密碼')
+                          : (lang === 'en' ? 'Show password' : '顯示密碼')}
+                        onPress={() => setPasswordVisible(value => !value)}
+                        style={styles.passwordToggle}
+                      >
+                        <Text style={[styles.passwordToggleText, { color: p.accent }]}>
+                          {passwordVisible
+                            ? (lang === 'en' ? 'Hide' : '隱藏')
+                            : (lang === 'en' ? 'Show' : '顯示')}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    {mode === 'register' ? (
+                      <Text style={[styles.passwordHint, { color: p.muted }]}>
+                        {lang === 'en' ? 'Use at least 6 characters' : '至少 6 個字元'}
+                      </Text>
+                    ) : null}
                   </View>
                 )}
 
@@ -282,6 +335,20 @@ export default function AuthScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               </FadeInUp>
             )}
+
+            {mode === 'register' && (
+              <Text style={[styles.legal, { color: p.muted }]}>
+                {lang === 'en' ? 'By creating an account, you confirm you are 18+ and agree to our ' : '建立帳號即代表你已年滿 18 歲，並同意'}
+                <Text
+                  accessibilityRole="link"
+                  onPress={() => Linking.openURL('https://thirties-landing.vercel.app/privacy').catch(() => {})}
+                  style={{ color: p.accent, textDecorationLine: 'underline' }}
+                >
+                  {lang === 'en' ? 'Privacy Policy' : '隱私權政策'}
+                </Text>
+                {lang === 'en' ? '.' : '。'}
+              </Text>
+            )}
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -298,9 +365,15 @@ const styles = StyleSheet.create({
   field:      { marginBottom: 16 },
   label:      { fontFamily: 'Inter-Regular', fontSize: 12, marginBottom: 6, letterSpacing: 1 },
   input:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 15, padding: 14, borderRadius: 14, borderWidth: 0.5 },
+  passwordWrap: { minHeight: 50, borderRadius: 14, flexDirection: 'row', alignItems: 'center' },
+  passwordInput: { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 15, paddingVertical: 14, paddingLeft: 14 },
+  passwordToggle: { minWidth: 58, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  passwordToggleText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 12 },
+  passwordHint: { fontFamily: 'Inter-Regular', fontSize: 10.5, marginTop: 6 },
   msgBox:     { padding: 12, borderRadius: 12, borderWidth: 0.5, marginBottom: 16 },
   links:      { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 20 },
   link:       { fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
   googleBtn:  { marginTop: 14, height: 50, borderRadius: 14, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
   guestBtn:   { alignItems: 'center', marginTop: 24, paddingVertical: 8 },
+  legal:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 11, lineHeight: 18, textAlign: 'center', marginTop: 20, paddingHorizontal: 10 },
 });

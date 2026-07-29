@@ -6,6 +6,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { Platform } from 'react-native';
 
 // The Google Sign-In native module is lazy-required so a build that doesn't
 // include it (e.g. an older dev client) won't crash at startup — Google sign-in
@@ -15,15 +16,17 @@ let GS: any = null;
 let isSuccess: ((r: any) => boolean) | null = null;
 let isErrWithCode: ((e: any) => boolean) | null = null;
 let codes: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const m = require('@react-native-google-signin/google-signin');
-  GS = m.GoogleSignin;
-  isSuccess = m.isSuccessResponse;
-  isErrWithCode = m.isErrorWithCode;
-  codes = m.statusCodes;
-} catch {
-  // native module not present in this binary
+if (Platform.OS !== 'web') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const m = require('@react-native-google-signin/google-signin');
+    GS = m.GoogleSignin;
+    isSuccess = m.isSuccessResponse;
+    isErrWithCode = m.isErrorWithCode;
+    codes = m.statusCodes;
+  } catch {
+    // native module not present in this binary
+  }
 }
 
 const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
@@ -37,7 +40,9 @@ export function configureGoogle(): void {
 
 /** True only when both a web client id and the native module are present. */
 export function isGoogleAvailable(): boolean {
-  return !!WEB_CLIENT_ID && !!GS;
+  // The native package exposes a web stub that only logs "not implemented".
+  // Hiding the unusable button is better than offering a guaranteed failure.
+  return Platform.OS !== 'web' && !!WEB_CLIENT_ID && !!GS;
 }
 
 export async function signInWithGoogle(): Promise<{ ok: boolean; linked?: boolean; error?: string }> {

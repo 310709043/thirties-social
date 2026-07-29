@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -31,6 +31,7 @@ export default function MatchScreen({ navigation, route }: Props) {
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const acceptPulse = useRef(new Animated.Value(1)).current;
   const haloPulse = useRef(new Animated.Value(0.6)).current;
+  const [decisionBusy, setDecisionBusy] = useState(false);
   // Set once I've accepted/declined, so the "they left" watcher below doesn't
   // fire off my own action or after I've navigated away.
   const iActedRef = useRef(false);
@@ -141,33 +142,57 @@ export default function MatchScreen({ navigation, route }: Props) {
             <FadeInUp delay={400} distance={10}>
               <Animated.View style={{ transform: [{ scale: acceptPulse }] }}>
                 <SoftButton p={p} variant="primary" size="lg" full
+                  disabled={decisionBusy}
                   onPress={async () => {
+                    if (decisionBusy) return;
+                    setDecisionBusy(true);
                     iActedRef.current = true;
-                    await trackPerson();
-                    analytics.matchAccept();
-                    // Charge moves to the first message sent (so neither side pays
-                    // for an empty chat if the other never shows up).
-                    await leaveMatchQueue();
-                    navigation.replace('Chat', { otherSeed, conversationId, matchCharge: !isOperator });
+                    try {
+                      await trackPerson();
+                      analytics.matchAccept();
+                      // Charge moves to the first message sent (so neither side pays
+                      // for an empty chat if the other never shows up).
+                      await leaveMatchQueue();
+                      navigation.replace('Chat', { otherSeed, conversationId, matchCharge: !isOperator });
+                    } catch {
+                      iActedRef.current = false;
+                      setDecisionBusy(false);
+                      Alert.alert(
+                        lang === 'en' ? 'Could not enter' : '暫時進不去',
+                        lang === 'en' ? 'Check your connection and try again.' : '請確認網路後再試一次。',
+                      );
+                    }
                   }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
-                    {t('matchAccept', lang)}
+                    {decisionBusy ? (lang === 'en' ? 'Entering…' : '正在進入⋯') : t('matchAccept', lang)}
                   </Text>
                 </SoftButton>
               </Animated.View>
             </FadeInUp>
             <FadeInUp delay={500} distance={8}>
               <TouchableOpacity
+                disabled={decisionBusy}
                 onPress={async () => {
+                  if (decisionBusy) return;
+                  setDecisionBusy(true);
                   iActedRef.current = true;
-                  analytics.matchDecline();
-                  // Tell the other side the match fell through (they may be on this
-                  // same screen or already waiting in the chat).
-                  if (conversationId) await endConversation(conversationId, 'declined');
-                  await leaveMatchQueue();
-                  navigation.goBack();
+                  try {
+                    analytics.matchDecline();
+                    // Tell the other side the match fell through (they may be on this
+                    // same screen or already waiting in the chat).
+                    if (conversationId) await endConversation(conversationId, 'declined');
+                    await leaveMatchQueue();
+                    navigation.goBack();
+                  } catch {
+                    iActedRef.current = false;
+                    setDecisionBusy(false);
+                    Alert.alert(
+                      lang === 'en' ? 'Could not leave' : '暫時無法離開',
+                      lang === 'en' ? 'Check your connection and try again.' : '請確認網路後再試一次。',
+                    );
+                  }
                 }}
-                style={styles.decline}
+                style={[styles.decline, { opacity: decisionBusy ? 0.4 : 1 }]}
               >
                 <Text style={[styles.declineText, { color: p.muted }]}>{t('matchDecline', lang)}</Text>
               </TouchableOpacity>

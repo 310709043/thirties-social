@@ -24,6 +24,7 @@ import * as ScreenCapture from 'expo-screen-capture';
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
 const TOTAL_SECONDS = 30 * 60;
+const CHAT_MAX_LENGTH = 280;
 /** Minimum messages exchanged before a veiled photo can be lifted (anti photo-grab). */
 const VEIL_MIN_MESSAGES = 10;
 /** 續燭 — each side pays this to vote for a one-time +30 min extension. */
@@ -64,6 +65,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const rekindleScheduledRef = useRef(false);
   const [realMessages, setRealMessages] = useState<DbConvMessage[]>([]);
   const [inputText, setInputText] = useState('');
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [showVeilSheet, setShowVeilSheet] = useState(false);
   const [veilSent, setVeilSent] = useState(false);
   const [veilSending, setVeilSending] = useState(false);
@@ -294,7 +297,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   };
 
   const sendMessage = async () => {
-    if (pausing) return;
+    if (pausing || sendingRef.current) return;
     if (!inputText.trim()) return;
     if (isNightSlow() && !pauseReadyRef.current) {
       setPausing(true);
@@ -309,7 +312,8 @@ export default function ChatScreen({ navigation, route }: Props) {
       return;
     }
     pauseReadyRef.current = false;
-    const check = autoFilter ? filterMessage(inputText.trim()) : { blocked: false };
+    const messageText = inputText.trim();
+    const check = autoFilter ? filterMessage(messageText) : { blocked: false };
     if (check.blocked) {
       Alert.alert(
         lang === 'en' ? 'Message blocked' : '\u8A0A\u606F\u5DF2\u88AB\u904E\u6FFE',
@@ -318,30 +322,38 @@ export default function ChatScreen({ navigation, route }: Props) {
       return;
     }
     if (conversationId) {
-      const ok = await sendConversationMessage({ conversationId, content: inputText.trim() });
-      if (!ok) {
-        Alert.alert(
-          lang === 'en' ? 'Failed to send' : '\u9001\u51FA\u5931\u6557',
-          lang === 'en' ? 'Please try again.' : '\u8ACB\u7A0D\u5F8C\u518D\u8A66\u4E00\u6B21\u3002',
-        );
-        return;
+      sendingRef.current = true;
+      setSending(true);
+      try {
+        const ok = await sendConversationMessage({ conversationId, content: messageText });
+        if (!ok) {
+          Alert.alert(
+            lang === 'en' ? 'Failed to send' : '\u9001\u51FA\u5931\u6557',
+            lang === 'en'
+              ? 'Your message is still here. Check your connection and try again.'
+              : '訊息還留在輸入框，請確認網路後再試一次。',
+          );
+          return;
+        }
+        analytics.messageSend(conversationId);
+        // A match "counts" only once you actually speak — charge on the first
+        // message you send, never for entering an empty chat.
+        if (matchCharge && !chargedRef.current) {
+          chargedRef.current = true;
+          // Await so a paid match actually settles (and a failed charge doesn't
+          // silently let the match go free); only mark charged once it succeeds.
+          const charged = await recordMatch();
+          if (!charged) chargedRef.current = false;
+        }
+        setInputText('');
+        setTyping(conversationId, false);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      } finally {
+        sendingRef.current = false;
+        setSending(false);
       }
-      analytics.messageSend(conversationId);
-      // A match "counts" only once you actually speak — charge on the first
-      // message you send, never for entering an empty chat.
-      if (matchCharge && !chargedRef.current) {
-        chargedRef.current = true;
-        // Await so a paid match actually settles (and a failed charge doesn't
-        // silently let the match go free); only mark charged once it succeeds.
-        const charged = await recordMatch();
-        if (!charged) chargedRef.current = false;
-      }
-      // Clear typing state after sending
-      setTyping(conversationId, false);
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     }
-    setInputText('');
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
   sendMessageRef.current = sendMessage;
@@ -513,6 +525,34 @@ export default function ChatScreen({ navigation, route }: Props) {
                       ? 'Say something first \u2014 they can hear you. Nothing here is kept.'
                       : '\u5148\u958B\u53E3\u8AAA\u9EDE\u4EC0\u9EBC\uFF0C\u5C0D\u65B9\u807D\u5F97\u5230\u3002\u9019\u88E1\u7559\u4E0D\u4E0B\u4EFB\u4F55\u6771\u897F\u3002'}
                   </Text>
+                  <Text style={[styles.promptLabel, { color: p.muted }]}>
+                    {lang === 'en' ? 'Need a first line? Tap to edit one.' : '不知道怎麼開始？點一句再改成你的話。'}
+                  </Text>
+                  <View style={styles.promptList}>
+                    {(lang === 'en'
+                      ? [
+                          'What do you wish someone understood tonight?',
+                          'What made you pause today?',
+                          'How are you, without saying “fine”?',
+                        ]
+                      : [
+                          '今晚，你最希望有人懂你什麼？',
+                          '今天有哪一刻，讓你想停一下？',
+                          '如果不能說「還好」，你現在好嗎？',
+                        ]
+                    ).map(prompt => (
+                      <TouchableOpacity
+                        key={prompt}
+                        accessibilityRole="button"
+                        onPress={() => handleInputChange(prompt)}
+                        activeOpacity={0.8}
+                        style={[styles.promptChip, { backgroundColor: p.surface, borderColor: p.line }]}
+                      >
+                        <Text style={[styles.promptText, { color: p.ink }]}>{prompt}</Text>
+                        <Text style={{ color: p.accent, fontSize: 14 }}>＋</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
               </FadeInUp>
             )}
@@ -584,14 +624,23 @@ export default function ChatScreen({ navigation, route }: Props) {
                 style={[styles.input, { color: p.ink }]}
                 onSubmitEditing={sendMessage}
                 returnKeyType="send"
+                maxLength={CHAT_MAX_LENGTH}
+                editable={!sending}
               />
               <TouchableOpacity
                 onPress={sendMessage}
-                  accessibilityRole="button" accessibilityLabel="送出"
-                disabled={pausing}
-                style={[styles.sendBtn, { backgroundColor: p.ink, opacity: pausing ? 0.4 : 1 }]}
+                accessibilityRole="button"
+                accessibilityLabel={lang === 'en' ? 'Send message' : '送出訊息'}
+                accessibilityState={{ disabled: pausing || sending || !inputText.trim() }}
+                disabled={pausing || sending || !inputText.trim()}
+                style={[styles.sendBtn, {
+                  backgroundColor: p.ink,
+                  opacity: pausing || sending || !inputText.trim() ? 0.4 : 1,
+                }]}
               >
-                <Text style={{ color: p.dark ? '#1a1530' : '#fff', fontSize: 16 }}>{pausing ? '⋯' : '↑'}</Text>
+                <Text style={{ color: p.dark ? '#1a1530' : '#fff', fontSize: 16 }}>
+                  {pausing || sending ? '⋯' : '↑'}
+                </Text>
               </TouchableOpacity>
             </GlassCard>
             </>
@@ -868,9 +917,13 @@ const styles = StyleSheet.create({
   dissolveNote:   { fontFamily: 'EBGaramond-Italic', fontSize: 11, textAlign: 'center', opacity: 0.7 },
   messages:       { flex: 1 },
   openNote:       { fontFamily: 'EBGaramond-Italic', fontSize: 11, textAlign: 'center', opacity: 0.7, marginBottom: 6 },
-  emptyState:     { alignItems: 'center', paddingTop: 64, paddingHorizontal: 20 },
+  emptyState:     { alignItems: 'center', paddingTop: 36, paddingHorizontal: 12 },
   emptyTitle:     { fontFamily: 'NotoSerifTC-Light', fontSize: 21, letterSpacing: 1, textAlign: 'center' },
   emptyBody:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5, lineHeight: 23, textAlign: 'center', marginTop: 10, maxWidth: 260 },
+  promptLabel:    { fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, textAlign: 'center', marginTop: 24, marginBottom: 10 },
+  promptList:     { width: '100%', maxWidth: 360, gap: 8 },
+  promptChip:     { minHeight: 44, borderRadius: 16, borderWidth: 0.5, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  promptText:     { flex: 1, fontFamily: 'NotoSerifTC-Regular', fontSize: 13, lineHeight: 20 },
   bubbleRow:      { flexDirection: 'row' },
   bubble:         { maxWidth: '78%', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 22 },
   bubbleText:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 24 },

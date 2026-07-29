@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Linking, Alert,
+  View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Linking, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Rect, Line } from 'react-native-svg';
@@ -25,6 +25,7 @@ export default function OnboardingScreen({ navigation }: Props) {
   const { seed, direction, lang, identityKind } = useAppStore();
   const p = DIRECTIONS[direction];
   const [step, setStep] = useState(0);
+  const [showAgeGate, setShowAgeGate] = useState(false);
   const isPreview = step === STEPS.length;
 
   const contentOpacity = useRef(new Animated.Value(1)).current;
@@ -59,21 +60,9 @@ export default function OnboardingScreen({ navigation }: Props) {
       animateStep(step + 1);
       return;
     }
-    // 18+ gate — this app hosts adult-leaning spaces (the Loft), so entry
-    // requires an explicit age confirmation before anything else.
-    Alert.alert(
-      lang === 'en' ? 'Adults only' : '需要年滿 18 歲',
-      lang === 'en'
-        ? 'Candle Whisper is for adults. Please confirm you are 18 or older.'
-        : '燭影私語是給成年人的空間。請確認你已年滿 18 歲。',
-      [
-        { text: lang === 'en' ? 'I am under 18' : '我未滿 18 歲', style: 'cancel' },
-        { text: lang === 'en' ? 'I am 18 or older' : '我已滿 18 歲', onPress: () => {
-          setOnboardingDone();
-          navigation.replace('Setup');
-        }},
-      ],
-    );
+    // A branded in-app gate works consistently on native and web. The previous
+    // Alert implementation had no actionable buttons on React Native Web.
+    setShowAgeGate(true);
   };
 
   const handleBack = () => {
@@ -161,7 +150,71 @@ export default function OnboardingScreen({ navigation }: Props) {
           </FadeInUp>
         </View>
       </SafeAreaView>
+
+      <Modal
+        visible={showAgeGate}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAgeGate(false)}
+      >
+        <View style={styles.ageScrim}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={lang === 'en' ? 'Close age confirmation' : '關閉年齡確認'}
+            activeOpacity={1}
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowAgeGate(false)}
+          />
+          <View style={[styles.ageCard, { backgroundColor: p.surfaceSolid, borderColor: p.line }]}>
+            <View style={[styles.ageMark, { backgroundColor: p.accentSoft, borderColor: p.accent + '45' }]}>
+              <WickGlyphMark color={p.accent} />
+            </View>
+            <Text style={[styles.ageTitle, { color: p.ink }]}>
+              {lang === 'en' ? 'A space for adults' : '這是成年人的空間'}
+            </Text>
+            <Text style={[styles.ageBody, { color: p.muted }]}>
+              {lang === 'en'
+                ? 'Candle Whisper includes intimate relationship topics and is only available to people aged 18 or older.'
+                : '燭影私語包含親密關係與成人情感話題，僅開放給年滿 18 歲的使用者。'}
+            </Text>
+            <SoftButton
+              p={p}
+              variant="primary"
+              size="lg"
+              full
+              onPress={() => {
+                setShowAgeGate(false);
+                setOnboardingDone();
+                navigation.replace('Setup');
+              }}
+            >
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.dark ? '#1a1530' : '#fff' }}>
+                {lang === 'en' ? 'I confirm I am 18 or older' : '我確認已年滿 18 歲'}
+              </Text>
+            </SoftButton>
+            <TouchableOpacity
+              accessibilityRole="button"
+              onPress={() => setShowAgeGate(false)}
+              style={styles.underageButton}
+            >
+              <Text style={[styles.underageText, { color: p.muted }]}>
+                {lang === 'en' ? 'I am under 18 — leave this screen' : '我未滿 18 歲，暫不使用'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </VaporBackground>
+  );
+}
+
+function WickGlyphMark({ color }: { color: string }) {
+  return (
+    <Svg width={26} height={34} viewBox="0 0 26 34">
+      <Circle cx={13} cy={13} r={10} fill={color} fillOpacity={0.12} />
+      <Circle cx={13} cy={13} r={4.5} fill={color} fillOpacity={0.92} />
+      <Line x1={13} y1={18} x2={13} y2={30} stroke={color} strokeOpacity={0.55} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
   );
 }
 
@@ -263,4 +316,11 @@ const styles = StyleSheet.create({
   bodyAlt:   { fontFamily: 'EBGaramond-Italic', fontSize: 13, opacity: 0.7, maxWidth: 320, lineHeight: 20 },
   footer:    { gap: 12 },
   back:      { alignItems: 'center', height: 22, justifyContent: 'center' },
+  ageScrim:  { flex: 1, backgroundColor: 'rgba(20,12,8,0.64)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  ageCard:   { width: '100%', maxWidth: 420, borderRadius: 28, borderWidth: 0.7, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 30, shadowOffset: { width: 0, height: 14 }, elevation: 12 },
+  ageMark:   { width: 58, height: 58, borderRadius: 29, borderWidth: 0.7, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  ageTitle:  { fontFamily: 'NotoSerifTC-Regular', fontSize: 22, lineHeight: 31, textAlign: 'center' },
+  ageBody:   { fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5, lineHeight: 23, textAlign: 'center', marginTop: 8, marginBottom: 22 },
+  underageButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, marginTop: 8 },
+  underageText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, textAlign: 'center' },
 });

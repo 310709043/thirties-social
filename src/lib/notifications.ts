@@ -6,18 +6,23 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { getCurrentUid, getCurrentNightSession } from './db';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Expo push/local notification APIs are native-only in this app. Keeping the
+// web bundle as an explicit no-op avoids permission prompts and unsupported
+// listener warnings while preserving the same call sites across platforms.
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 export async function registerForPushNotifications(): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
   try {
     // Check permissions
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -75,6 +80,7 @@ export async function scheduleLocalNotification(params: {
   body: string;
   data?: Record<string, any>;
 }): Promise<void> {
+  if (Platform.OS === 'web') return;
   await Notifications.scheduleNotificationAsync({
     content: {
       title: params.title,
@@ -95,6 +101,7 @@ const NIGHTLY_REMINDER_ID = 'nightly-window-reminder';
  * no-op if the user never granted notification permission.
  */
 export async function scheduleNightlyReminder(lang: 'zh' | 'en' = 'zh'): Promise<void> {
+  if (Platform.OS === 'web') return;
   try {
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') return;
@@ -129,6 +136,7 @@ export async function scheduleNightlyReminder(lang: 'zh' | 'en' = 'zh'): Promise
  * day late (the old raw `+1 day` did exactly that after midnight).
  */
 export async function scheduleRekindleReminder(lang: 'zh' | 'en' = 'zh'): Promise<void> {
+  if (Platform.OS === 'web') return;
   try {
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') return;
@@ -158,6 +166,7 @@ export async function scheduleRekindleReminder(lang: 'zh' | 'en' = 'zh'): Promis
  *  a cold-start tap often never reaches the response listener — it has to be
  *  picked up here once the app is up. */
 export function getInitialNotificationResponse(): Promise<Notifications.NotificationResponse | null> {
+  if (Platform.OS === 'web') return Promise.resolve(null);
   return Notifications.getLastNotificationResponseAsync();
 }
 
@@ -165,6 +174,7 @@ export function addNotificationListener(
   onReceive: (notification: Notifications.Notification) => void,
   onInteract: (response: Notifications.NotificationResponse) => void,
 ): () => void {
+  if (Platform.OS === 'web') return () => {};
   const receiveSub = Notifications.addNotificationReceivedListener(onReceive);
   const responseSub = Notifications.addNotificationResponseReceivedListener(onInteract);
   return () => {

@@ -8,6 +8,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path as SvgPath, Ellipse, Rect } from 'react-native-svg';
 import { Palette } from '../../lib/theme';
+import { NightAtmosphere } from './NightAtmosphere';
 
 // ── VaporBackground ──────────────────────────────────────────
 export function VaporBackground({ p, children, style }: { p: Palette; children: ReactNode; style?: ViewStyle }) {
@@ -22,17 +23,18 @@ export function VaporBackground({ p, children, style }: { p: Palette; children: 
       <View style={{
         position: 'absolute', top: '8%', left: '-20%',
         width: '90%', aspectRatio: 1,
-        backgroundColor: p.accent + '44',
+        backgroundColor: p.glow,
         borderRadius: 999,
-        opacity: 0.55,
+        opacity: 0.32,
       }} />
       <View style={{
         position: 'absolute', bottom: '5%', right: '-30%',
         width: '110%', aspectRatio: 1,
-        backgroundColor: p.accent + '33',
+        backgroundColor: p.glow,
         borderRadius: 999,
-        opacity: 0.4,
+        opacity: 0.2,
       }} />
+      <NightAtmosphere p={p} />
       {children}
     </LinearGradient>
   );

@@ -1,78 +1,126 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, TextInput,
-  StyleSheet,
+  StyleSheet, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
-import { DIRECTIONS } from '../lib/theme';
-import { VaporBackground, GlassCard, Cap, WickGlyph, FadeInUp } from '../components/ui';
+import { DIRECTIONS, Palette } from '../lib/theme';
+import { VaporBackground, Cap, WickGlyph, FadeInUp } from '../components/ui';
 import { useAppStore, setSetupDone, setProfileFields, Gender } from '../hooks/useAppStore';
 
-// A quiet section heading that breaks the long form into a few breaths.
-function SectionTitle({ p, zh, en, lang }: { p: any; zh: string; en: string; lang: string }) {
+type Props = NativeStackScreenProps<RootStackParamList, 'Setup'>;
+type ProfileStep = 0 | 1 | 2;
+
+const STEPS = [
+  { zh: '關於你', en: 'About you' },
+  { zh: '你的關係', en: 'Your relationship' },
+  { zh: '今晚想遇見誰', en: 'What you want tonight' },
+] as const;
+
+const MARRIAGE_ZH = ['穩定交往中', '同居', '訂婚', '已婚', '已婚·分居中', '偽單身', '開放關係', '對象是已婚的', '單身但說不清'];
+const MARRIAGE_EN = ['in a relationship', 'cohabiting', 'engaged', 'married', 'married · separated', 'single-passing', 'open', 'seeing someone married', 'single-ish'];
+const MARRIAGE_SLUGS = ['dating', 'cohabiting', 'engaged', 'married', 'separated', 'single-passing', 'open', 'seeing-married', 'single-ish'];
+const SHAPE_ZH = ['無性了', '喪偶式', '還有愛但寂寞', '熱戀期過了', '正在想要不要離開', '說不清'];
+const SHAPE_EN = ['sexless', 'roommates', 'love remains, lonely', 'past the honeymoon', 'thinking of leaving', 'hard to say'];
+const SHAPE_SLUGS = ['sexless', 'roommates', 'love-lonely', 'post-honeymoon', 'considering-leaving', 'unclear'];
+const WHEN_ZH = ['深夜', '午後', '上班時間', '碎片時間'];
+const WHEN_EN = ['late night', 'afternoons', 'office hours', 'in-between'];
+const WHEN_SLUGS = ['late-night', 'afternoon', 'office-hours', 'in-between'];
+const SEEKING_ZH = ['一個樹洞', '情感陪伴', '曖昧', '線上親密', '不設限'];
+const SEEKING_EN = ['someone to listen', 'companionship', 'flirtation', 'online intimacy', 'no limits'];
+const SEEKING_SLUGS = ['listener', 'companion', 'flirt', 'online-intimacy', 'no-limits'];
+const BOUNDARY_ZH = ['只在線上', '或許可以見面', '看感覺'];
+const BOUNDARY_EN = ['online only', 'maybe meet', 'depends'];
+const BOUNDARY_SLUGS = ['online-only', 'maybe-meet', 'depends'];
+const REGION_ZH = ['北部', '中部', '南部', '東部', '不透露'];
+const REGION_EN = ['north', 'central', 'south', 'east', 'undisclosed'];
+const REGION_SLUGS = ['north', 'central', 'south', 'east', 'undisclosed'];
+
+function SectionIntro({
+  p, eyebrow, title, body,
+}: {
+  p: Palette; eyebrow: string; title: string; body: string;
+}) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 30, marginBottom: 2 }}>
-      <View style={{ width: 5, height: 5, borderRadius: 5, backgroundColor: p.accent }} />
-      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, letterSpacing: 0.5 }}>
-        {lang === 'en' ? en : zh}
-      </Text>
-      <View style={{ flex: 1, height: 0.5, backgroundColor: p.line }} />
-    </View>
+    <FadeInUp delay={30} distance={8}>
+      <Cap p={p}>{eyebrow}</Cap>
+      <Text style={[styles.title, { color: p.ink }]}>{title}</Text>
+      <Text style={[styles.sub, { color: p.muted }]}>{body}</Text>
+    </FadeInUp>
   );
 }
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Setup'>;
-
 function ChipRow({
-  p, label, alt, options, value, onPick, multi = false,
+  p, label, optional, options, value, onPick, multi = false,
 }: {
-  p: any; label: string; alt?: string; options: string[];
+  p: Palette; label: string; optional?: string; options: string[];
   value: string | string[] | null; onPick: (v: any) => void; multi?: boolean;
 }) {
   const isPicked = (v: string) => multi
     ? (value as string[] || []).includes(v)
     : value === v;
   const pick = (v: string) => {
-    if (multi) {
-      const cur = (value as string[]) || [];
-      onPick(isPicked(v) ? cur.filter(x => x !== v) : [...cur, v]);
-    } else {
-      onPick(v);
-    }
+    if (!multi) return onPick(v);
+    const current = (value as string[]) || [];
+    onPick(isPicked(v) ? current.filter(x => x !== v) : [...current, v]);
   };
+
   return (
-    <View style={{ marginTop: 20 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-        <Cap p={p}>{label}</Cap>
-        {alt && <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, opacity: 0.6 }}>{alt}</Text>}
+    <View style={styles.fieldGroup}>
+      <View style={styles.labelRow}>
+        <Text style={[styles.fieldLabel, { color: p.ink }]}>{label}</Text>
+        {optional ? <Text style={[styles.optional, { color: p.muted }]}>{optional}</Text> : null}
       </View>
-      <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {options.map(o => (
-          <TouchableOpacity key={o} onPress={() => pick(o)} activeOpacity={0.8}
-            style={{
-              paddingVertical: 9, paddingHorizontal: 15, borderRadius: 999,
-              backgroundColor: isPicked(o) ? (multi ? p.accentSoft : p.ink) : p.surface,
-              borderWidth: 0.5,
-              borderColor: isPicked(o) ? (multi ? p.accent : p.ink) : p.line,
-            }}>
-            <Text style={{
-              fontFamily: 'NotoSerifTC-Regular', fontSize: 13,
-              color: isPicked(o) ? (multi ? p.ink : (p.dark ? '#1a1530' : '#fff')) : p.ink,
-            }}>{o}</Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.chips}>
+        {options.map(option => {
+          const selected = isPicked(option);
+          return (
+            <TouchableOpacity
+              key={option}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => pick(option)}
+              activeOpacity={0.8}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: selected ? p.accentSoft : p.surface,
+                  borderColor: selected ? p.accent : p.line,
+                  borderWidth: selected ? 1.2 : 0.7,
+                },
+              ]}
+            >
+              <Text style={[styles.chipText, { color: selected ? p.accent : p.ink }]}>
+                {option}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
+}
+
+function toSlug(zhOptions: string[], enOptions: string[], slugs: string[], value: string | null) {
+  if (!value) return null;
+  const zhIndex = zhOptions.indexOf(value);
+  const index = zhIndex >= 0 ? zhIndex : enOptions.indexOf(value);
+  return index >= 0 ? slugs[index] : value;
+}
+
+function toSlugs(zhOptions: string[], enOptions: string[], slugs: string[], values: string[]) {
+  return values.map(value => toSlug(zhOptions, enOptions, slugs, value)).filter(Boolean) as string[];
 }
 
 export default function SetupScreen({ navigation }: Props) {
   const { direction, lang } = useAppStore();
   const p = DIRECTIONS[direction];
   const zh = lang !== 'en';
+  const scrollRef = useRef<ScrollView>(null);
 
+  const [step, setStep] = useState<ProfileStep>(0);
   const [gender, setGender] = useState<string | null>(null);
   const [age, setAge] = useState<string | null>(null);
   const [marriage, setMarriage] = useState<string | null>(null);
@@ -83,214 +131,321 @@ export default function SetupScreen({ navigation }: Props) {
   const [region, setRegion] = useState<string | null>(null);
   const [line, setLine] = useState('');
   const [lineFocused, setLineFocused] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // The five required answers — track completion for a live progress hint.
-  const requiredDone = [!!gender, !!age, !!marriage, seeking.length > 0, !!boundary];
-  const doneCount = requiredDone.filter(Boolean).length;
-  const ready = doneCount === requiredDone.length;
-  const remaining = requiredDone.length - doneCount;
+  const stepReady = step === 0
+    ? !!gender && !!age
+    : step === 1
+      ? !!marriage
+      : seeking.length > 0 && !!boundary;
 
-  // Canonical slug mappings (same index order as the chip options)
-  const MARRIAGE_ZH = ['穩定交往中', '同居', '訂婚', '已婚', '已婚·分居中', '偽單身', '開放關係', '對象是已婚的', '單身但說不清'];
-  const MARRIAGE_EN = ['in a relationship', 'cohabiting', 'engaged', 'married', 'married · separated', 'single-passing', 'open', 'seeing someone married', 'single-ish'];
-  const MARRIAGE_SLUGS = ['dating', 'cohabiting', 'engaged', 'married', 'separated', 'single-passing', 'open', 'seeing-married', 'single-ish'];
-  const SHAPE_ZH = ['無性了', '喪偶式', '還有愛但寂寞', '熱戀期過了', '正在想要不要離開', '說不清'];
-  const SHAPE_EN = ['sexless', 'roommates', 'love remains, lonely', 'past the honeymoon', 'thinking of leaving', 'hard to say'];
-  const SHAPE_SLUGS = ['sexless', 'roommates', 'love-lonely', 'post-honeymoon', 'considering-leaving', 'unclear'];
-  const WHEN_ZH = ['深夜', '午後', '上班時間', '碎片時間'];
-  const WHEN_EN = ['late night', 'afternoons', 'office hours', 'in-between'];
-  const WHEN_SLUGS = ['late-night', 'afternoon', 'office-hours', 'in-between'];
-  const SEEKING_ZH = ['一個樹洞', '情感陪伴', '曖昧', '線上親密', '不設限'];
-  const SEEKING_EN = ['someone to listen', 'companionship', 'flirtation', 'online intimacy', 'no limits'];
-  const SEEKING_SLUGS = ['listener', 'companion', 'flirt', 'online-intimacy', 'no-limits'];
-  const BOUNDARY_ZH = ['只在線上', '或許可以見面', '看感覺'];
-  const BOUNDARY_EN = ['online only', 'maybe meet', 'depends'];
-  const BOUNDARY_SLUGS = ['online-only', 'maybe-meet', 'depends'];
-  const REGION_ZH = ['北部', '中部', '南部', '東部', '不透露'];
-  const REGION_EN = ['north', 'central', 'south', 'east', 'undisclosed'];
-  const REGION_SLUGS = ['north', 'central', 'south', 'east', 'undisclosed'];
-
-  const toSlug = (zhOpts: string[], enOpts: string[], slugs: string[], val: string | null) => {
-    if (!val) return null;
-    const idx = zhOpts.indexOf(val) >= 0 ? zhOpts.indexOf(val) : enOpts.indexOf(val);
-    return idx >= 0 ? slugs[idx] : val;
+  const goToStep = (next: ProfileStep) => {
+    setStep(next);
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
   };
-  const toSlugs = (zhOpts: string[], enOpts: string[], slugs: string[], vals: string[]) =>
-    vals.map(v => toSlug(zhOpts, enOpts, slugs, v)).filter(Boolean) as string[];
 
   const handleDone = async () => {
-    if (!ready) return;
+    if (!stepReady || saving) return;
+    setSaving(true);
     const genderMap: Record<string, Gender> = { f: 'female', m: 'male', x: 'nonbinary' };
-    // Fallback to null (not nonbinary) so "no answer" is distinct from "chose nonbinary".
-    const resolvedGender = genderMap[gender!] ?? null;
-    const resolvedRelationship = toSlug(MARRIAGE_ZH, MARRIAGE_EN, MARRIAGE_SLUGS, marriage);
-    const resolvedSeeking = toSlugs(SEEKING_ZH, SEEKING_EN, SEEKING_SLUGS, seeking);
-    const resolvedBoundary = toSlug(BOUNDARY_ZH, BOUNDARY_EN, BOUNDARY_SLUGS, boundary);
-    const resolvedRegion = toSlug(REGION_ZH, REGION_EN, REGION_SLUGS, region);
-    const resolvedShape = toSlug(SHAPE_ZH, SHAPE_EN, SHAPE_SLUGS, shape);
-    const resolvedFreeTimes = toSlugs(WHEN_ZH, WHEN_EN, WHEN_SLUGS, when);
     await setProfileFields({
-      gender: resolvedGender,
+      gender: genderMap[gender!] ?? 'nonbinary',
       ageBracket: age!,
-      relationshipStatus: resolvedRelationship ?? marriage!,
-      relationshipShape: resolvedShape,
-      seeking: resolvedSeeking,
-      boundary: resolvedBoundary ?? boundary!,
-      freeTimes: resolvedFreeTimes,
-      region: resolvedRegion,
+      relationshipStatus: toSlug(MARRIAGE_ZH, MARRIAGE_EN, MARRIAGE_SLUGS, marriage) ?? marriage!,
+      relationshipShape: toSlug(SHAPE_ZH, SHAPE_EN, SHAPE_SLUGS, shape),
+      seeking: toSlugs(SEEKING_ZH, SEEKING_EN, SEEKING_SLUGS, seeking),
+      boundary: toSlug(BOUNDARY_ZH, BOUNDARY_EN, BOUNDARY_SLUGS, boundary) ?? boundary!,
+      freeTimes: toSlugs(WHEN_ZH, WHEN_EN, WHEN_SLUGS, when),
+      region: toSlug(REGION_ZH, REGION_EN, REGION_SLUGS, region),
       quote: line.trim() || null,
     });
     await setSetupDone();
     navigation.replace('Mood');
   };
 
+  const handlePrimary = () => {
+    if (!stepReady) return;
+    if (step < 2) goToStep((step + 1) as ProfileStep);
+    else void handleDone();
+  };
+
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <FadeInUp delay={0} distance={8}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Cap p={p}>{zh ? '最後一步' : 'Last step'}</Cap>
-              <WickGlyph size={16} color={p.accent} />
+      <SafeAreaView style={styles.safe}>
+        <KeyboardAvoidingView behavior="padding" style={styles.safe}>
+          <View style={styles.shell}>
+            <View style={styles.progressHeader}>
+              <View style={styles.progressCopy}>
+                <Cap p={p}>{zh ? '建立你的夜間名片' : 'Your night profile'}</Cap>
+                <Text style={[styles.stepCount, { color: p.muted }]}>
+                  {step + 1} / {STEPS.length}
+                </Text>
+              </View>
+              <View style={styles.progressBars}>
+                {STEPS.map((item, index) => (
+                  <View
+                    key={item.en}
+                    style={[
+                      styles.progressBar,
+                      { backgroundColor: index <= step ? p.accent : p.line },
+                    ]}
+                  />
+                ))}
+              </View>
             </View>
-            <Text style={[styles.title, { color: p.ink }]}>
-              {zh ? '讓我多認識你一點' : 'Let me know you a little'}
-            </Text>
-            <Text style={[styles.sub, { color: p.muted }]}>
-              {zh
-                ? '這些只是為了幫你遇到懂這種夜晚的人——沒有對錯，也不會公開。只有你允許時，夜閣才看得到一部分。'
-                : 'Just so you can meet people who understand your kind of night — no right or wrong, never public. Only the Loft sees a part, and only what you allow.'}
-            </Text>
-            {/* Live progress — five soft dots that fill as required answers land */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 16 }}>
-              {requiredDone.map((d, i) => (
-                <View key={i} style={{ width: d ? 22 : 14, height: 4, borderRadius: 4, backgroundColor: d ? p.accent : p.line }} />
-              ))}
-              <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: p.muted, marginLeft: 4 }}>
-                {doneCount}/{requiredDone.length}
-              </Text>
-            </View>
-          </FadeInUp>
 
-          <SectionTitle p={p} zh="關於你" en="About you" lang={lang} />
+            <ScrollView
+              ref={scrollRef}
+              style={styles.scrollView}
+              contentContainerStyle={styles.scroll}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {step === 0 && (
+                <>
+                  <SectionIntro
+                    p={p}
+                    eyebrow={zh ? '第一步 · 基本輪廓' : 'Step one · basics'}
+                    title={zh ? '先讓對的人認出你' : 'Help the right person find you'}
+                    body={zh
+                      ? '只顯示必要的輪廓，不使用真名。你可以之後在設定中調整。'
+                      : 'Only the essentials, never your real name. You can change these later.'}
+                  />
 
-          {/* Gender */}
-          <View style={{ marginTop: 16 }}>
-            <Cap p={p}>{zh ? '我是' : 'I am'}</Cap>
-            <View style={{ marginTop: 10, flexDirection: 'row', gap: 8 }}>
-              {[
-                { v: 'f', zh: '女生', en: 'Woman' },
-                { v: 'm', zh: '男生', en: 'Man' },
-              ].map(g => (
-                <TouchableOpacity key={g.v} onPress={() => setGender(g.v)} activeOpacity={0.8}
-                  style={[styles.genderCard, {
-                    backgroundColor: gender === g.v ? p.accentSoft : p.surface,
-                    borderColor: gender === g.v ? p.accent : p.line,
-                    borderWidth: gender === g.v ? 1.2 : 1,
-                  }]}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: gender === g.v ? p.accent : p.ink, fontWeight: '500', textAlign: 'center' }}>
-                    {zh ? g.zh : g.en}
-                  </Text>
+                  <View style={styles.fieldGroup}>
+                    <Text style={[styles.fieldLabel, { color: p.ink }]}>{zh ? '我是' : 'I am'}</Text>
+                    <View style={styles.genderRow}>
+                      {[
+                        { value: 'f', zh: '女生', en: 'Woman' },
+                        { value: 'm', zh: '男生', en: 'Man' },
+                        { value: 'x', zh: '非二元', en: 'Non-binary' },
+                      ].map(item => {
+                        const selected = gender === item.value;
+                        return (
+                          <TouchableOpacity
+                            key={item.value}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            onPress={() => setGender(item.value)}
+                            activeOpacity={0.8}
+                            style={[
+                              styles.genderCard,
+                              {
+                                backgroundColor: selected ? p.accentSoft : p.surface,
+                                borderColor: selected ? p.accent : p.line,
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.genderText, { color: selected ? p.accent : p.ink }]}>
+                              {zh ? item.zh : item.en}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  <ChipRow
+                    p={p}
+                    label={zh ? '年齡區間' : 'Age range'}
+                    options={['18−24', '25−30', '31−35', '36−40', '41−45', '46+']}
+                    value={age}
+                    onPick={setAge}
+                  />
+                </>
+              )}
+
+              {step === 1 && (
+                <>
+                  <SectionIntro
+                    p={p}
+                    eyebrow={zh ? '第二步 · 關係現況' : 'Step two · relationship'}
+                    title={zh ? '說清楚，才不會彼此猜測' : 'Clarity creates safer connections'}
+                    body={zh
+                      ? '這些資訊會用來改善配對，也能幫助雙方在開始前理解彼此情境。'
+                      : 'These answers improve matching and help both people understand the context before talking.'}
+                  />
+                  <ChipRow
+                    p={p}
+                    label={zh ? '目前的感情狀態' : 'Relationship status'}
+                    options={zh ? MARRIAGE_ZH : MARRIAGE_EN}
+                    value={marriage}
+                    onPick={setMarriage}
+                  />
+                  <ChipRow
+                    p={p}
+                    label={zh ? '它現在的樣子' : 'What it feels like now'}
+                    optional={zh ? '選填' : 'optional'}
+                    options={zh ? SHAPE_ZH : SHAPE_EN}
+                    value={shape}
+                    onPick={setShape}
+                  />
+                  <View style={[styles.trustNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '35' }]}>
+                    <Text style={[styles.trustText, { color: p.inkSoft }]}>
+                      {zh
+                        ? '誠實不等於公開。這些內容只用於配對與你允許顯示的個人頁。'
+                        : 'Honest does not mean public. These answers are used for matching and the profile details you choose to show.'}
+                    </Text>
+                  </View>
+                </>
+              )}
+
+              {step === 2 && (
+                <>
+                  <SectionIntro
+                    p={p}
+                    eyebrow={zh ? '第三步 · 意圖與邊界' : 'Step three · intent & boundaries'}
+                    title={zh ? '今晚，你想靠近到哪裡？' : 'How close feels right tonight?'}
+                    body={zh
+                      ? '先說出期待與邊界，會讓第一句話更自然，也更安全。'
+                      : 'Clear expectations make the first message easier and the connection safer.'}
+                  />
+                  <ChipRow
+                    p={p}
+                    label={zh ? '我來找' : 'I am here for'}
+                    optional={zh ? '可複選' : 'choose any'}
+                    multi
+                    options={zh ? SEEKING_ZH : SEEKING_EN}
+                    value={seeking}
+                    onPick={setSeeking}
+                  />
+                  <ChipRow
+                    p={p}
+                    label={zh ? '我的邊界' : 'My boundary'}
+                    options={zh ? BOUNDARY_ZH : BOUNDARY_EN}
+                    value={boundary}
+                    onPick={setBoundary}
+                  />
+                  <ChipRow
+                    p={p}
+                    label={zh ? '通常有空的時候' : 'Usually free'}
+                    optional={zh ? '選填 · 可複選' : 'optional · choose any'}
+                    multi
+                    options={zh ? WHEN_ZH : WHEN_EN}
+                    value={when}
+                    onPick={setWhen}
+                  />
+                  <ChipRow
+                    p={p}
+                    label={zh ? '大概在哪裡' : 'Rough location'}
+                    optional={zh ? '選填 · 只到區域' : 'optional · region only'}
+                    options={zh ? REGION_ZH : REGION_EN}
+                    value={region}
+                    onPick={setRegion}
+                  />
+                  <View style={styles.fieldGroup}>
+                    <View style={styles.labelRow}>
+                      <Text style={[styles.fieldLabel, { color: p.ink }]}>
+                        {zh ? '留給夜閣的一句話' : 'One line for the Loft'}
+                      </Text>
+                      <Text style={[styles.optional, { color: p.muted }]}>{zh ? '選填' : 'optional'}</Text>
+                    </View>
+                    <TextInput
+                      value={line}
+                      onChangeText={setLine}
+                      onFocus={() => setLineFocused(true)}
+                      onBlur={() => setLineFocused(false)}
+                      placeholder={zh ? '例：「我想遇見一個願意好好說話的人。」' : 'e.g. “I want to meet someone who can really talk.”'}
+                      placeholderTextColor={p.muted}
+                      maxLength={80}
+                      returnKeyType="done"
+                      style={[
+                        styles.lineInput,
+                        {
+                          backgroundColor: p.surface,
+                          borderColor: lineFocused ? p.accent : p.line,
+                          borderWidth: lineFocused ? 1.2 : 0.7,
+                          color: p.ink,
+                        },
+                      ]}
+                    />
+                    <Text style={[styles.characterCount, { color: p.muted }]}>{line.length}/80</Text>
+                  </View>
+                  <View style={[styles.trustNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '35' }]}>
+                    <Text style={[styles.trustText, { color: p.inkSoft }]}>
+                      {zh
+                        ? '燭影私語限年滿 18 歲使用。你的年齡區間與配對資料會安全儲存，且不會顯示真實身分。'
+                        : 'Candle Whisper is for adults 18+. Your age range and matching profile are stored securely without revealing your real identity.'}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </ScrollView>
+
+            <View style={[styles.footer, { borderTopColor: p.line, backgroundColor: p.bgSolid + 'F2' }]}>
+              {step > 0 ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  onPress={() => goToStep((step - 1) as ProfileStep)}
+                  style={[styles.backButton, { borderColor: p.line, backgroundColor: p.surface }]}
+                >
+                  <Text style={[styles.backText, { color: p.muted }]}>{zh ? '上一步' : 'Back'}</Text>
                 </TouchableOpacity>
-              ))}
+              ) : null}
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !stepReady }}
+                onPress={handlePrimary}
+                disabled={!stepReady || saving}
+                activeOpacity={stepReady ? 0.85 : 1}
+                style={[
+                  styles.primaryButton,
+                  {
+                    flex: step > 0 ? 1 : undefined,
+                    width: step > 0 ? undefined : '100%',
+                    backgroundColor: stepReady ? p.ink : p.surface,
+                    borderColor: p.line,
+                  },
+                ]}
+              >
+                <Text style={[
+                  styles.primaryText,
+                  { color: stepReady ? (p.dark ? '#1a1530' : '#fff') : p.muted },
+                ]}>
+                  {saving
+                    ? (zh ? '正在準備你的夜晚⋯' : 'Preparing your night…')
+                    : step === 2
+                      ? (zh ? '完成，開始今晚' : 'Finish and begin')
+                      : (zh ? `繼續 · ${STEPS[step + 1].zh}` : `Continue · ${STEPS[step + 1].en}`)}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
-
-          <ChipRow p={p} label={zh ? '年齡' : 'Age'} alt={zh ? 'age' : '年齡'}
-            options={['18−24', '25−30', '31−35', '36−40', '41−45', '46+']}
-            value={age} onPick={setAge} />
-
-          <SectionTitle p={p} zh="你的關係" en="Your relationship" lang={lang} />
-
-          <ChipRow p={p} label={zh ? '我的感情狀態' : 'My relationship'} alt={zh ? 'status' : '狀態'}
-            options={zh
-              ? ['穩定交往中', '同居', '訂婚', '已婚', '已婚·分居中', '偽單身', '開放關係', '對象是已婚的', '單身但說不清']
-              : ['in a relationship', 'cohabiting', 'engaged', 'married', 'married · separated', 'single-passing', 'open', 'seeing someone married', 'single-ish']}
-            value={marriage} onPick={setMarriage} />
-
-          <ChipRow p={p} label={zh ? '它現在的樣子' : 'What it feels like now'} alt={zh ? '誠實地說' : 'honestly'}
-            options={zh
-              ? ['無性了', '喪偶式', '還有愛但寂寞', '熱戀期過了', '正在想要不要離開', '說不清']
-              : ['sexless', 'roommates', 'love remains, lonely', 'past the honeymoon', 'thinking of leaving', 'hard to say']}
-            value={shape} onPick={setShape} />
-
-          <SectionTitle p={p} zh="你今晚想要的" en="What you're here for" lang={lang} />
-
-          <ChipRow p={p} label={zh ? '我來找' : 'I am here for'} alt={zh ? '可複選' : 'multi'} multi
-            options={zh
-              ? ['一個樹洞', '情感陪伴', '曖昧', '線上親密', '不設限']
-              : ['someone to listen', 'companionship', 'flirtation', 'online intimacy', 'no limits']}
-            value={seeking} onPick={setSeeking} />
-
-          <ChipRow p={p} label={zh ? '我的邊界' : 'My boundary'} alt={zh ? 'boundary' : '邊界'}
-            options={zh ? ['只在線上', '或許可以見面', '看感覺'] : ['online only', 'maybe meet', 'depends']}
-            value={boundary} onPick={setBoundary} />
-
-          <ChipRow p={p} label={zh ? '我通常有空的時候' : 'When I am free'} alt={zh ? '可複選' : 'multi'} multi
-            options={zh ? ['深夜', '午後', '上班時間', '碎片時間'] : ['late night', 'afternoons', 'office hours', 'in-between']}
-            value={when} onPick={setWhen} />
-
-          <ChipRow p={p} label={zh ? '大概在' : 'Roughly in'} alt={zh ? '只到區域' : 'region only'}
-            options={zh ? ['北部', '中部', '南部', '東部', '不透露'] : ['north', 'central', 'south', 'east', 'undisclosed']}
-            value={region} onPick={setRegion} />
-
-          {/* One line */}
-          <View style={{ marginTop: 20 }}>
-            <Cap p={p}>{zh ? '留給夜閣的一句話（可不填）' : 'One line, for the Loft (optional)'}</Cap>
-            <TextInput
-              value={line}
-              onChangeText={setLine}
-              onFocus={() => setLineFocused(true)}
-              onBlur={() => setLineFocused(false)}
-              placeholder={zh ? '例：「婚姻是兩個人輪流孤獨。」' : 'e.g. "Marriage is two people taking turns being lonely."'}
-              placeholderTextColor={p.muted}
-              style={[styles.lineInput, { backgroundColor: p.surface, borderColor: lineFocused ? p.accent : p.line, borderWidth: lineFocused ? 1 : 0.5, color: p.ink }]}
-            />
-          </View>
-
-          {/* Age confirm */}
-          <View style={[styles.ageNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
-            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.inkSoft, lineHeight: 20 }}>
-              {zh
-                ? '按下開始即代表你已滿 18 歲。驗證只在裝置上完成，不會儲存。'
-                : 'Starting means you are over 18. Verification happens on-device only — never stored.'}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            onPress={handleDone}
-            disabled={!ready}
-            activeOpacity={ready ? 0.85 : 1}
-            style={[styles.doneBtn, {
-              backgroundColor: ready ? p.ink : p.surface,
-              borderWidth: ready ? 0 : 0.5,
-              borderColor: p.line,
-            }]}>
-            <Text style={{
-              fontFamily: 'NotoSerifTC-Regular', fontSize: 16, fontWeight: '500', letterSpacing: 1,
-              color: ready ? (p.dark ? '#1a1530' : '#fff') : p.muted,
-            }}>
-              {ready
-                ? (zh ? '開始今晚' : 'Begin tonight')
-                : (zh ? `還差 ${remaining} 項` : `${remaining} more to go`)}
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </VaporBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll:     { padding: 26, paddingBottom: 48, width: '100%', maxWidth: 560, alignSelf: 'center' },
-  title:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 28, fontWeight: '400', lineHeight: 38, marginTop: 8 },
-  sub:        { fontFamily: 'NotoSerifTC-Regular', fontSize: 13, lineHeight: 22, marginTop: 8 },
-  genderCard: { flex: 1, padding: 14, borderRadius: 16, borderWidth: 1 },
-  lineInput:  { marginTop: 10, padding: 13, borderRadius: 14, borderWidth: 0.5, fontFamily: 'NotoSerifTC-Regular', fontSize: 14 },
-  ageNote:    { marginTop: 18, padding: 12, borderRadius: 14, borderWidth: 0.5 },
-  doneBtn:    { marginTop: 18, height: 56, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  safe: { flex: 1 },
+  shell: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' },
+  progressHeader: { paddingHorizontal: 24, paddingTop: 14, paddingBottom: 12 },
+  progressCopy: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stepCount: { fontFamily: 'Inter-Regular', fontSize: 11, letterSpacing: 1 },
+  progressBars: { flexDirection: 'row', gap: 7, marginTop: 12 },
+  progressBar: { flex: 1, height: 3, borderRadius: 3 },
+  scrollView: { flex: 1 },
+  scroll: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 30 },
+  title: { fontFamily: 'NotoSerifTC-Regular', fontSize: 28, lineHeight: 39, marginTop: 8 },
+  sub: { fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5, lineHeight: 22, marginTop: 8 },
+  fieldGroup: { marginTop: 28 },
+  labelRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  fieldLabel: { fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 22 },
+  optional: { fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 0.5 },
+  chips: { marginTop: 11, flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
+  chip: { paddingVertical: 10, paddingHorizontal: 15, borderRadius: 999 },
+  chipText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 13, lineHeight: 20 },
+  genderRow: { flexDirection: 'row', gap: 9, marginTop: 11 },
+  genderCard: { flex: 1, minHeight: 54, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  genderText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5, textAlign: 'center' },
+  trustNote: { marginTop: 28, padding: 14, borderRadius: 16, borderWidth: 0.7 },
+  trustText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, lineHeight: 21 },
+  lineInput: { marginTop: 11, paddingHorizontal: 14, paddingVertical: 13, borderRadius: 14, fontFamily: 'NotoSerifTC-Regular', fontSize: 14 },
+  characterCount: { fontFamily: 'Inter-Regular', fontSize: 10, textAlign: 'right', marginTop: 5 },
+  footer: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  backButton: { height: 54, minWidth: 94, borderRadius: 999, borderWidth: 0.7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+  backText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 14 },
+  primaryButton: { height: 54, borderRadius: 999, borderWidth: 0.7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
+  primaryText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 15, fontWeight: '500', letterSpacing: 0.5, textAlign: 'center' },
 });
