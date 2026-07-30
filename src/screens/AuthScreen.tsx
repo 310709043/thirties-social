@@ -10,7 +10,7 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, SoftButton, FadeInUp, Logo } from '../components/ui';
-import { useAppStore } from '../hooks/useAppStore';
+import { syncAfterAuth, useAppStore } from '../hooks/useAppStore';
 import { register, login, resetPassword, getCurrentUser } from '../lib/auth';
 import { signInWithGoogle, isGoogleAvailable } from '../lib/googleAuth';
 import { analytics } from '../lib/analytics';
@@ -60,6 +60,7 @@ export default function AuthScreen({ navigation, route }: Props) {
     setLoading(false);
     if (result.ok) {
       hapticSuccess();
+      await syncAfterAuth();
       await routeAfterAuth();
     } else {
       setError(result.error ?? '登入失敗');
@@ -85,6 +86,7 @@ export default function AuthScreen({ navigation, route }: Props) {
     setLoading(false);
     if (result.ok) {
       hapticSuccess();
+      await syncAfterAuth();
       await routeAfterAuth();
     } else {
       setError(result.error ?? '註冊失敗');
@@ -98,6 +100,7 @@ export default function AuthScreen({ navigation, route }: Props) {
     setLoading(false);
     if (result.ok) {
       hapticSuccess();
+      await syncAfterAuth();
       await routeAfterAuth();
     } else if (result.error !== 'cancelled') {
       // Surface the real error for diagnosis (revert to a generic message later),
@@ -141,6 +144,17 @@ export default function AuthScreen({ navigation, route }: Props) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {navigation.canGoBack() ? (
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                accessibilityRole="button"
+                accessibilityLabel={lang === 'en' ? 'Back to the previous screen' : '回到上一頁'}
+                style={[styles.backButton, { backgroundColor: p.surface, borderColor: p.line }]}
+              >
+                <Text style={[styles.backGlyph, { color: p.ink }]}>‹</Text>
+              </TouchableOpacity>
+            ) : null}
+
             {/* Logo */}
             <FadeInUp delay={0} distance={12}>
               <View style={styles.logoWrap}>
@@ -324,6 +338,7 @@ export default function AuthScreen({ navigation, route }: Props) {
                 <TouchableOpacity
                   onPress={async () => {
                     try { await ensureAnonAuth(); } catch {}
+                    await syncAfterAuth();
                     hapticSuccess();
                     navigation.replace('Onboarding');
                   }}
@@ -358,6 +373,8 @@ export default function AuthScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   scroll:     { padding: 28, paddingBottom: 48, justifyContent: 'center', flexGrow: 1, width: '100%', maxWidth: 560, alignSelf: 'center' },
+  backButton: { position: 'absolute', top: 14, left: 22, zIndex: 2, width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  backGlyph:  { fontFamily: 'NotoSerifTC-Regular', fontSize: 25, lineHeight: 30, marginTop: -2 },
   logoWrap:   { alignItems: 'center', marginBottom: 24 },
   header:     { alignItems: 'center', marginBottom: 24, gap: 6 },
   title:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 28, letterSpacing: 2 },

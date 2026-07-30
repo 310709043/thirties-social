@@ -49,7 +49,7 @@ export async function register(email: string, password: string): Promise<{
       deviceId: null,
       seed: null,
       lang: 'zh',
-      direction: 'light',
+      direction: 'mist',
       wicks: 3,
       vigil: false,
       setupDone: false,

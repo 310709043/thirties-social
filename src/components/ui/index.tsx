@@ -21,20 +21,29 @@ export function VaporBackground({ p, children, style }: { p: Palette; children: 
       end={{ x: 0.9, y: 1 }}
       style={[{ flex: 1, overflow: 'hidden' }, style]}
     >
-      {/* accent orbs */}
+      {/* Layered twilight light: a warm focal glow plus a cooler lower echo.
+          These use native Views rather than blur filters, so Android gets the
+          same visual hierarchy as iOS and web. */}
       <View style={{
-        position: 'absolute', top: '8%', left: '-20%',
-        width: '90%', aspectRatio: 1,
+        position: 'absolute', top: '-16%', right: '-34%',
+        width: '112%', aspectRatio: 1,
         backgroundColor: p.glow,
         borderRadius: 999,
-        opacity: 0.32,
+        opacity: p.dark ? 0.32 : 0.42,
       }} />
       <View style={{
-        position: 'absolute', bottom: '5%', right: '-30%',
-        width: '110%', aspectRatio: 1,
-        backgroundColor: p.glow,
+        position: 'absolute', top: '24%', left: '-48%',
+        width: '98%', aspectRatio: 1,
+        backgroundColor: p.dark ? p.accentSoft : 'rgba(255,247,231,0.76)',
         borderRadius: 999,
-        opacity: 0.2,
+        opacity: p.dark ? 0.42 : 0.9,
+      }} />
+      <View style={{
+        position: 'absolute', bottom: '-28%', right: '-42%',
+        width: '122%', aspectRatio: 1,
+        backgroundColor: p.dark ? p.glow : 'rgba(104,74,106,0.10)',
+        borderRadius: 999,
+        opacity: p.dark ? 0.22 : 1,
       }} />
       <NightAtmosphere p={p} />
       {children}
@@ -54,13 +63,13 @@ export const GlassCard = React.memo(function GlassCard({
       backgroundColor: p.glass,
       borderRadius: radius,
       padding,
-      borderWidth: 0.5,
+      borderWidth: 1,
       borderColor: p.line,
-      shadowColor: p.dark ? '#000' : 'rgba(50,40,60,1)',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: p.dark ? 0.25 : 0.06,
-      shadowRadius: 24,
-      elevation: p.dark ? 5 : 2,
+      shadowColor: p.dark ? '#000' : '#6f4054',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: p.dark ? 0.28 : 0.14,
+      shadowRadius: 30,
+      elevation: p.dark ? 6 : 4,
     }, style]}>
       {children}
     </View>
@@ -114,6 +123,11 @@ export const SoftButton = React.memo(function SoftButton({
         gap: 8,
         width: full ? '100%' : undefined,
         opacity: disabled ? 0.5 : 1,
+        shadowColor: variant === 'primary' || variant === 'accent' ? p.ink : 'transparent',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: disabled || (variant !== 'primary' && variant !== 'accent') ? 0 : (p.dark ? 0.18 : 0.22),
+        shadowRadius: 16,
+        elevation: disabled || (variant !== 'primary' && variant !== 'accent') ? 0 : 5,
       }, style]}
     >
       {typeof children === 'string'

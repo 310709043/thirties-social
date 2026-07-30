@@ -86,14 +86,14 @@ function ChipRow({
               style={[
                 styles.chip,
                 {
-                  backgroundColor: selected ? p.accentSoft : p.surface,
+                  backgroundColor: selected ? p.accent : p.surface,
                   borderColor: selected ? p.accent : p.line,
-                  borderWidth: selected ? 1.2 : 0.7,
+                  borderWidth: selected ? 1.2 : 0.9,
                 },
               ]}
             >
-              <Text style={[styles.chipText, { color: selected ? p.accent : p.ink }]}>
-                {option}
+              <Text style={[styles.chipText, { color: selected ? (p.dark ? '#15172e' : '#fff') : p.ink }]}>
+                {selected ? '✓ ' : ''}{option}
               </Text>
             </TouchableOpacity>
           );
@@ -174,7 +174,7 @@ export default function SetupScreen({ navigation }: Props) {
       <SafeAreaView style={styles.safe}>
         <KeyboardAvoidingView behavior="padding" style={styles.safe}>
           <View style={styles.shell}>
-            <View style={styles.progressHeader}>
+            <View style={[styles.progressHeader, { backgroundColor: p.surface, borderColor: p.line }]}>
               <View style={styles.progressCopy}>
                 <Cap p={p}>{zh ? '建立你的夜間名片' : 'Your night profile'}</Cap>
                 <Text style={[styles.stepCount, { color: p.muted }]}>
@@ -231,13 +231,13 @@ export default function SetupScreen({ navigation }: Props) {
                             style={[
                               styles.genderCard,
                               {
-                                backgroundColor: selected ? p.accentSoft : p.surface,
-                                borderColor: selected ? p.accent : p.line,
+                                  backgroundColor: selected ? p.accent : p.surface,
+                                  borderColor: selected ? p.accent : p.line,
                               },
                             ]}
                           >
-                            <Text style={[styles.genderText, { color: selected ? p.accent : p.ink }]}>
-                              {zh ? item.zh : item.en}
+                            <Text style={[styles.genderText, { color: selected ? (p.dark ? '#15172e' : '#fff') : p.ink }]}>
+                              {selected ? '✓ ' : ''}{zh ? item.zh : item.en}
                             </Text>
                           </TouchableOpacity>
                         );
@@ -420,7 +420,7 @@ export default function SetupScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   shell: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' },
-  progressHeader: { paddingHorizontal: 24, paddingTop: 14, paddingBottom: 12 },
+  progressHeader: { marginHorizontal: 16, marginTop: 10, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14, borderRadius: 18, borderWidth: 1, shadowColor: '#6f4054', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 18, elevation: 2 },
   progressCopy: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stepCount: { fontFamily: 'Inter-Regular', fontSize: 11, letterSpacing: 1 },
   progressBars: { flexDirection: 'row', gap: 7, marginTop: 12 },
@@ -434,10 +434,10 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: 'NotoSerifTC-Regular', fontSize: 15, lineHeight: 22 },
   optional: { fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 0.5 },
   chips: { marginTop: 11, flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
-  chip: { paddingVertical: 10, paddingHorizontal: 15, borderRadius: 999 },
+  chip: { paddingVertical: 11, paddingHorizontal: 16, borderRadius: 999, minHeight: 44, justifyContent: 'center' },
   chipText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 13, lineHeight: 20 },
   genderRow: { flexDirection: 'row', gap: 9, marginTop: 11 },
-  genderCard: { flex: 1, minHeight: 54, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  genderCard: { flex: 1, minHeight: 58, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, shadowColor: '#6f4054', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 2 },
   genderText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5, textAlign: 'center' },
   trustNote: { marginTop: 28, padding: 14, borderRadius: 16, borderWidth: 0.7 },
   trustText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, lineHeight: 21 },

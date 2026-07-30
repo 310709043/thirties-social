@@ -227,8 +227,8 @@ export default function SettingsScreen({ navigation }: Props) {
                     <TouchableOpacity onPress={() => Alert.alert(
                       lang === 'en' ? 'About Candle Whisper' : '關於燭影私語',
                       lang === 'en'
-                        ? 'Candle Whisper — in the late-night glow, what you whisper is heard.\n\nVersion 0.1.0'
-                        : '燭影私語 — 在深夜的微光裡，說出口的都有人懂。\n\n版本 0.1.0'
+                        ? 'Candle Whisper — in the late-night glow, what you whisper is heard.\n\nVersion 1.1.0 · Alpha build 21'
+                        : '燭影私語 — 在深夜的微光裡，說出口的都有人懂。\n\n版本 1.1.0 · Alpha 測試版 21'
                     )}>
                       <Text style={{ color: p.muted, fontSize: 18 }}>›</Text>
                     </TouchableOpacity>
@@ -326,11 +326,16 @@ export default function SettingsScreen({ navigation }: Props) {
           )}
 
           <FadeInUp delay={500} distance={8}>
-            <Text style={[styles.footer, { color: p.muted }]}>
-              {lang === 'en'
-                ? 'Candle Whisper — in the late-night glow, what you whisper is heard.'
-                : '燭影私語 — 在深夜的微光裡，說出口的都有人懂。'}
-            </Text>
+            <View style={styles.footerWrap}>
+              <View style={[styles.versionPill, { backgroundColor: p.accentSoft, borderColor: p.accent + '35' }]}>
+                <Text style={[styles.versionText, { color: p.accent }]}>1.1.0 · ALPHA 21</Text>
+              </View>
+              <Text style={[styles.footer, { color: p.muted }]}>
+                {lang === 'en'
+                  ? 'Candle Whisper — in the late-night glow, what you whisper is heard.'
+                  : '燭影私語 — 在深夜的微光裡，說出口的都有人懂。'}
+              </Text>
+            </View>
           </FadeInUp>
         </ScrollView>
       </SafeAreaView>
@@ -386,5 +391,8 @@ const styles = StyleSheet.create({
   topBar:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 20 },
   backBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
   section: { marginTop: 18 },
-  footer:  { fontFamily: 'EBGaramond-Italic', fontSize: 11, textAlign: 'center', opacity: 0.7, lineHeight: 20, marginTop: 20 },
+  footerWrap: { alignItems: 'center', marginTop: 20, gap: 9 },
+  versionPill: { borderRadius: 999, borderWidth: 0.8, paddingHorizontal: 10, paddingVertical: 6 },
+  versionText: { fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 1.4, fontWeight: '600' },
+  footer:  { fontFamily: 'EBGaramond-Italic', fontSize: 11, textAlign: 'center', opacity: 0.7, lineHeight: 20 },
 });

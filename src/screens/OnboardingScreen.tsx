@@ -112,9 +112,17 @@ export default function OnboardingScreen({ navigation }: Props) {
           <Animated.View style={[styles.content, {
             opacity: contentOpacity,
             transform: [{ translateY: contentTranslate }],
+            backgroundColor: isPreview ? 'transparent' : p.surface,
+            borderColor: isPreview ? 'transparent' : p.line,
+            shadowColor: p.dark ? '#000' : '#6f4054',
           }]}>
             {!isPreview ? (
               <>
+                <View style={[styles.stepPill, { backgroundColor: p.accentSoft }]}>
+                  <Text style={[styles.stepPillText, { color: p.accent }]}>
+                    {String(step + 1).padStart(2, '0')} / {String(STEPS.length).padStart(2, '0')}
+                  </Text>
+                </View>
                 <BreathingMark style={styles.mark}>
                   {step === 0 && <IntroMark1 color={p.ink} accent={p.accent} />}
                   {step === 1 && <IntroMark2 color={p.ink} accent={p.accent} />}
@@ -323,9 +331,11 @@ const styles = StyleSheet.create({
   brandEn:   { fontFamily: 'EBGaramond-Italic', fontSize: 13, textAlign: 'center' },
   progress:  { flexDirection: 'row', gap: 6, marginTop: 28, height: 2 },
   progressBar: { height: 2, borderRadius: 2 },
-  content:   { flex: 1, justifyContent: 'center', gap: 16, marginTop: 24 },
+  content:   { flex: 1, justifyContent: 'center', gap: 15, marginTop: 20, marginBottom: 18, paddingHorizontal: 22, paddingVertical: 24, borderRadius: 30, borderWidth: 1, shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.12, shadowRadius: 28, elevation: 4 },
+  stepPill:  { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, marginBottom: 2 },
+  stepPillText: { fontFamily: 'Inter-Regular', fontSize: 10, letterSpacing: 1.6, fontWeight: '600' },
   mark:      { alignItems: 'center', marginBottom: 8 },
-  title:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 32, lineHeight: 44 },
+  title:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 30, lineHeight: 42 },
   titleAlt:  { fontFamily: 'EBGaramond-Italic', fontSize: 15, marginTop: -8, opacity: 0.45 },
   body:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 16, lineHeight: 26, maxWidth: 320 },
   bodyAlt:   { fontFamily: 'EBGaramond-Italic', fontSize: 13, opacity: 0.7, maxWidth: 320, lineHeight: 20 },

@@ -117,10 +117,21 @@ export default function MoodScreen({ navigation }: Props) {
   const [tonightMode, setTonightMode] = useState<TonightMode | null>(null);
   // Full brazier list (only the top 3 fit on the home screen).
   const [showAllRooms, setShowAllRooms] = useState(false);
-  // First-time guide so new users know what the three spaces are.
+  // New users get the space guide; returning testers get a one-time, explicit
+  // release card so they can instantly verify that Play delivered build 21.
   const [showGuide, setShowGuide] = useState(false);
-  useEffect(() => { AsyncStorage.getItem('mainGuideSeen').then(v => { if (v !== '1') setShowGuide(true); }); }, []);
+  const [showReleaseWelcome, setShowReleaseWelcome] = useState(false);
+  useEffect(() => {
+    AsyncStorage.multiGet(['mainGuideSeen', 'v21ReleaseSeen']).then(([[, guideSeen], [, releaseSeen]]) => {
+      if (guideSeen !== '1') setShowGuide(true);
+      else if (releaseSeen !== '1') setShowReleaseWelcome(true);
+    });
+  }, []);
   const dismissGuide = () => { setShowGuide(false); AsyncStorage.setItem('mainGuideSeen', '1'); };
+  const dismissReleaseWelcome = () => {
+    setShowReleaseWelcome(false);
+    AsyncStorage.setItem('v21ReleaseSeen', '1');
+  };
 
   // Show rooms that have any activity, OR were opened recently (so a freshly
   // created room stays visible even before the first message is sent).
@@ -364,16 +375,10 @@ export default function MoodScreen({ navigation }: Props) {
     // (The old one-free-taste match dropped guests into a chat where every
     // follow-up action hit a wall — confusing, not converting.)
     if (getTier() === 'guest') {
-      Alert.alert(
-        lang === 'en' ? 'Create an account to match' : '配對需要帳號',
-        lang === 'en'
-          ? 'Sign up to meet someone tonight — it takes a moment.'
-          : '建立帳號就能開始配對，只要一下下。',
-        [
-          { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
-          { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
-        ],
-      );
+      // The CTA already says "Create an account". Repeating that choice in a
+      // confirmation dialog added a dead tap (and React Native Web Alerts are
+      // not consistently actionable), so take the user directly to the form.
+      navigation.push('Auth', { mode: 'register' });
       return;
     }
     if (!tonightMode) return;
@@ -478,6 +483,12 @@ export default function MoodScreen({ navigation }: Props) {
           keyboardShouldPersistTaps="handled"
         >
           {/* Heading + reassuring subline (type hierarchy + grayscale tone) */}
+          <View style={[styles.releasePill, { backgroundColor: p.accentSoft, borderColor: p.accent + '35' }]}>
+            <BreathDot p={p} size={4} />
+            <Text style={[styles.releasePillText, { color: p.accent }]}>
+              {lang === 'en' ? 'NEW · 1.1 · ALPHA 21' : '全新 1.1 · ALPHA 21'}
+            </Text>
+          </View>
           <Text style={[styles.heading, { color: p.ink }]}>{t('moodHeader', lang)}</Text>
           <Text style={[styles.subheading, { color: p.muted }]}>{t('moodPrompt', lang)}</Text>
           {/* Honest presence — a real count when the room is warm, honest quiet
@@ -1019,7 +1030,10 @@ export default function MoodScreen({ navigation }: Props) {
         </View>
       )}
 
-      {showGuide && <FirstTimeGuide p={p} lang={lang} onDismiss={dismissGuide} />}
+      {showReleaseWelcome && (
+        <ReleaseWelcome p={p} lang={lang} onDismiss={dismissReleaseWelcome} />
+      )}
+      {!showReleaseWelcome && showGuide && <FirstTimeGuide p={p} lang={lang} onDismiss={dismissGuide} />}
     </VaporBackground>
   );
 }
@@ -1071,6 +1085,92 @@ function LetterGlyph({ c, accent }: { c: string; accent: string }) {
       <Path d="M6 10 L16 18 L26 10" fill="none" stroke={accent} strokeWidth={1.4} strokeLinejoin="round" />
       <Path d="M6 22.5 L13 16.8 M26 22.5 L19 16.8" fill="none" stroke={c} strokeWidth={1.1} strokeLinecap="round" />
     </Svg>
+  );
+}
+
+function ReleaseWelcome({ p, lang, onDismiss }: { p: Palette; lang: string; onDismiss: () => void }) {
+  const scale = useRef(new Animated.Value(0.94)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
+
+  useEffect(() => {
+    if (reduceMotion) {
+      scale.setValue(1);
+      opacity.setValue(1);
+      return;
+    }
+    const intro = Animated.parallel([
+      Animated.spring(scale, { toValue: 1, tension: 64, friction: 9, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(opacity, { toValue: 1, duration: MOTION.standard, easing: MOTION.easeOut, useNativeDriver: USE_NATIVE_DRIVER }),
+    ]);
+    intro.start();
+    return () => intro.stop();
+  }, [opacity, reduceMotion, scale]);
+
+  const updates = lang === 'en'
+    ? [
+        ['A clearer night', 'Richer contrast, stronger cards and unmistakable selected states.'],
+        ['A safer first hello', 'Intent, boundaries and conversation prompts now lead the flow.'],
+        ['Nothing charged too early', 'A match only counts after you actually speak.'],
+      ]
+    : [
+        ['夜晚更清楚', '更有層次的暮光色彩、卡片，以及一眼可辨的選中狀態。'],
+        ['第一句更安心', '意圖、界線與破冰提示，現在會一路帶著你。'],
+        ['不會提早扣燭芯', '真正開口說話後，才會算一次配對。'],
+      ];
+
+  return (
+    <Animated.View style={[styles.guideScrim, { opacity }]}>
+      <Animated.View style={{ width: '100%', maxWidth: 360, transform: [{ scale }] }}>
+        <LinearGradient
+          colors={p.dark ? ['#222541', '#16182d'] : ['#fffaf5', '#f6e8e6', '#ecd9df']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.releaseCard, { borderColor: p.accent + '45' }]}
+        >
+          <View style={[styles.releaseBadge, { backgroundColor: p.accent }]}>
+            <Text style={styles.releaseBadgeText}>1.1 · ALPHA 21</Text>
+          </View>
+          <View style={[styles.releaseOrb, { backgroundColor: p.accentSoft }]}>
+            <WickGlyph size={22} color={p.accent} />
+          </View>
+          <Text style={[styles.releaseTitle, { color: p.ink }]}>
+            {lang === 'en' ? 'The night has changed.' : '今晚，真的不一樣了。'}
+          </Text>
+          <Text style={[styles.releaseSub, { color: p.muted }]}>
+            {lang === 'en'
+              ? 'This is the rebuilt testing release. Here is what to notice first.'
+              : '這是重新打造的測試版本。請先感受這三個改變。'}
+          </Text>
+          <View style={styles.releaseList}>
+            {updates.map(([title, body], index) => (
+              <View
+                key={title}
+                style={[styles.releaseRow, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: p.line }]}
+              >
+                <View style={[styles.releaseIndex, { backgroundColor: p.accentSoft }]}>
+                  <Text style={[styles.releaseIndexText, { color: p.accent }]}>0{index + 1}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.releaseRowTitle, { color: p.ink }]}>{title}</Text>
+                  <Text style={[styles.releaseRowBody, { color: p.muted }]}>{body}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+          <PressableScale
+            onPress={onDismiss}
+            accessibilityRole="button"
+            accessibilityLabel={lang === 'en' ? 'Start testing version 1.1' : '開始測試 1.1 版本'}
+            style={[styles.releaseButton, { backgroundColor: p.ink }]}
+          >
+            <Text style={[styles.releaseButtonText, { color: p.dark ? '#15172e' : '#fff' }]}>
+              {lang === 'en' ? 'Start testing 1.1' : '開始測試 1.1'}
+            </Text>
+          </PressableScale>
+        </LinearGradient>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -1204,6 +1304,8 @@ const styles = StyleSheet.create({
 
   contentScroll: { flex: 1 },
   content:       { flexGrow: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 22, gap: 16 },
+  releasePill:   { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999, borderWidth: 0.8 },
+  releasePillText:{ fontFamily: 'Inter-Regular', fontSize: 9.5, letterSpacing: 1.5, fontWeight: '600' },
   heading:       { fontFamily: 'NotoSerifTC-Light', fontSize: 28, lineHeight: 36, textAlign: 'center' },
   subheading:    { fontFamily: 'NotoSerifTC-Regular', fontSize: 14, lineHeight: 22, textAlign: 'center', marginTop: -8, opacity: 0.85 },
 
@@ -1263,4 +1365,18 @@ const styles = StyleSheet.create({
   guideRow:      { flexDirection: 'row', gap: 16, alignItems: 'center', paddingVertical: 16 },
   guideIconWrap: { width: 50, height: 50, borderRadius: 16, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
   guideBtn:      { marginTop: 24, height: 52, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  releaseCard:   { borderRadius: 30, padding: 20, width: '100%', borderWidth: 1, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 34, shadowOffset: { width: 0, height: 18 }, elevation: 16 },
+  releaseBadge:  { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  releaseBadgeText:{ color: '#fff', fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 1.4, fontWeight: '700' },
+  releaseOrb:    { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginTop: 15, marginBottom: 10 },
+  releaseTitle:  { fontFamily: 'NotoSerifTC-Regular', fontSize: 24, lineHeight: 33 },
+  releaseSub:    { fontFamily: 'NotoSerifTC-Regular', fontSize: 13, lineHeight: 21, marginTop: 6 },
+  releaseList:   { marginTop: 12 },
+  releaseRow:    { flexDirection: 'row', gap: 12, paddingVertical: 10, alignItems: 'flex-start' },
+  releaseIndex:  { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  releaseIndexText:{ fontFamily: 'Inter-Regular', fontSize: 9, fontWeight: '700', letterSpacing: 0.8 },
+  releaseRowTitle:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, fontWeight: '600' },
+  releaseRowBody:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 18, marginTop: 2 },
+  releaseButton: { height: 50, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 12, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
+  releaseButtonText:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, fontWeight: '600', letterSpacing: 0.8 },
 });

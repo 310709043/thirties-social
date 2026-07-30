@@ -166,20 +166,40 @@ export async function initStore() {
 
 let _userUnsubscribe: (() => void) | null = null;
 
-async function _syncWithFirebase(deviceId: string, seed: string) {
+async function _syncWithFirebase(
+  deviceId: string,
+  seed: string,
+  options: { preserveLocalSetup?: boolean } = {},
+) {
   try {
     const userId = await ensureAnonAuth();
     const dbUser = await upsertUser({ userId, deviceId, seed, lang: _state.lang, direction: _state.direction });
     if (dbUser) {
       const today = new Date().toISOString().slice(0, 10);
       const lastReward = (dbUser as any).lastRewardDate ?? null;
+      const serverDirection: Direction =
+        dbUser.direction === 'mist' || dbUser.direction === 'nocturne' || dbUser.direction === 'ink'
+          ? dbUser.direction
+          : _state.direction;
+      const serverLang: Lang = dbUser.lang === 'en' ? 'en' : 'zh';
+      const clearMissingAccountField = options.preserveLocalSetup === false;
+      const persistNullable = (key: string, value: string | null | undefined) =>
+        value
+          ? AsyncStorage.setItem(key, value)
+          : clearMissingAccountField
+            ? AsyncStorage.removeItem(key)
+            : Promise.resolve();
       _state = {
         // wicks: coerce through safeWicks so a missing/corrupt ("undefined"/NaN)
         // field can never surface as NaN in the UI or get re-persisted.
-        ..._state, userId, dbSynced: true, wicks: safeWicks(dbUser.wicks), vigil: dbUser.vigil,
+        ..._state, userId, dbSynced: true, direction: serverDirection, lang: serverLang,
+        wicks: safeWicks(dbUser.wicks), vigil: dbUser.vigil,
         // setupDone is sticky: once finished locally, a fresh/incomplete server
         // doc must never force the user to fill in their profile again.
-        setupDone: dbUser.setupDone || _state.setupDone, isBanned: dbUser.isBanned, banReason: dbUser.banReason,
+        setupDone: options.preserveLocalSetup === false
+          ? dbUser.setupDone
+          : dbUser.setupDone || _state.setupDone,
+        isBanned: dbUser.isBanned, banReason: dbUser.banReason,
         banExpiresAt: (dbUser as any).banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
         gender: dbUser.gender as Gender | null, ageBracket: dbUser.ageBracket,
@@ -202,15 +222,17 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
         AsyncStorage.setItem('wicks', String(safeWicks(dbUser.wicks))),
         AsyncStorage.setItem('vigil', dbUser.vigil ? '1' : '0'),
         AsyncStorage.setItem('setup_done', dbUser.setupDone ? '1' : '0'),
-        dbUser.gender ? AsyncStorage.setItem('gender', dbUser.gender) : Promise.resolve(),
-        dbUser.ageBracket ? AsyncStorage.setItem('ageBracket', dbUser.ageBracket) : Promise.resolve(),
-        dbUser.relationshipStatus ? AsyncStorage.setItem('relationshipStatus', dbUser.relationshipStatus) : Promise.resolve(),
-        (dbUser as any).relationshipShape ? AsyncStorage.setItem('relationshipShape', (dbUser as any).relationshipShape) : Promise.resolve(),
-        dbUser.seeking.length ? AsyncStorage.setItem('seeking', JSON.stringify(dbUser.seeking)) : Promise.resolve(),
-        dbUser.boundary ? AsyncStorage.setItem('boundary', dbUser.boundary) : Promise.resolve(),
-        (dbUser as any).freeTimes?.length ? AsyncStorage.setItem('freeTimes', JSON.stringify((dbUser as any).freeTimes)) : Promise.resolve(),
-        dbUser.region ? AsyncStorage.setItem('region', dbUser.region) : Promise.resolve(),
-        dbUser.quote ? AsyncStorage.setItem('quote', dbUser.quote) : Promise.resolve(),
+        AsyncStorage.setItem('direction', serverDirection),
+        AsyncStorage.setItem('lang', serverLang),
+        persistNullable('gender', dbUser.gender),
+        persistNullable('ageBracket', dbUser.ageBracket),
+        persistNullable('relationshipStatus', dbUser.relationshipStatus),
+        persistNullable('relationshipShape', (dbUser as any).relationshipShape),
+        AsyncStorage.setItem('seeking', JSON.stringify(dbUser.seeking ?? [])),
+        persistNullable('boundary', dbUser.boundary),
+        AsyncStorage.setItem('freeTimes', JSON.stringify((dbUser as any).freeTimes ?? [])),
+        persistNullable('region', dbUser.region),
+        persistNullable('quote', dbUser.quote),
         AsyncStorage.setItem('loftVisible', (dbUser as any).loftVisible !== false ? '1' : '0'),
         AsyncStorage.setItem('autoFilter', (dbUser as any).autoFilter === true ? '1' : '0'),
         AsyncStorage.setItem('slowMode', (dbUser as any).slowMode ? '1' : '0'),
@@ -258,6 +280,19 @@ async function _syncWithFirebase(deviceId: string, seed: string) {
     _state = { ..._state, dbSynced: false };
     notify();
   }
+}
+
+/**
+ * Refresh every account-bound field after Firebase changes identity.
+ *
+ * Normal startup keeps a locally-completed setup sticky while an older server
+ * document catches up. An explicit login/logout transition is different: the
+ * new account must win, otherwise the previous guest/account profile, balance,
+ * or setup state can leak into the next session until the app restarts.
+ */
+export async function syncAfterAuth(): Promise<void> {
+  if (!_state.deviceId || !_state.seed) return;
+  await _syncWithFirebase(_state.deviceId, _state.seed, { preserveLocalSetup: false });
 }
 
 export async function checkAndClaimDailyReward(): Promise<{ rewarded: boolean; amount?: number; balance?: number }> {
