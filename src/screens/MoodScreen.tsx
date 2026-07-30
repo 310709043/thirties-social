@@ -28,9 +28,24 @@ import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../lib/motion';
 type Props = NativeStackScreenProps<RootStackParamList, 'Mood'>;
 
 const TONIGHT_MODES = [
-  { value: 'just_here', titleKey: 'modeJustHere' },
-  { value: 'want_to_talk', titleKey: 'modeWantToTalk' },
-  { value: 'open_to_more', titleKey: 'modeOpenToMore' },
+  {
+    value: 'just_here',
+    titleKey: 'modeJustHere',
+    zhDesc: '安靜陪著也可以，不催你開口',
+    enDesc: 'Quiet company, with no pressure to speak',
+  },
+  {
+    value: 'want_to_talk',
+    titleKey: 'modeWantToTalk',
+    zhDesc: '想用文字聊聊，彼此好好回應',
+    enDesc: 'A real text conversation, with thoughtful replies',
+  },
+  {
+    value: 'open_to_more',
+    titleKey: 'modeOpenToMore',
+    zhDesc: '雙方同意下，願意慢慢更靠近',
+    enDesc: 'Open to growing closer, only with mutual consent',
+  },
 ] as const;
 
 function ModeGlyph({ mode, color }: { mode: TonightMode; color: string }) {
@@ -105,6 +120,32 @@ function WaitingDots({ style, prefix }: { style: any; prefix: string }) {
   return <Text style={style}>{prefix}{dots}</Text>;
 }
 
+function WaitStatus({
+  awakeCount,
+  lang,
+  color,
+}: {
+  awakeCount: number | null;
+  lang: 'zh' | 'en';
+  color: string;
+}) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setSeconds(value => value + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const ss = String(seconds % 60).padStart(2, '0');
+  const estimate = awakeCount !== null && awakeCount >= 3
+    ? (lang === 'en' ? 'usually within about a minute' : '通常約 1 分鐘內')
+    : (lang === 'en' ? 'a quiet hour — it may take a few minutes' : '目前人少，可能需要幾分鐘');
+  return (
+    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, color, marginTop: 2 }}>
+      {lang === 'en' ? `Searching ${mm}:${ss} · ${estimate}` : `已尋找 ${mm}:${ss} · ${estimate}`}
+    </Text>
+  );
+}
+
 export default function MoodScreen({ navigation }: Props) {
   const { seed, direction, lang, identityKind, wicks, gender, ageBracket, userId } = useAppStore();
   const p = DIRECTIONS[direction];
@@ -121,16 +162,27 @@ export default function MoodScreen({ navigation }: Props) {
   // release card so they can instantly verify that Play delivered build 21.
   const [showGuide, setShowGuide] = useState(false);
   const [showReleaseWelcome, setShowReleaseWelcome] = useState(false);
+  const [showExplore, setShowExplore] = useState(false);
   useEffect(() => {
-    AsyncStorage.multiGet(['mainGuideSeen', 'v21ReleaseSeen']).then(([[, guideSeen], [, releaseSeen]]) => {
+    AsyncStorage.multiGet(['mainGuideSeen', 'v21ReleaseSeen', 'coreExperienceSeen']).then(([
+      [, guideSeen],
+      [, releaseSeen],
+      [, coreExperienceSeen],
+    ]) => {
       if (guideSeen !== '1') setShowGuide(true);
       else if (releaseSeen !== '1') setShowReleaseWelcome(true);
+      setShowExplore(coreExperienceSeen === '1');
     });
   }, []);
   const dismissGuide = () => { setShowGuide(false); AsyncStorage.setItem('mainGuideSeen', '1'); };
   const dismissReleaseWelcome = () => {
     setShowReleaseWelcome(false);
     AsyncStorage.setItem('v21ReleaseSeen', '1');
+  };
+  const revealExplore = () => {
+    setShowExplore(true);
+    AsyncStorage.setItem('coreExperienceSeen', '1');
+    analytics.exploreOpen();
   };
 
   // Show rooms that have any activity, OR were opened recently (so a freshly
@@ -304,6 +356,7 @@ export default function MoodScreen({ navigation }: Props) {
     // the background while they sit by a brazier, or wait another round.
     const onTimeout = () => {
       if (matched) return;
+      analytics.matchWaitTimeout(60);
       Alert.alert(
         lang === 'en' ? 'No one waiting right now' : '還沒有人配上',
         lang === 'en'
@@ -354,6 +407,7 @@ export default function MoodScreen({ navigation }: Props) {
           otherGender: (entry as any).matchedGender ?? null,
           otherAge: (entry as any).matchedAge ?? null,
           otherTonightMode: (entry as any).matchedTonightMode ?? null,
+          myTonightMode: tonightMode,
         });
       }
     });
@@ -617,7 +671,9 @@ export default function MoodScreen({ navigation }: Props) {
                 />
                 <View style={styles.inputFooter}>
                   <Text style={{ flex: 1, marginRight: 8, fontFamily: 'NotoSerifTC-Regular', fontSize: 10.5, color: p.muted }}>
-                    {lang === 'en' ? 'visible to your match · saved only in your diary' : '配對後讓對方看見 · 只留在你的日記'}
+                    {lang === 'en'
+                      ? 'shown once on the match card · your copy stays in this device diary'
+                      : '配對卡上讓對方看一次 · 你的副本只留在本機日記'}
                   </Text>
                   <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: text.length > 240 ? p.accent : p.muted }}>
                     {text.length}/280
@@ -673,10 +729,30 @@ export default function MoodScreen({ navigation }: Props) {
                     );
                   })}
                 </View>
+                {tonightMode ? (
+                  <Text style={[styles.modeDescription, { color: p.inkSoft }]}>
+                    {lang === 'en'
+                      ? TONIGHT_MODES.find(mode => mode.value === tonightMode)?.enDesc
+                      : TONIGHT_MODES.find(mode => mode.value === tonightMode)?.zhDesc}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View style={[styles.safetyStrip, { backgroundColor: p.accentSoft, borderColor: p.accent + '35' }]}>
+                <Text style={[styles.safetyStripTitle, { color: p.accent }]}>
+                  {lang === 'en' ? 'PRIVATE BY DESIGN' : '安心開始'}
+                </Text>
+                <Text style={[styles.safetyStripBody, { color: p.inkSoft }]}>
+                  {lang === 'en'
+                    ? 'Leave anytime · block or report in one tap · messages are removed when the conversation ends'
+                    : '可隨時離開 · 一鍵封鎖或檢舉 · 對話結束時清除訊息內容'}
+                </Text>
               </View>
             </View>
           </FadeInUp>
 
+          {showExplore ? (
+            <>
           {/* Rooms */}
           <View style={styles.roomsSection}>
             <View style={styles.roomsHeader}>
@@ -785,6 +861,30 @@ export default function MoodScreen({ navigation }: Props) {
               </View>
             </PressableScale>
           </View>
+            </>
+          ) : (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={lang === 'en' ? 'Explore braziers, the Loft and night letters' : '探索火盆、夜閣與夜信'}
+              onPress={revealExplore}
+              activeOpacity={0.84}
+              style={[styles.exploreGate, { backgroundColor: p.glass, borderColor: p.line }]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.exploreGateTitle, { color: p.ink }]}>
+                  {lang === 'en' ? 'First, focus on meeting one person' : '第一次，先專心遇見一個人'}
+                </Text>
+                <Text style={[styles.exploreGateBody, { color: p.muted }]}>
+                  {lang === 'en'
+                    ? 'Braziers, the Loft and night letters are here when you want another way to stay.'
+                    : '想換一種方式時，再打開火盆、夜閣與夜信。'}
+                </Text>
+              </View>
+              <Text style={[styles.exploreGateAction, { color: p.accent }]}>
+                {lang === 'en' ? 'Explore +' : '探索 +'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
 
         {/* ── Bottom: Match Button ── */}
@@ -805,9 +905,7 @@ export default function MoodScreen({ navigation }: Props) {
                   <WaitingDots
                     style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink }}
                     prefix={lang === 'en' ? 'Finding someone' : '正在為你尋找'} />
-                  <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11.5, color: p.muted, marginTop: 1 }}>
-                    {lang === 'en' ? 'we’ll tell you the moment they arrive' : '配到了會立刻告訴你'}
-                  </Text>
+                  <WaitStatus awakeCount={awakeCount} lang={lang} color={p.muted} />
                 </View>
                 <TouchableOpacity onPress={handleCancelWait}
                   style={[styles.cancelBtn, { backgroundColor: p.danger + '12', borderColor: p.danger + '25' }]}>
@@ -1066,6 +1164,29 @@ function MatchGlyph({ c, accent }: { c: string; accent: string }) {
   );
 }
 
+function SafetyGlyph({ c, accent }: { c: string; accent: string }) {
+  return (
+    <Svg width={30} height={30} viewBox="0 0 32 32">
+      <Path d="M16 4 L25 8 V15 C25 21 21.4 25.5 16 28 C10.6 25.5 7 21 7 15 V8 Z"
+        fill="none" stroke={c} strokeWidth={1.4} strokeLinejoin="round" />
+      <Path d="M11.5 16 L14.5 19 L20.8 12.5"
+        fill="none" stroke={accent} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function FreeTalkGlyph({ c, accent }: { c: string; accent: string }) {
+  return (
+    <Svg width={30} height={30} viewBox="0 0 32 32">
+      <Path d="M6 7.5 H26 V21 H16 L10 26 V21 H6 Z"
+        fill="none" stroke={c} strokeWidth={1.4} strokeLinejoin="round" />
+      <Circle cx={12} cy={14.5} r={1.2} fill={accent} />
+      <Circle cx={16} cy={14.5} r={1.2} fill={accent} />
+      <Circle cx={20} cy={14.5} r={1.2} fill={accent} />
+    </Svg>
+  );
+}
+
 function LoftGlyph({ c, accent }: { c: string; accent: string }) {
   // A crescent over a single ember — the late-night room.
   return (
@@ -1199,12 +1320,12 @@ function FirstTimeGuide({ p, lang, onDismiss }: { p: Palette; lang: string; onDi
   }, [opacity, reduceMotion, scale]);
 
   const rows = [
-    { Glyph: BrazierGlyph, title: lang === 'en' ? 'Brazier' : '火盆', alt: lang === 'en' ? '火盆' : 'Brazier',
-      desc: lang === 'en' ? 'Sit by a topic, speak softly with others awake' : '圍著一個話題，和也醒著的人輕輕說話' },
-    { Glyph: MatchGlyph, title: lang === 'en' ? 'Match' : '配對', alt: lang === 'en' ? '配對' : 'Match',
-      desc: lang === 'en' ? 'Meet one person — just the two of you' : '隨機遇見一個人，只有你們兩個' },
-    { Glyph: LoftGlyph, title: lang === 'en' ? 'The Loft' : '夜閣', alt: lang === 'en' ? '夜閣' : 'The Loft',
-      desc: lang === 'en' ? 'Opens late, when you want to come closer' : '深夜開放，想更靠近一點的時候' },
+    { Glyph: MatchGlyph, title: lang === 'en' ? 'One person, 30 minutes' : '一個人，30 分鐘', alt: '',
+      desc: lang === 'en' ? 'Choose tonight’s intent, then meet anonymously' : '選今晚的狀態，再匿名遇見一個人' },
+    { Glyph: SafetyGlyph, title: lang === 'en' ? 'You stay in control' : '主導權一直在你手上', alt: '',
+      desc: lang === 'en' ? 'Leave, block or report at any moment' : '任何時候都能離開、封鎖或檢舉' },
+    { Glyph: FreeTalkGlyph, title: lang === 'en' ? 'Talking stays free' : '說話本身免費', alt: '',
+      desc: lang === 'en' ? 'Wicks are only for optional closer moments and extra use' : '燭芯只用於額外次數與自願靠近的功能' },
   ];
 
   return (
@@ -1233,12 +1354,12 @@ function FirstTimeGuide({ p, lang, onDismiss }: { p: Palette; lang: string; onDi
 
           <FadeInUp delay={140} distance={8}>
             <Text style={[styles.guideTitle, { color: p.ink }]}>
-              {lang === 'en' ? 'Three places here' : '這裡有三個地方'}
+              {lang === 'en' ? 'Your first night, simply' : '第一次來，只要三件事'}
             </Text>
           </FadeInUp>
           <FadeInUp delay={200} distance={8}>
             <Text style={[styles.guideSub, { color: p.muted }]}>
-              {lang === 'en' ? 'no rush — stay however you like' : '不急，你想怎麼待著都可以'}
+              {lang === 'en' ? 'the other spaces can wait' : '其他空間，想探索時再打開'}
             </Text>
           </FadeInUp>
 
@@ -1261,26 +1382,7 @@ function FirstTimeGuide({ p, lang, onDismiss }: { p: Palette; lang: string; onDi
             ))}
           </View>
 
-          {/* 燭芯 — deliberately a quieter footnote, not a fourth "place": it's the
-              currency, and naming it here (with the reassurance that talking and
-              braziers are free) heads off a confusing first paywall later. */}
-          <FadeInUp delay={555} distance={10}>
-            <View style={{ marginTop: 18, paddingTop: 16, borderTopWidth: 0.5, borderTopColor: p.line, flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
-              <View style={{ marginTop: 2 }}><WickGlyph size={15} color={p.accent} /></View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
-                  {lang === 'en' ? 'Wicks' : '燭芯'}
-                </Text>
-                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, color: p.muted, lineHeight: 19, marginTop: 3 }}>
-                  {lang === 'en'
-                    ? 'A few arrive each day you log in — spent on speaking up, veiled photos, the closer moments. Talking and braziers are always free.'
-                    : '每天登入會得幾枚，用在開口說話、帶紗照片這些更靠近的時刻。對話和火盆，一直都是免費的。'}
-                </Text>
-              </View>
-            </View>
-          </FadeInUp>
-
-          <FadeInUp delay={640} distance={10}>
+          <FadeInUp delay={570} distance={10}>
             <TouchableOpacity onPress={onDismiss} activeOpacity={0.88}
               style={[styles.guideBtn, { backgroundColor: p.ink }]}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, letterSpacing: 2, color: p.dark ? '#1a1530' : '#fff', fontWeight: '500' }}>
@@ -1325,6 +1427,14 @@ const styles = StyleSheet.create({
   modeGlyphWrap: { height: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
   modeCheck:     { position: 'absolute', right: -8, top: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   modeText:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 16, textAlign: 'center' },
+  modeDescription:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, lineHeight: 19, textAlign: 'center', paddingHorizontal: 8, marginTop: 3 },
+  safetyStrip:   { marginTop: 14, padding: 12, borderRadius: 15, borderWidth: 0.7 },
+  safetyStripTitle:{ fontFamily: 'Inter-Regular', fontSize: 9.5, letterSpacing: 1.6, fontWeight: '600' },
+  safetyStripBody:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 19, marginTop: 4 },
+  exploreGate:   { minHeight: 92, borderRadius: 20, borderWidth: 0.7, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
+  exploreGateTitle:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14.5, lineHeight: 21 },
+  exploreGateBody:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 18, marginTop: 4 },
+  exploreGateAction:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, fontWeight: '500' },
 
   roomsSection:  { gap: 10, marginTop: 2 },
   roomsHeader:   { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },

@@ -29,6 +29,7 @@ export default function UpgradeScreen({ navigation }: Props) {
   // One purchase at a time — a second tap while the store sheet is opening
   // could stack two native purchase dialogs.
   const [buying, setBuying] = useState(false);
+  const [showWickDetails, setShowWickDetails] = useState(false);
 
   useEffect(() => {
     Animated.loop(
@@ -165,6 +166,16 @@ export default function UpgradeScreen({ navigation }: Props) {
           <FadeInUp delay={160} distance={10}>
             <Cap p={p}>{t('upgradeTitle', lang)} · {tAlt('upgradeTitle', lang)}</Cap>
             <Text style={[styles.blurb, { color: p.muted }]}>{t('upgradeBlurb', lang)}</Text>
+            <View style={[styles.paymentPromise, { backgroundColor: p.accentSoft, borderColor: p.accent + '35' }]}>
+              <Text style={[styles.paymentPromiseTitle, { color: p.accent }]}>
+                {lang === 'en' ? 'THE SIMPLE RULE' : '只要記得這個規則'}
+              </Text>
+              <Text style={[styles.paymentPromiseBody, { color: p.inkSoft }]}>
+                {lang === 'en'
+                  ? 'Ordinary talking is free. Payment never improves your visibility or match ranking.'
+                  : '一般聊天免費；付費不會提高曝光，也不會讓你在配對中插隊。'}
+              </Text>
+            </View>
           </FadeInUp>
 
           {/* Vigil tier */}
@@ -220,17 +231,17 @@ export default function UpgradeScreen({ navigation }: Props) {
 
           {/* Free tier */}
           <FadeInUp delay={320} distance={10}>
-            <GlassCard p={p} padding={18} radius={20} style={{ marginTop: 12, opacity: 0.7 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View>
+            <GlassCard p={p} padding={18} radius={20} style={{ marginTop: 12 }}>
+              <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.ink }}>
                     {t('tierFree', lang)}
                   </Text>
                   <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.muted, marginTop: 2 }}>
-                    {tAlt('tierFree', lang)}
+                    {lang === 'en' ? 'current plan' : '目前方案'}
                   </Text>
                 </View>
-                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 14, color: p.muted }}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, lineHeight: 20, color: p.muted }}>
                   {t('tierFreeSub', lang)}
                 </Text>
               </View>
@@ -279,15 +290,33 @@ export default function UpgradeScreen({ navigation }: Props) {
             </View>
           </FadeInUp>
 
-          {/* Wicks explainer */}
+          {/* Detailed costs stay available without dominating the decision. */}
           <FadeInUp delay={700} distance={10}>
-            <View style={[styles.wickNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.inkSoft, lineHeight: 20 }}>
-                {lang === 'en'
-                  ? 'Wicks are spent on the closer moments: a veiled photo (2), lifting a veil layer (1), relighting a chat +30 min (2 each), meeting again tomorrow (3 each), a Loft pulse (1), a second room in one day (2), and each match past the daily free ones (1). Talking itself is always free.'
-                  : '燭芯用在更靠近的時刻：帶紗照片（2）、揭一層面紗（1）、續燭 +30 分（各 2）、約明晚重逢（各 3）、夜閣心跳（1）、一天內開第二個火盆（2）、免費額度用完後的配對（1）。說話本身，永遠免費。'}
-              </Text>
-            </View>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showWickDetails }}
+              onPress={() => setShowWickDetails(value => !value)}
+              style={[styles.detailToggle, { backgroundColor: p.surface, borderColor: p.line }]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.detailToggleTitle, { color: p.ink }]}>
+                  {lang === 'en' ? 'When exactly are wicks used?' : '什麼時候才會用到燭芯？'}
+                </Text>
+                <Text style={[styles.detailToggleSub, { color: p.muted }]}>
+                  {lang === 'en' ? 'See the full, fixed cost list' : '查看完整且固定的扣除規則'}
+                </Text>
+              </View>
+              <Text style={{ color: p.accent, fontSize: 18 }}>{showWickDetails ? '−' : '+'}</Text>
+            </TouchableOpacity>
+            {showWickDetails ? (
+              <View style={[styles.wickNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.inkSoft, lineHeight: 20 }}>
+                  {lang === 'en'
+                    ? 'Veiled photo (2), lifting a veil layer (1), +30 minutes (2 each), meeting again tomorrow (3 each), Loft pulse (1), a second room that day (2), and each match past the daily free allowance (1). Ordinary messages cost 0.'
+                    : '帶紗照片（2）、揭一層面紗（1）、續聊 30 分鐘（各 2）、約明晚重逢（各 3）、夜閣心跳（1）、當天第二個火盆（2）、超過每日免費額度的配對（1）。一般訊息為 0。'}
+                </Text>
+              </View>
+            ) : null}
           </FadeInUp>
 
           {/* Restore purchases */}
@@ -308,8 +337,14 @@ const styles = StyleSheet.create({
   scroll:       { padding: 24, paddingBottom: 48, width: '100%', maxWidth: 560, alignSelf: 'center' },
   backBtn:      { paddingBottom: 20 },
   blurb:        { fontFamily: 'NotoSerifTC-Regular', fontSize: 13, lineHeight: 22, marginTop: 8 },
+  paymentPromise:{ marginTop: 16, padding: 14, borderRadius: 16, borderWidth: 0.7 },
+  paymentPromiseTitle:{ fontFamily: 'Inter-Regular', fontSize: 9.5, letterSpacing: 1.5, fontWeight: '600' },
+  paymentPromiseBody:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, lineHeight: 20, marginTop: 5 },
   vigilBtn:     { height: 52, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
   vigilActive:  { height: 44, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 16, borderWidth: 0.5 },
   packRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 18, borderWidth: 0.5, marginBottom: 10 },
   wickNote:     { marginTop: 20, padding: 14, borderRadius: 14, borderWidth: 0.5 },
+  detailToggle: { marginTop: 18, minHeight: 68, borderRadius: 16, borderWidth: 0.7, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 12 },
+  detailToggleTitle:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5 },
+  detailToggleSub:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, marginTop: 3 },
 });

@@ -16,6 +16,7 @@ import { pickImage, uploadAlbumPhoto } from '../lib/photos';
 import { getAlbum, addAlbumPhoto, removeAlbumPhoto, AlbumPhoto, fetchMyBonds, removeBond, DbBond, createConversation, getCurrentUid } from '../lib/db';
 import { getDiaryEntries, removeDiaryEntry, DiaryEntry } from '../lib/diary';
 import { getColorAdj } from '../lib/identity';
+import { styleMeta } from '../lib/identityStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -26,9 +27,9 @@ const STATUS_MAP: Record<string, { zh: string; en: string }> = {
   engaged:         { zh: '訂婚',           en: 'engaged' },
   married:         { zh: '已婚',           en: 'married' },
   separated:       { zh: '已婚·分居中',    en: 'married · separated' },
-  'single-passing':{ zh: '偽單身',         en: 'single-passing' },
+  'single-passing':{ zh: '關係狀態未公開', en: 'relationship not public' },
   open:            { zh: '開放關係',       en: 'open' },
-  'seeing-married':{ zh: '對象是已婚的',   en: 'seeing someone married' },
+  'seeing-married':{ zh: '對方另有伴侶',   en: 'the other person has a partner' },
   'single-ish':    { zh: '單身但說不清',   en: 'single-ish' },
 };
 
@@ -48,7 +49,7 @@ const BOUNDARY_MAP: Record<string, { zh: string; en: string }> = {
 
 const SHAPE_MAP: Record<string, { zh: string; en: string }> = {
   sexless:               { zh: '無性了',         en: 'sexless' },
-  roommates:             { zh: '喪偶式',         en: 'like roommates' },
+  roommates:             { zh: '像室友',         en: 'like roommates' },
   'love-lonely':         { zh: '還有愛但寂寞',   en: 'love remains, lonely' },
   'post-honeymoon':      { zh: '熱戀期過了',     en: 'past the honeymoon' },
   'considering-leaving': { zh: '正在想要不要離開', en: 'thinking of leaving' },
@@ -74,6 +75,7 @@ export default function ProfileScreen({ navigation }: Props) {
   const [diaryExpanded, setDiaryExpanded] = useState(false);
   const [bonds, setBonds] = useState<DbBond[]>([]);
   const [openingBond, setOpeningBond] = useState<string | null>(null);
+  const [showIdentityStyles, setShowIdentityStyles] = useState(false);
   useEffect(() => { getAlbum().then(setAlbum); getDiaryEntries().then(setDiary); fetchMyBonds().then(setBonds); }, []);
 
   const openBondChat = async (bond: DbBond) => {
@@ -188,6 +190,7 @@ export default function ProfileScreen({ navigation }: Props) {
   // The Loft now shows an auto-generated poetic name (seed-based, changes nightly);
   // this is the real name others see, so the profile shows it read-only.
   const loftName = getLoftName(seed, lang);
+  const currentStyle = styleMeta(identityKind);
 
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
@@ -198,7 +201,10 @@ export default function ProfileScreen({ navigation }: Props) {
             <ScreenHeader p={p} onBack={() => navigation.goBack()}
               title={lang === 'en' ? 'My page' : '我的頁面'}
               right={
-                <TouchableOpacity onPress={() => navigation.push('Settings')}
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={lang === 'en' ? 'Open settings' : '開啟設定'}
+                  onPress={() => navigation.push('Settings')}
                   style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line, alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ color: p.muted, fontSize: 15 }}>⚙</Text>
                 </TouchableOpacity>
@@ -230,7 +236,7 @@ export default function ProfileScreen({ navigation }: Props) {
             </View>
             <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: p.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>
-                {vigil ? (lang === 'en' ? 'Vigil member' : '守夜會員') : (lang === 'en' ? 'One Candle (free)' : '一根蠟燭（免費）')}
+                {vigil ? (lang === 'en' ? 'Vigil member' : '守夜會員') : (lang === 'en' ? 'Free plan' : '免費方案')}
               </Text>
               <TouchableOpacity onPress={() => navigation.push('Upgrade')}>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
@@ -241,18 +247,84 @@ export default function ProfileScreen({ navigation }: Props) {
           </GlassCard>
           </FadeInUp>
 
-          {/* Identity style selector — premium, categorised, live-preview */}
+          {/* Core profile first: this is what affects trust and matching. */}
           <FadeInUp delay={120} distance={10}>
-            <IdentityStylePicker
-              current={identityKind}
-              available={getAvailableIdentityKinds()}
-              vigil={vigil}
-              lang={lang}
-              p={p}
-              seed={seed}
-              onSelect={setIdentityKind}
-              onUpgrade={() => navigation.push('Upgrade')}
-            />
+            <View style={[styles.editProfileCard, { backgroundColor: p.surface, borderColor: p.line }]}>
+              <View style={styles.editProfileHeader}>
+                <View style={{ flex: 1 }}>
+                  <Cap p={p}>{lang === 'en' ? 'NIGHT PROFILE' : '夜間名片'}</Cap>
+                  <Text style={[styles.editProfileTitle, { color: p.ink }]}>
+                    {lang === 'en' ? 'What others know before talking' : '對話前，讓彼此少一點猜測'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={lang === 'en' ? 'Edit night profile' : '編輯夜間名片'}
+                  onPress={() => navigation.push('Setup', { edit: true })}
+                  style={[styles.editProfileButton, { backgroundColor: p.accent, borderColor: p.accent }]}
+                >
+                  <Text style={[styles.editProfileButtonText, { color: p.dark ? '#15172e' : '#fff' }]}>
+                    {lang === 'en' ? 'Edit' : '編輯'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.profileChipRow}>
+                <View style={[styles.profileChip, { backgroundColor: p.accentSoft, borderColor: p.accent + '45' }]}>
+                  <Text style={[styles.profileChipText, { color: p.accent }]}>{statusLabel}</Text>
+                </View>
+                {boundaryLabel ? (
+                  <View style={[styles.profileChip, { backgroundColor: p.glass, borderColor: p.line }]}>
+                    <Text style={[styles.profileChipText, { color: p.ink }]}>{boundaryLabel}</Text>
+                  </View>
+                ) : null}
+                {seekingLabels.slice(0, 2).map(item => (
+                  <View key={item} style={[styles.profileChip, { backgroundColor: p.glass, borderColor: p.line }]}>
+                    <Text style={[styles.profileChipText, { color: p.ink }]}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={[styles.editProfileHint, { color: p.muted }]}>
+                {lang === 'en'
+                  ? 'Age, relationship context, intent and boundaries can be changed at any time.'
+                  : '年齡、關係現況、期待與邊界，都可以隨時修改。'}
+              </Text>
+            </View>
+          </FadeInUp>
+
+          {/* Identity styling is optional personalisation, collapsed by default. */}
+          <FadeInUp delay={160} distance={10}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showIdentityStyles }}
+              onPress={() => setShowIdentityStyles(value => !value)}
+              style={[styles.identityToggle, { backgroundColor: p.glass, borderColor: p.line }]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.identityToggleTitle, { color: p.ink }]}>
+                  {lang === 'en' ? 'Anonymous identity style' : '匿名身份樣式'}
+                </Text>
+                <Text style={[styles.identityToggleSub, { color: p.muted }]}>
+                  {currentStyle
+                    ? (lang === 'en' ? currentStyle.en : currentStyle.zh)
+                    : (lang === 'en' ? 'Current style' : '目前樣式')}
+                  {' · '}
+                  {lang === 'en' ? 'appearance only, never affects matching' : '只改外觀，不影響配對'}
+                </Text>
+              </View>
+              <Text style={{ color: p.accent, fontSize: 18 }}>{showIdentityStyles ? '−' : '+'}</Text>
+            </TouchableOpacity>
+            {showIdentityStyles ? (
+              <IdentityStylePicker
+                current={identityKind}
+                available={getAvailableIdentityKinds()}
+                vigil={vigil}
+                lang={lang}
+                p={p}
+                seed={seed}
+                onSelect={setIdentityKind}
+                onUpgrade={() => navigation.push('Upgrade')}
+              />
+            ) : null}
           </FadeInUp>
 
           {/* Night name composer (Loft) */}
@@ -473,6 +545,18 @@ const styles = StyleSheet.create({
   scroll:          { padding: 22, paddingBottom: 48, width: '100%', maxWidth: 560, alignSelf: 'center' },
   topBar:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 20 },
   backBtn:         { width: 36, height: 36, borderRadius: 18, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+  editProfileCard: { marginTop: 14, padding: 18, borderRadius: 22, borderWidth: 0.8, shadowColor: '#6f4054', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 18, elevation: 2 },
+  editProfileHeader:{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  editProfileTitle:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 17, lineHeight: 25, marginTop: 5 },
+  editProfileButton:{ minWidth: 58, minHeight: 42, borderRadius: 999, borderWidth: 0.8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  editProfileButtonText:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5, fontWeight: '500' },
+  profileChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 15 },
+  profileChip: { minHeight: 34, borderRadius: 999, borderWidth: 0.6, justifyContent: 'center', paddingHorizontal: 11, paddingVertical: 6 },
+  profileChipText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 12 },
+  editProfileHint: { fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 19, marginTop: 12 },
+  identityToggle: { marginTop: 12, minHeight: 66, borderRadius: 18, borderWidth: 0.7, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  identityToggleTitle: { fontFamily: 'NotoSerifTC-Regular', fontSize: 14 },
+  identityToggleSub: { fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 18, marginTop: 3 },
   nightNameBox:    { marginTop: 16, padding: 16, borderRadius: 16, borderWidth: 0.5 },
   loftToggle:      { marginTop: 10, padding: 14, borderRadius: 14, borderWidth: 0.5, flexDirection: 'row', alignItems: 'center', gap: 12 },
   profileSection:  { marginTop: 22 },

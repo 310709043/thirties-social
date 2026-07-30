@@ -7,10 +7,15 @@
 import { readFileSync } from 'node:fs';
 
 const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
+const dbSource = readFileSync(new URL('../src/lib/db.ts', import.meta.url), 'utf8');
+const conversationRules = rules.slice(
+  rules.indexOf('match /conversations/{convId}'),
+  rules.indexOf('// ── Awake presence'),
+);
 
 let failures = 0;
-function check(name, pattern) {
-  const ok = pattern.test(rules);
+function check(name, pattern, source = rules) {
+  const ok = pattern.test(source);
   console.log(`${ok ? '✓' : '✗ FAIL'} ${name}`);
   if (!ok) failures++;
 }
@@ -29,6 +34,21 @@ check(
   /allow delete:[\s\S]*?request\.auth\.uid == userId[\s\S]*?resource\.data\.isBanned != true/,
 );
 check('client wick ledger entries are spend-only', /request\.resource\.data\.amount < 0/);
+check(
+  'conversation close purges message payloads',
+  /endConversation[\s\S]*?purgeConversationMessages\(conversationId\)/,
+  dbSource,
+);
+check(
+  'ended conversations reject new messages',
+  /messages\/\{msgId\}[\s\S]*?allow create:[\s\S]*?endedAt == null/,
+  conversationRules,
+);
+check(
+  'expired conversations reject new messages',
+  /messages\/\{msgId\}[\s\S]*?allow create:[\s\S]*?expiresAt > request\.time/,
+  conversationRules,
+);
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall security-policy checks passed');
 process.exit(failures ? 1 : 0);

@@ -9,6 +9,7 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS, Palette } from '../lib/theme';
 import { VaporBackground, Cap, WickGlyph, FadeInUp } from '../components/ui';
 import { useAppStore, setSetupDone, setProfileFields, Gender } from '../hooks/useAppStore';
+import { analytics } from '../lib/analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Setup'>;
 type ProfileStep = 0 | 1 | 2;
@@ -19,10 +20,10 @@ const STEPS = [
   { zh: '今晚想遇見誰', en: 'What you want tonight' },
 ] as const;
 
-const MARRIAGE_ZH = ['穩定交往中', '同居', '訂婚', '已婚', '已婚·分居中', '偽單身', '開放關係', '對象是已婚的', '單身但說不清'];
-const MARRIAGE_EN = ['in a relationship', 'cohabiting', 'engaged', 'married', 'married · separated', 'single-passing', 'open', 'seeing someone married', 'single-ish'];
+const MARRIAGE_ZH = ['穩定交往中', '同居', '訂婚', '已婚', '已婚·分居中', '關係狀態未公開', '開放關係', '對方另有伴侶', '單身但說不清'];
+const MARRIAGE_EN = ['in a relationship', 'cohabiting', 'engaged', 'married', 'married · separated', 'relationship not public', 'open', 'the other person has a partner', 'single-ish'];
 const MARRIAGE_SLUGS = ['dating', 'cohabiting', 'engaged', 'married', 'separated', 'single-passing', 'open', 'seeing-married', 'single-ish'];
-const SHAPE_ZH = ['無性了', '喪偶式', '還有愛但寂寞', '熱戀期過了', '正在想要不要離開', '說不清'];
+const SHAPE_ZH = ['無性了', '像室友', '還有愛但寂寞', '熱戀期過了', '正在想要不要離開', '說不清'];
 const SHAPE_EN = ['sexless', 'roommates', 'love remains, lonely', 'past the honeymoon', 'thinking of leaving', 'hard to say'];
 const SHAPE_SLUGS = ['sexless', 'roommates', 'love-lonely', 'post-honeymoon', 'considering-leaving', 'unclear'];
 const WHEN_ZH = ['深夜', '午後', '上班時間', '碎片時間'];
@@ -114,22 +115,64 @@ function toSlugs(zhOptions: string[], enOptions: string[], slugs: string[], valu
   return values.map(value => toSlug(zhOptions, enOptions, slugs, value)).filter(Boolean) as string[];
 }
 
-export default function SetupScreen({ navigation }: Props) {
-  const { direction, lang } = useAppStore();
+function fromSlug(
+  zhOptions: string[],
+  enOptions: string[],
+  slugs: string[],
+  value: string | null,
+  zh: boolean,
+) {
+  if (!value) return null;
+  const index = slugs.indexOf(value);
+  return index >= 0 ? (zh ? zhOptions[index] : enOptions[index]) : value;
+}
+
+function fromSlugs(
+  zhOptions: string[],
+  enOptions: string[],
+  slugs: string[],
+  values: string[],
+  zh: boolean,
+) {
+  return (values ?? []).map(value => fromSlug(zhOptions, enOptions, slugs, value, zh)).filter(Boolean) as string[];
+}
+
+export default function SetupScreen({ navigation, route }: Props) {
+  const {
+    direction, lang,
+    gender: savedGender, ageBracket: savedAge, relationshipStatus: savedMarriage,
+    relationshipShape: savedShape, seeking: savedSeeking, boundary: savedBoundary,
+    freeTimes: savedWhen, region: savedRegion, quote: savedLine,
+  } = useAppStore();
   const p = DIRECTIONS[direction];
   const zh = lang !== 'en';
+  const editMode = route.params?.edit === true;
   const scrollRef = useRef<ScrollView>(null);
 
   const [step, setStep] = useState<ProfileStep>(0);
-  const [gender, setGender] = useState<string | null>(null);
-  const [age, setAge] = useState<string | null>(null);
-  const [marriage, setMarriage] = useState<string | null>(null);
-  const [shape, setShape] = useState<string | null>(null);
-  const [seeking, setSeeking] = useState<string[]>([]);
-  const [boundary, setBoundary] = useState<string | null>(null);
-  const [when, setWhen] = useState<string[]>([]);
-  const [region, setRegion] = useState<string | null>(null);
-  const [line, setLine] = useState('');
+  const [gender, setGender] = useState<string | null>(() => editMode
+    ? ({ female: 'f', male: 'm', nonbinary: 'x' } as Record<string, string>)[savedGender ?? ''] ?? null
+    : null);
+  const [age, setAge] = useState<string | null>(() => editMode ? savedAge : null);
+  const [marriage, setMarriage] = useState<string | null>(() => editMode
+    ? fromSlug(MARRIAGE_ZH, MARRIAGE_EN, MARRIAGE_SLUGS, savedMarriage, zh)
+    : null);
+  const [shape, setShape] = useState<string | null>(() => editMode
+    ? fromSlug(SHAPE_ZH, SHAPE_EN, SHAPE_SLUGS, savedShape, zh)
+    : null);
+  const [seeking, setSeeking] = useState<string[]>(() => editMode
+    ? fromSlugs(SEEKING_ZH, SEEKING_EN, SEEKING_SLUGS, savedSeeking, zh)
+    : []);
+  const [boundary, setBoundary] = useState<string | null>(() => editMode
+    ? fromSlug(BOUNDARY_ZH, BOUNDARY_EN, BOUNDARY_SLUGS, savedBoundary, zh)
+    : null);
+  const [when, setWhen] = useState<string[]>(() => editMode
+    ? fromSlugs(WHEN_ZH, WHEN_EN, WHEN_SLUGS, savedWhen, zh)
+    : []);
+  const [region, setRegion] = useState<string | null>(() => editMode
+    ? fromSlug(REGION_ZH, REGION_EN, REGION_SLUGS, savedRegion, zh)
+    : null);
+  const [line, setLine] = useState(editMode ? savedLine ?? '' : '');
   const [lineFocused, setLineFocused] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -159,8 +202,14 @@ export default function SetupScreen({ navigation }: Props) {
       region: toSlug(REGION_ZH, REGION_EN, REGION_SLUGS, region),
       quote: line.trim() || null,
     });
-    await setSetupDone();
-    navigation.replace('Mood');
+    if (editMode) {
+      analytics.profileEdit();
+      navigation.goBack();
+    } else {
+      await setSetupDone();
+      analytics.setupComplete(genderMap[gender!] ?? 'nonbinary');
+      navigation.replace('Mood');
+    }
   };
 
   const handlePrimary = () => {
@@ -176,10 +225,26 @@ export default function SetupScreen({ navigation }: Props) {
           <View style={styles.shell}>
             <View style={[styles.progressHeader, { backgroundColor: p.surface, borderColor: p.line }]}>
               <View style={styles.progressCopy}>
-                <Cap p={p}>{zh ? '建立你的夜間名片' : 'Your night profile'}</Cap>
-                <Text style={[styles.stepCount, { color: p.muted }]}>
-                  {step + 1} / {STEPS.length}
-                </Text>
+                <Cap p={p}>
+                  {editMode
+                    ? (zh ? '編輯夜間名片' : 'Edit night profile')
+                    : (zh ? '建立你的夜間名片' : 'Your night profile')}
+                </Cap>
+                <View style={styles.headerActions}>
+                  <Text style={[styles.stepCount, { color: p.muted }]}>
+                    {step + 1} / {STEPS.length}
+                  </Text>
+                  {editMode ? (
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={zh ? '取消編輯' : 'Cancel editing'}
+                      onPress={() => navigation.goBack()}
+                      style={[styles.cancelEdit, { backgroundColor: p.glass, borderColor: p.line }]}
+                    >
+                      <Text style={[styles.cancelEditText, { color: p.muted }]}>{zh ? '取消' : 'Cancel'}</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
               </View>
               <View style={styles.progressBars}>
                 {STEPS.map((item, index) => (
@@ -208,8 +273,8 @@ export default function SetupScreen({ navigation }: Props) {
                     eyebrow={zh ? '第一步 · 基本輪廓' : 'Step one · basics'}
                     title={zh ? '先讓對的人認出你' : 'Help the right person find you'}
                     body={zh
-                      ? '只顯示必要的輪廓，不使用真名。你可以之後在設定中調整。'
-                      : 'Only the essentials, never your real name. You can change these later.'}
+                      ? '只顯示必要的輪廓，不使用真名。之後可隨時從個人頁修改。'
+                      : 'Only the essentials, never your real name. You can edit these later from your profile.'}
                   />
 
                   <View style={styles.fieldGroup}>
@@ -403,9 +468,13 @@ export default function SetupScreen({ navigation }: Props) {
                   { color: stepReady ? (p.dark ? '#1a1530' : '#fff') : p.muted },
                 ]}>
                   {saving
-                    ? (zh ? '正在準備你的夜晚⋯' : 'Preparing your night…')
+                    ? (editMode
+                        ? (zh ? '正在儲存變更⋯' : 'Saving changes…')
+                        : (zh ? '正在準備你的夜晚⋯' : 'Preparing your night…'))
                     : step === 2
-                      ? (zh ? '完成，開始今晚' : 'Finish and begin')
+                      ? (editMode
+                          ? (zh ? '儲存變更' : 'Save changes')
+                          : (zh ? '完成，開始今晚' : 'Finish and begin'))
                       : (zh ? `繼續 · ${STEPS[step + 1].zh}` : `Continue · ${STEPS[step + 1].en}`)}
                 </Text>
               </TouchableOpacity>
@@ -422,6 +491,9 @@ const styles = StyleSheet.create({
   shell: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' },
   progressHeader: { marginHorizontal: 16, marginTop: 10, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14, borderRadius: 18, borderWidth: 1, shadowColor: '#6f4054', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 18, elevation: 2 },
   progressCopy: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cancelEdit: { minHeight: 32, borderRadius: 999, borderWidth: 0.7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
+  cancelEditText: { fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5 },
   stepCount: { fontFamily: 'Inter-Regular', fontSize: 11, letterSpacing: 1 },
   progressBars: { flexDirection: 'row', gap: 7, marginTop: 12 },
   progressBar: { flex: 1, height: 3, borderRadius: 3 },

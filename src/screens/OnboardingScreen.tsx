@@ -8,26 +8,24 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
-import { VaporBackground, GlassCard, SoftButton, Logo, FadeInUp } from '../components/ui';
-import { Identity } from '../components/identity/Identity';
-import { ColorAdjLabel } from '../components/identity/Identity';
-import { setOnboardingDone, useAppStore } from '../hooks/useAppStore';
+import { VaporBackground, SoftButton, Logo, FadeInUp } from '../components/ui';
+import { useAppStore } from '../hooks/useAppStore';
 import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../lib/motion';
+import { analytics } from '../lib/analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 
 const STEPS = [
   { title: 'ob1Title', body: 'ob1Body' },
   { title: 'ob2Title', body: 'ob2Body' },
-  { title: 'ob3Title', body: 'ob3Body' },
 ];
 
 export default function OnboardingScreen({ navigation }: Props) {
-  const { seed, direction, lang, identityKind } = useAppStore();
+  const { direction, lang } = useAppStore();
   const p = DIRECTIONS[direction];
   const [step, setStep] = useState(0);
   const [showAgeGate, setShowAgeGate] = useState(false);
-  const isPreview = step === STEPS.length;
+  const isLastStep = step === STEPS.length - 1;
   const reduceMotion = useReduceMotion();
 
   const contentOpacity = useRef(new Animated.Value(1)).current;
@@ -64,7 +62,7 @@ export default function OnboardingScreen({ navigation }: Props) {
   };
 
   const handleContinue = () => {
-    if (!isPreview) {
+    if (!isLastStep) {
       animateStep(step + 1);
       return;
     }
@@ -95,7 +93,7 @@ export default function OnboardingScreen({ navigation }: Props) {
           {/* Progress bar */}
           <FadeInUp delay={100} distance={6}>
             <View style={styles.progress}>
-              {[0, 1, 2, 3].map(i => (
+              {STEPS.map((_, i) => (
                 <View key={i} style={[
                   styles.progressBar,
                   {
@@ -112,30 +110,23 @@ export default function OnboardingScreen({ navigation }: Props) {
           <Animated.View style={[styles.content, {
             opacity: contentOpacity,
             transform: [{ translateY: contentTranslate }],
-            backgroundColor: isPreview ? 'transparent' : p.surface,
-            borderColor: isPreview ? 'transparent' : p.line,
+            backgroundColor: p.surface,
+            borderColor: p.line,
             shadowColor: p.dark ? '#000' : '#6f4054',
           }]}>
-            {!isPreview ? (
-              <>
-                <View style={[styles.stepPill, { backgroundColor: p.accentSoft }]}>
-                  <Text style={[styles.stepPillText, { color: p.accent }]}>
-                    {String(step + 1).padStart(2, '0')} / {String(STEPS.length).padStart(2, '0')}
-                  </Text>
-                </View>
-                <BreathingMark style={styles.mark}>
-                  {step === 0 && <IntroMark1 color={p.ink} accent={p.accent} />}
-                  {step === 1 && <IntroMark2 color={p.ink} accent={p.accent} />}
-                  {step === 2 && <IntroMark3 color={p.ink} accent={p.accent} />}
-                </BreathingMark>
-                <Text style={[styles.title, { color: p.ink }]}>{t(STEPS[step].title, lang)}</Text>
-                <Text style={[styles.titleAlt, { color: p.ink }]}>{tAlt(STEPS[step].title, lang)}</Text>
-                <Text style={[styles.body, { color: p.inkSoft }]}>{t(STEPS[step].body, lang)}</Text>
-                <Text style={[styles.bodyAlt, { color: p.muted }]}>{tAlt(STEPS[step].body, lang)}</Text>
-              </>
-            ) : (
-              <IdentityPreview p={p} lang={lang} identityKind={identityKind} seed={seed} />
-            )}
+            <View style={[styles.stepPill, { backgroundColor: p.accentSoft }]}>
+              <Text style={[styles.stepPillText, { color: p.accent }]}>
+                {String(step + 1).padStart(2, '0')} / {String(STEPS.length).padStart(2, '0')}
+              </Text>
+            </View>
+            <BreathingMark style={styles.mark}>
+              {step === 0 && <IntroMark1 color={p.ink} accent={p.accent} />}
+              {step === 1 && <IntroMark2 color={p.ink} accent={p.accent} />}
+            </BreathingMark>
+            <Text style={[styles.title, { color: p.ink }]}>{t(STEPS[step].title, lang)}</Text>
+            <Text style={[styles.titleAlt, { color: p.ink }]}>{tAlt(STEPS[step].title, lang)}</Text>
+            <Text style={[styles.body, { color: p.inkSoft }]}>{t(STEPS[step].body, lang)}</Text>
+            <Text style={[styles.bodyAlt, { color: p.muted }]}>{tAlt(STEPS[step].body, lang)}</Text>
           </Animated.View>
 
           {/* Footer */}
@@ -143,10 +134,10 @@ export default function OnboardingScreen({ navigation }: Props) {
             <View style={styles.footer}>
               <SoftButton p={p} variant="primary" size="lg" full onPress={handleContinue}>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
-                  {isPreview ? t('obContinue', lang) : (lang === 'en' ? 'Continue →' : '繼續 →')}
+                  {isLastStep ? (lang === 'en' ? 'Continue safely' : '安心繼續') : (lang === 'en' ? 'Continue →' : '繼續 →')}
                 </Text>
               </SoftButton>
-              {!isPreview && step > 0 && (
+              {step > 0 && (
                 <TouchableOpacity onPress={handleBack} style={styles.back}>
                   <Text style={{ color: p.muted, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 }}>
                     {lang === 'en' ? 'Back' : '\u4E0A\u4E00\u6B65'}
@@ -154,13 +145,24 @@ export default function OnboardingScreen({ navigation }: Props) {
                 </TouchableOpacity>
               )}
               {step === 0 && (
-                <TouchableOpacity
-                  onPress={() => Linking.openURL('https://thirties-landing.vercel.app/privacy')}
-                  style={styles.back}>
-                  <Text style={{ color: p.muted, fontFamily: 'EBGaramond-Italic', fontSize: 12, opacity: 0.6 }}>
-                    {lang === 'en' ? 'Privacy Policy' : '\u96B1\u79C1\u6B0A\u653F\u7B56'}
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.firstStepLinks}>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    onPress={() => navigation.push('Auth', { mode: 'login' })}
+                    style={styles.back}>
+                    <Text style={{ color: p.accent, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 }}>
+                      {lang === 'en' ? 'Already have an account? Sign in' : '已有帳號？直接登入'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityRole="link"
+                    onPress={() => Linking.openURL('https://thirties-landing.vercel.app/privacy')}
+                    style={styles.back}>
+                    <Text style={{ color: p.muted, fontFamily: 'EBGaramond-Italic', fontSize: 12, opacity: 0.72 }}>
+                      {lang === 'en' ? 'Privacy Policy' : '\u96B1\u79C1\u6B0A\u653F\u7B56'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           </FadeInUp>
@@ -200,8 +202,8 @@ export default function OnboardingScreen({ navigation }: Props) {
               full
               onPress={() => {
                 setShowAgeGate(false);
-                setOnboardingDone();
-                navigation.replace('Setup');
+                analytics.onboardingComplete();
+                navigation.replace('Auth', { mode: 'register' });
               }}
             >
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.dark ? '#1a1530' : '#fff' }}>
@@ -231,25 +233,6 @@ function WickGlyphMark({ color }: { color: string }) {
       <Circle cx={13} cy={13} r={4.5} fill={color} fillOpacity={0.92} />
       <Line x1={13} y1={18} x2={13} y2={30} stroke={color} strokeOpacity={0.55} strokeWidth={2} strokeLinecap="round" />
     </Svg>
-  );
-}
-
-function IdentityPreview({ p, lang, identityKind, seed }: any) {
-  return (
-    <View style={{ gap: 22 }}>
-      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 28, color: p.ink }}>
-        {t('obSigil', lang)}
-      </Text>
-      <GlassCard p={p} padding={32} radius={32}>
-        <View style={{ alignItems: 'center', gap: 18 }}>
-          <Identity kind={identityKind} seed={seed} size={132} palette={p} lang={lang} trust={0.35} />
-          <ColorAdjLabel seed={seed} lang={lang} palette={p} />
-        </View>
-      </GlassCard>
-      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center', lineHeight: 20 }}>
-        {t('obSigilHint', lang)}
-      </Text>
-    </View>
   );
 }
 
@@ -308,22 +291,6 @@ function IntroMark2({ color, accent }: { color: string; accent: string }) {
   );
 }
 
-// Step 3 — everyone is the same: three equal presences side by side.
-function IntroMark3({ color, accent }: { color: string; accent: string }) {
-  return (
-    <Svg width={96} height={84} viewBox="0 0 96 84">
-      {[20, 48, 76].map((cx, i) => (
-        <Circle key={cx} cx={cx} cy={42} r={13} stroke={color} strokeOpacity={0.35} strokeWidth={1} fill="none" />
-      ))}
-      {[20, 48, 76].map((cx, i) => (
-        <Circle key={`d${cx}`} cx={cx} cy={42} r={5} fill={i === 1 ? accent : color} fillOpacity={i === 1 ? 0.9 : 0.6} />
-      ))}
-      <Line x1={33} y1={42} x2={35} y2={42} stroke={color} strokeOpacity={0.2} strokeWidth={1} />
-      <Line x1={61} y1={42} x2={63} y2={42} stroke={color} strokeOpacity={0.2} strokeWidth={1} />
-    </Svg>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 28, paddingBottom: 38, width: '100%', maxWidth: 560, alignSelf: 'center' },
   brand:     { alignItems: 'center', gap: 12, marginTop: 8 },
@@ -340,6 +307,7 @@ const styles = StyleSheet.create({
   body:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 16, lineHeight: 26, maxWidth: 320 },
   bodyAlt:   { fontFamily: 'EBGaramond-Italic', fontSize: 13, opacity: 0.7, maxWidth: 320, lineHeight: 20 },
   footer:    { gap: 12 },
+  firstStepLinks: { alignItems: 'center', gap: 2 },
   back:      { alignItems: 'center', height: 22, justifyContent: 'center' },
   ageScrim:  { flex: 1, backgroundColor: 'rgba(20,12,8,0.64)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   ageCard:   { width: '100%', maxWidth: 420, borderRadius: 28, borderWidth: 0.7, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 30, shadowOffset: { width: 0, height: 14 }, elevation: 12 },

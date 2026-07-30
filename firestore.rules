@@ -196,6 +196,8 @@ service cloud.firestore {
                       && request.resource.data.senderId == request.auth.uid
                       && request.resource.data.content is string
                       && request.resource.data.content.size() <= 280
+                      && get(/databases/$(database)/documents/conversations/$(convId)).data.endedAt == null
+                      && get(/databases/$(database)/documents/conversations/$(convId)).data.expiresAt > request.time
                       && notBanned();
         allow update: if false;
         allow delete: if request.auth != null

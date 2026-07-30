@@ -1862,13 +1862,33 @@ export function subscribeToConversationDoc(
   });
 }
 
+/**
+ * Remove the message payloads when a private conversation closes.
+ *
+ * Both participants are allowed to delete this subcollection. The conversation
+ * shell remains as a content-free receipt for expiry, block/report routing and
+ * duplicate-action guards, but the words themselves do not linger.
+ */
+export async function purgeConversationMessages(conversationId: string): Promise<void> {
+  try {
+    const snap = await getDocs(collection(db, 'conversations', conversationId, 'messages'));
+    await Promise.all(snap.docs.map(message => deleteDoc(message.ref)));
+  } catch {
+    // Best effort: the other participant may complete the same cleanup. Server
+    // retention remains a release checklist guard for offline close events.
+  }
+}
+
 export async function endConversation(conversationId: string, reason: string): Promise<void> {
   try {
     await updateDoc(doc(db, 'conversations', conversationId), { endedAt: serverTimestamp(), endedReason: reason });
   } catch {}
-  // The chat is over — wipe any veiled photos it held so nothing lingers on our
-  // storage (honors "photos vanish after the conversation"). Fire-and-forget.
-  void purgeConversationPhotos(conversationId);
+  // The chat is over — remove both text payloads and veiled photos before the
+  // closing screen claims that the conversation has disappeared.
+  await Promise.all([
+    purgeConversationMessages(conversationId),
+    purgeConversationPhotos(conversationId),
+  ]);
 }
 
 /**

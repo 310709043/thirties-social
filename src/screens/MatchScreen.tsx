@@ -19,7 +19,16 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Match'>;
 export default function MatchScreen({ navigation, route }: Props) {
   const { direction, lang, identityKind } = useAppStore();
   const p = DIRECTIONS[direction];
-  const { fromSeed: otherSeed, moodText, conversationId, isOperator, otherGender, otherAge, otherTonightMode } = route.params;
+  const {
+    fromSeed: otherSeed,
+    moodText,
+    conversationId,
+    isOperator,
+    otherGender,
+    otherAge,
+    otherTonightMode,
+    myTonightMode,
+  } = route.params;
   const genderLabel = otherGender === 'female' ? (lang === 'en' ? 'Woman' : '女生')
     : otherGender === 'male' ? (lang === 'en' ? 'Man' : '男生')
     : otherGender === 'nonbinary' ? (lang === 'en' ? 'Non-binary' : '非二元') : null;
@@ -28,6 +37,7 @@ export default function MatchScreen({ navigation, route }: Props) {
     : otherTonightMode === 'want_to_talk' ? (lang === 'en' ? 'Wants to talk' : '想說說話')
     : otherTonightMode === 'open_to_more' ? (lang === 'en' ? 'Open to more' : '願意靠近一點')
     : null;
+  const sharedMode = !!otherTonightMode && otherTonightMode === myTonightMode;
   const cardScale = useRef(new Animated.Value(0.92)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const acceptPulse = useRef(new Animated.Value(1)).current;
@@ -142,6 +152,22 @@ export default function MatchScreen({ navigation, route }: Props) {
               </View>
 
               <View style={[styles.moodBox, { borderTopColor: p.line }]}>
+                {modeLabel ? (
+                  <View style={[styles.matchReason, { backgroundColor: p.accentSoft, borderColor: p.accent + '35' }]}>
+                    <Text style={[styles.matchReasonLabel, { color: p.accent }]}>
+                      {lang === 'en' ? 'TONIGHT’S SIGNAL' : '這次相遇的線索'}
+                    </Text>
+                    <Text style={[styles.matchReasonText, { color: p.inkSoft }]}>
+                      {sharedMode
+                        ? (lang === 'en'
+                            ? `You both chose “${modeLabel}” tonight.`
+                            : `你們今晚都選擇了「${modeLabel}」。`)
+                        : (lang === 'en'
+                            ? `They chose “${modeLabel}” tonight. You can still skip freely.`
+                            : `對方今晚選擇「${modeLabel}」。不合適可以直接略過。`)}
+                    </Text>
+                  </View>
+                ) : null}
                 <Text style={[styles.subhead, { color: p.muted }]}>{t('matchSubhead', lang)}</Text>
                 <Text style={[styles.moodText, { color: p.ink }]}>
                   {moodText ? `「${moodText}」` : (lang === 'en' ? 'They came quietly, without leaving a line.' : '對方安靜地來了，沒有留下心情。')}
@@ -254,6 +280,9 @@ const styles = StyleSheet.create({
   modePill:     { marginTop: 2, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 7 },
   modeDot:      { width: 5, height: 5, borderRadius: 3 },
   moodBox:      { borderTopWidth: 0.5, paddingTop: 20, gap: 10 },
+  matchReason:  { borderRadius: 14, borderWidth: 0.7, padding: 12, marginBottom: 2 },
+  matchReasonLabel:{ fontFamily: 'Inter-Regular', fontSize: 9, letterSpacing: 1.5, fontWeight: '600' },
+  matchReasonText:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, lineHeight: 19, marginTop: 4 },
   subhead:      { fontFamily: 'Inter-Regular', fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' },
   moodText:     { fontFamily: 'NotoSerifTC-Regular', fontSize: 16.5, lineHeight: 28 },
   hints:        { flexDirection: 'row', gap: 8, justifyContent: 'center', marginTop: 18 },

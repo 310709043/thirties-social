@@ -7,6 +7,9 @@ export type AnalyticsEvent =
   | 'app_open'
   | 'onboarding_complete'
   | 'setup_complete'
+  | 'profile_edit'
+  | 'explore_open'
+  | 'match_wait_timeout'
   | 'match_search'
   | 'match_found'
   | 'match_accept'
@@ -30,6 +33,7 @@ export type AnalyticsEvent =
   | 'safety_report'
   | 'safety_block'
   | 'account_delete'
+  | 'auth_success'
   | 'auth_google_error'
   | 'app_error';
 
@@ -70,6 +74,9 @@ export const analytics = {
   appOpen: () => trackEvent('app_open'),
   onboardingComplete: () => trackEvent('onboarding_complete'),
   setupComplete: (gender: string) => trackEvent('setup_complete', { gender }),
+  profileEdit: () => trackEvent('profile_edit'),
+  exploreOpen: () => trackEvent('explore_open'),
+  matchWaitTimeout: (seconds: number) => trackEvent('match_wait_timeout', { seconds }),
   matchSearch: (moodLength: number) => trackEvent('match_search', { moodLength }),
   matchFound: () => trackEvent('match_found'),
   matchAccept: () => trackEvent('match_accept'),
@@ -93,6 +100,8 @@ export const analytics = {
   safetyReport: (conversationId: string) => trackEvent('safety_report', { conversationId }),
   safetyBlock: (conversationId: string) => trackEvent('safety_block', { conversationId }),
   accountDelete: () => trackEvent('account_delete'),
+  authSuccess: (method: 'email_login' | 'email_register' | 'google' | 'guest') =>
+    trackEvent('auth_success', { method }),
   authGoogleError: (error: string) => trackEvent('auth_google_error', { error: error.slice(0, 300) }),
   appError: (message: string, stack: string, fatal: boolean, source: string) =>
     trackEvent('app_error', { message, stack, fatal, source }),

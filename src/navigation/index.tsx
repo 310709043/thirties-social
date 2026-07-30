@@ -21,10 +21,10 @@ import UpgradeScreen from '../screens/UpgradeScreen';
 export type RootStackParamList = {
   Auth: { mode?: 'login' | 'register' } | undefined;
   Onboarding: undefined;
-  Setup: undefined;
+  Setup: { edit?: boolean } | undefined;
   Mood: undefined;
   Room: { roomKey: string; roomId?: string };
-  Match: { fromSeed: string; moodText: string; conversationId: string; isOperator?: boolean; otherGender?: string | null; otherAge?: string | null; otherTonightMode?: string | null };
+  Match: { fromSeed: string; moodText: string; conversationId: string; isOperator?: boolean; otherGender?: string | null; otherAge?: string | null; otherTonightMode?: string | null; myTonightMode?: string | null };
   Chat: { otherSeed: string; conversationId?: string; matchCharge?: boolean };
   Safety: { reportedUserId?: string; conversationId?: string; isLoft?: boolean };
   Close: { conversationsCount?: number; peopleCount?: number } | undefined;

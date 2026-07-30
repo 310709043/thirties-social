@@ -10,7 +10,7 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, SoftButton, FadeInUp, Logo } from '../components/ui';
-import { syncAfterAuth, useAppStore } from '../hooks/useAppStore';
+import { setOnboardingDone, syncAfterAuth, useAppStore } from '../hooks/useAppStore';
 import { register, login, resetPassword, getCurrentUser } from '../lib/auth';
 import { signInWithGoogle, isGoogleAvailable } from '../lib/googleAuth';
 import { analytics } from '../lib/analytics';
@@ -61,6 +61,8 @@ export default function AuthScreen({ navigation, route }: Props) {
     if (result.ok) {
       hapticSuccess();
       await syncAfterAuth();
+      await setOnboardingDone();
+      analytics.authSuccess('email_login');
       await routeAfterAuth();
     } else {
       setError(result.error ?? '登入失敗');
@@ -87,6 +89,8 @@ export default function AuthScreen({ navigation, route }: Props) {
     if (result.ok) {
       hapticSuccess();
       await syncAfterAuth();
+      await setOnboardingDone();
+      analytics.authSuccess('email_register');
       await routeAfterAuth();
     } else {
       setError(result.error ?? '註冊失敗');
@@ -101,6 +105,8 @@ export default function AuthScreen({ navigation, route }: Props) {
     if (result.ok) {
       hapticSuccess();
       await syncAfterAuth();
+      await setOnboardingDone();
+      analytics.authSuccess('google');
       await routeAfterAuth();
     } else if (result.error !== 'cancelled') {
       // Surface the real error for diagnosis (revert to a generic message later),
@@ -286,6 +292,21 @@ export default function AuthScreen({ navigation, route }: Props) {
               </GlassCard>
             </FadeInUp>
 
+            {(mode === 'login' || mode === 'register') && (
+              <FadeInUp delay={230} distance={8}>
+                <View
+                  accessibilityRole="summary"
+                  style={[styles.trustRow, { backgroundColor: p.accentSoft, borderColor: p.line }]}
+                >
+                  <Text style={[styles.trustText, { color: p.inkSoft }]}>
+                    {lang === 'en'
+                      ? 'No real name shown  ·  Delete your account anytime  ·  Paying never boosts visibility'
+                      : '不顯示真名  ·  可隨時刪除帳號  ·  付費不影響曝光'}
+                  </Text>
+                </View>
+              </FadeInUp>
+            )}
+
             {/* Google sign-in */}
             {(mode === 'login' || mode === 'register') && isGoogleAvailable() && (
               <FadeInUp delay={250} distance={8}>
@@ -339,13 +360,15 @@ export default function AuthScreen({ navigation, route }: Props) {
                   onPress={async () => {
                     try { await ensureAnonAuth(); } catch {}
                     await syncAfterAuth();
+                    await setOnboardingDone();
+                    analytics.authSuccess('guest');
                     hapticSuccess();
-                    navigation.replace('Onboarding');
+                    navigation.replace('Setup');
                   }}
                   style={styles.guestBtn}
                 >
                   <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: p.muted }}>
-                    {lang === 'en' ? 'Continue as guest' : '先以訪客身分體驗'}
+                    {lang === 'en' ? 'Browse first without an account' : '暫不建立帳號，先瀏覽體驗'}
                   </Text>
                 </TouchableOpacity>
               </FadeInUp>
@@ -391,6 +414,8 @@ const styles = StyleSheet.create({
   links:      { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 20 },
   link:       { fontFamily: 'NotoSerifTC-Regular', fontSize: 13 },
   googleBtn:  { marginTop: 14, height: 50, borderRadius: 14, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+  trustRow:   { marginTop: 14, borderRadius: 14, borderWidth: 0.5, paddingHorizontal: 14, paddingVertical: 11 },
+  trustText:  { fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 18, textAlign: 'center' },
   guestBtn:   { alignItems: 'center', marginTop: 24, paddingVertical: 8 },
   legal:      { fontFamily: 'NotoSerifTC-Regular', fontSize: 11, lineHeight: 18, textAlign: 'center', marginTop: 20, paddingHorizontal: 10 },
 });

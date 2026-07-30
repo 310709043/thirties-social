@@ -336,6 +336,9 @@ export default function ChatScreen({ navigation, route }: Props) {
           return;
         }
         analytics.messageSend(conversationId);
+        // After the first real conversation begins, the home screen can reveal
+        // optional spaces without overwhelming a brand-new user.
+        AsyncStorage.setItem('coreExperienceSeen', '1');
         // A match "counts" only once you actually speak — charge on the first
         // message you send, never for entering an empty chat.
         if (matchCharge && !chargedRef.current) {
