@@ -17,7 +17,7 @@ type ProfileStep = 0 | 1 | 2;
 const STEPS = [
   { zh: '關於你', en: 'About you' },
   { zh: '你的關係', en: 'Your relationship' },
-  { zh: '今晚想遇見誰', en: 'What you want tonight' },
+  { zh: '今晚想要什麼', en: 'What you want tonight' },
 ] as const;
 
 const MARRIAGE_ZH = ['穩定交往中', '同居', '訂婚', '已婚', '已婚·分居中', '關係狀態未公開', '開放關係', '對方另有伴侶', '單身但說不清'];
@@ -419,7 +419,7 @@ export default function SetupScreen({ navigation, route }: Props) {
                       onChangeText={setLine}
                       onFocus={() => setLineFocused(true)}
                       onBlur={() => setLineFocused(false)}
-                      placeholder={zh ? '例：「我想遇見一個願意好好說話的人。」' : 'e.g. “I want to meet someone who can really talk.”'}
+                      placeholder={zh ? '例：「今晚只想找個人好好說說話。」' : 'e.g. “Tonight I just want someone to really talk to.”'}
                       placeholderTextColor={p.muted}
                       maxLength={80}
                       returnKeyType="done"

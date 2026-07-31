@@ -326,7 +326,7 @@ export default function ProfileScreen({ navigation }: Props) {
                     ? (lang === 'en' ? currentStyle.en : currentStyle.zh)
                     : (lang === 'en' ? 'Current style' : '目前樣式')}
                   {' · '}
-                  {lang === 'en' ? 'appearance only, never affects who you meet' : '只改外觀，不影響遇見誰'}
+                  {lang === 'en' ? 'appearance only, never affects who you talk to' : '只改外觀，不影響你會配對到誰'}
                 </Text>
               </View>
               <Text style={{ color: p.accent, fontSize: 18 }}>{showIdentityStyles ? '−' : '+'}</Text>

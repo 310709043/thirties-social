@@ -52,7 +52,8 @@
     "test:persona": "node scripts/persona-regression.mjs",
     "test:time": "node scripts/time-regression.mjs",
     "test:security": "node scripts/security-regression.mjs",
-    "check": "npm run typecheck && npm run test:identity && npm run test:persona && npm run test:time && npm run test:security"
+    "lint:voice": "node scripts/voice-lint.mjs",
+    "check": "npm run typecheck && npm run test:identity && npm run test:persona && npm run test:time && npm run test:security && npm run lint:voice"
   },
   "private": true
 }

@@ -17,6 +17,29 @@
 
 ---
 
+# 工程不變量（ENGINEERING INVARIANTS — 改到相關區塊前必讀，改動後跑 `npm run check`）
+
+這些是已通過安全審計的護欄，被 `scripts/*-regression.mjs` 守著。**不要放寬**；要動先確認回歸測試同步更新且仍合理。
+
+## 經濟（燭芯 / 守夜會員）
+- **發放只在伺服器端**：燭芯加值、vigil 開啟，**唯一**入口是 RevenueCat webhook（`thirties-admin` 的 `api/iap/revenuecat`）。客戶端永遠不能為自己加燭芯或開會員。
+- 客戶端 wick ledger **只能扣（spend-only）**，餘額**不得為負**。
+- 新帳號固定 **3 燭芯**、`vigil:false`、未封鎖起始值（`validNewUser()` 強制）。
+- IAP 商品 ID 必須 app 端與 webhook 兩邊一致：`wick10/30/100` + `vigil.monthly`。
+
+## 隱私 / 安全
+- **發文/寫入必須有真實且未封鎖的 user profile**（不能靠刪 profile 繞過封鎖）。
+- 照片在**上傳時就降析度**把匿名性烤進像素：帶紗照 140px、夜閣照 96px、一律去 EXIF/GPS。不要改大或延後降析度。
+- 對話結束/過期 → 清訊息內容、拒收新訊息（一般對話、夜閣、房間都是）。
+- 密鑰**不進版控**：Firebase 設定放 EAS env / 本地 .env；Cloudinary、RevenueCat 密鑰只在伺服器端。
+- Firestore rules 是真正防線（客戶端不可信）。放寬 rules 前先過 `/security-review`。
+
+## Build / 發布
+- 動到**原生依賴**（`package.json` 的 `expo-*` / `react-native-*`）→ **必須重 build，不能 OTA**（OTA 到 production channel 會讓舊客戶端閃退）。純 JS 修復才可考慮 OTA，且要跟 build 走。
+- 出 build 前跑 `/pre-build-check`。
+
+---
+
 # Expo HAS CHANGED
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before writing any code.
