@@ -9,6 +9,8 @@ import { ensureAnonAuth, upsertUser, updateUser, subscribeToUser, claimDailyRewa
 import { isGuest } from '../lib/auth';
 import { safeWicks } from '../lib/num';
 import { FREE_IDENTITY_KINDS, VIGIL_IDENTITY_KINDS } from '../lib/identityStyles';
+import { localProductDayKey, localProductWeekKey } from '../lib/timeBuckets';
+import { connectionPolicy } from '../lib/personaPolicy';
 
 let _deviceId: string | null = null;
 async function getDeviceId(): Promise<string> {
@@ -62,9 +64,9 @@ interface AppState {
   roomsToday: number;
   freeMatchesUsed: number;
   loftFreeUsed: number;
-  /** Week bucket (weeks-since-epoch) when the free user last used their weekly free Loft entry. */
-  loftFreeWeek: number | null;
-  /** A guest's single free taste match — spent once, then sign-up is required. */
+  /** Local Monday (03:00 boundary) when the free weekly Loft entry was used. */
+  loftFreeWeek: string | null;
+  /** @deprecated Legacy marker from the old guest taste-match flow. */
   guestMatchUsed: boolean;
 }
 
@@ -72,7 +74,7 @@ interface AppState {
  * Free registered users get this many free "connections" PER DAY, shared across
  * random matches AND room invites (tapping someone in a brazier to chat). Beyond
  * the daily quota, each connection costs MATCH_WICK_COST. Tracked locally per day
- * (resets at local midnight via _resetDailyCountersIfNeeded) so it doesn't fight
+ * (resets at local 03:00 via _resetDailyCountersIfNeeded) so it doesn't fight
  * the increase-only Firestore rule that the old lifetime counter needed.
  */
 export const FREE_DAILY_CONNECTIONS = 10;
@@ -156,7 +158,7 @@ export async function initStore() {
     roomsToday: storedRoomsToday ? parseInt(storedRoomsToday, 10) : 0,
     freeMatchesUsed: storedFreeMatches ? parseInt(storedFreeMatches, 10) : 0,
     loftFreeUsed: storedLoftFree ? parseInt(storedLoftFree, 10) : 0,
-    loftFreeWeek: storedLoftFreeWeek ? parseInt(storedLoftFreeWeek, 10) : null,
+    loftFreeWeek: storedLoftFreeWeek ?? null,
     guestMatchUsed: storedGuestMatchUsed === '1',
   };
   notify();
@@ -183,12 +185,16 @@ async function _syncWithFirebase(
           : _state.direction;
       const serverLang: Lang = dbUser.lang === 'en' ? 'en' : 'zh';
       const clearMissingAccountField = options.preserveLocalSetup === false;
-      const persistNullable = (key: string, value: string | null | undefined) =>
-        value
-          ? AsyncStorage.setItem(key, value)
-          : clearMissingAccountField
-            ? AsyncStorage.removeItem(key)
-            : Promise.resolve();
+      const hasServerField = (key: string) => Object.prototype.hasOwnProperty.call(dbUser, key);
+      const serverNullable = (key: string, local: string | null): string | null =>
+        hasServerField(key) ? ((dbUser as any)[key] ?? null) : local;
+      const persistNullable = (key: string, value: string | null | undefined) => {
+        if (value != null && value !== '') return AsyncStorage.setItem(key, value);
+        // Explicit null means the user cleared the field. A truly absent field
+        // is only preserved for a legacy document during normal startup.
+        if (hasServerField(key) || clearMissingAccountField) return AsyncStorage.removeItem(key);
+        return Promise.resolve();
+      };
       _state = {
         // wicks: coerce through safeWicks so a missing/corrupt ("undefined"/NaN)
         // field can never surface as NaN in the UI or get re-persisted.
@@ -202,13 +208,15 @@ async function _syncWithFirebase(
         isBanned: dbUser.isBanned, banReason: dbUser.banReason,
         banExpiresAt: (dbUser as any).banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
-        gender: dbUser.gender as Gender | null, ageBracket: dbUser.ageBracket,
-        relationshipStatus: dbUser.relationshipStatus,
-        relationshipShape: (dbUser as any).relationshipShape ?? _state.relationshipShape,
+        gender: serverNullable('gender', _state.gender) as Gender | null,
+        ageBracket: serverNullable('ageBracket', _state.ageBracket),
+        relationshipStatus: serverNullable('relationshipStatus', _state.relationshipStatus),
+        relationshipShape: serverNullable('relationshipShape', _state.relationshipShape),
         seeking: dbUser.seeking,
-        boundary: dbUser.boundary,
+        boundary: serverNullable('boundary', _state.boundary),
         freeTimes: (dbUser as any).freeTimes ?? _state.freeTimes,
-        region: dbUser.region, quote: dbUser.quote,
+        region: serverNullable('region', _state.region),
+        quote: serverNullable('quote', _state.quote),
         loftVisible: (dbUser as any).loftVisible !== false,
         // OFF unless explicitly turned on — `?? true` here silently re-enabled
         // the filter for every user whose doc predates the field, undoing the
@@ -252,18 +260,23 @@ async function _syncWithFirebase(
     _userUnsubscribe = subscribeToUser(userId, updated => {
       const today = new Date().toISOString().slice(0, 10);
       const lastReward = (updated as any).lastRewardDate ?? null;
+      const hasUpdatedField = (key: string) => Object.prototype.hasOwnProperty.call(updated, key);
+      const updatedNullable = (key: string, local: string | null): string | null =>
+        hasUpdatedField(key) ? ((updated as any)[key] ?? null) : local;
       _state = {
         ..._state, wicks: safeWicks(updated.wicks), vigil: updated.vigil,
         isBanned: updated.isBanned, banReason: updated.banReason,
         banExpiresAt: (updated as any).banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
-        gender: updated.gender as Gender | null, ageBracket: updated.ageBracket,
-        relationshipStatus: updated.relationshipStatus,
-        relationshipShape: (updated as any).relationshipShape ?? _state.relationshipShape,
+        gender: updatedNullable('gender', _state.gender) as Gender | null,
+        ageBracket: updatedNullable('ageBracket', _state.ageBracket),
+        relationshipStatus: updatedNullable('relationshipStatus', _state.relationshipStatus),
+        relationshipShape: updatedNullable('relationshipShape', _state.relationshipShape),
         seeking: updated.seeking,
-        boundary: updated.boundary,
+        boundary: updatedNullable('boundary', _state.boundary),
         freeTimes: (updated as any).freeTimes ?? _state.freeTimes,
-        region: updated.region, quote: updated.quote,
+        region: updatedNullable('region', _state.region),
+        quote: updatedNullable('quote', _state.quote),
         loftVisible: (updated as any).loftVisible !== false,
         autoFilter: (updated as any).autoFilter === true, // opt-in, see above
         slowMode: (updated as any).slowMode ?? false,
@@ -334,7 +347,7 @@ export async function setSetupDone() {
   _state = { ..._state, setupDone: true };
   await AsyncStorage.setItem('setup_done', '1');
   notify();
-  if (_state.userId) updateUser({ setupDone: true });
+  if (_state.userId) await updateUser({ setupDone: true });
 }
 
 export async function setWicks(n: number) {
@@ -369,7 +382,14 @@ export async function setProfileFields(fields: {
   if (fields.region) stores.push(['region', fields.region]);
   if (fields.quote) stores.push(['quote', fields.quote]);
   await AsyncStorage.multiSet(stores);
-  if (_state.userId) updateUser({ ...fields });
+  await AsyncStorage.multiRemove(
+    [
+      !fields.relationshipShape ? 'relationshipShape' : null,
+      !fields.region ? 'region' : null,
+      !fields.quote ? 'quote' : null,
+    ].filter((key): key is string => key !== null),
+  );
+  if (_state.userId) await updateUser({ ...fields });
 }
 
 export async function setLoftVisible(on: boolean) {
@@ -408,7 +428,7 @@ export async function trackConversation(conversationId?: string) {
   if (conversationId) _countedConversations.add(conversationId);
 
   const convs = _state.conversationsToday + 1;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localProductDayKey();
   _state = { ..._state, conversationsToday: convs };
   await AsyncStorage.setItem('conversationsToday', String(convs));
   await AsyncStorage.setItem('countersDate', today);
@@ -418,7 +438,7 @@ export async function trackConversation(conversationId?: string) {
 export async function trackPerson() {
   await _resetDailyCountersIfNeeded();
   const people = _state.peopleTodayCount + 1;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localProductDayKey();
   _state = { ..._state, peopleTodayCount: people };
   await AsyncStorage.setItem('peopleTodayCount', String(people));
   await AsyncStorage.setItem('countersDate', today);
@@ -442,28 +462,45 @@ export function getTier(): Tier {
  * A "connection" = starting a 1:1 chat, whether via random match or a room
  * invite. Vigil is unlimited. Women match free and unlimited — they are the
  * scarce side of this marketplace, and every barrier on them starves the whole
- * app. Guests get ONE taste match before being asked to sign up. Free men get
- * FREE_DAILY_CONNECTIONS per day, then each costs MATCH_WICK_COST wicks.
+ * app. Guests browse only. Free men/nonbinary users get FREE_DAILY_CONNECTIONS
+ * per day, then each costs MATCH_WICK_COST wicks.
  */
 export function canMatch(): boolean {
-  const t = getTier();
-  if (t === 'guest') return !_state.guestMatchUsed;
-  if (t === 'vigil') return true;
-  if (_state.gender === 'female') return true;
-  if (_state.connectionsToday < FREE_DAILY_CONNECTIONS) return true;
-  return _state.wicks >= MATCH_WICK_COST;
+  return connectionPolicy({
+    guest: getTier() === 'guest',
+    vigil: getTier() === 'vigil',
+    gender: _state.gender,
+    connectionsToday: _state.connectionsToday,
+    wicks: _state.wicks,
+    dailyAllowance: FREE_DAILY_CONNECTIONS,
+    wickCost: MATCH_WICK_COST,
+  }).canConnect;
 }
 
 /** True once a free user has used today's free connections and must pay wicks. */
 export function matchCostsWick(): boolean {
-  if (getTier() !== 'free' || _state.gender === 'female') return false;
-  return _state.connectionsToday >= FREE_DAILY_CONNECTIONS;
+  return connectionPolicy({
+    guest: getTier() === 'guest',
+    vigil: getTier() === 'vigil',
+    gender: _state.gender,
+    connectionsToday: _state.connectionsToday,
+    wicks: _state.wicks,
+    dailyAllowance: FREE_DAILY_CONNECTIONS,
+    wickCost: MATCH_WICK_COST,
+  }).costsWick;
 }
 
 /** Remaining free connections (matches + room invites) for a free user today. */
 export function freeConnectionsRemaining(): number {
-  if (getTier() !== 'free') return 0;
-  return Math.max(0, FREE_DAILY_CONNECTIONS - _state.connectionsToday);
+  return connectionPolicy({
+    guest: getTier() === 'guest',
+    vigil: getTier() === 'vigil',
+    gender: _state.gender,
+    connectionsToday: _state.connectionsToday,
+    wicks: _state.wicks,
+    dailyAllowance: FREE_DAILY_CONNECTIONS,
+    wickCost: MATCH_WICK_COST,
+  }).freeRemaining;
 }
 
 /**
@@ -478,18 +515,16 @@ export function freeConnectionsRemaining(): number {
  */
 export async function recordMatch(): Promise<boolean> {
   if (getTier() === 'guest') {
-    // The guest's single taste match is now spent.
-    _state = { ..._state, guestMatchUsed: true };
-    await AsyncStorage.setItem('guestMatchUsed', '1');
-    notify();
-    return true;
+    // Guests are browse-only. Keep this guard here as defence in depth even
+    // though every current screen routes them to registration before matching.
+    return false;
   }
   if (getTier() !== 'free') return true;
   if (_state.gender === 'female') return true; // women never consume quota or wicks
   await _resetDailyCountersIfNeeded();
   if (_state.connectionsToday < FREE_DAILY_CONNECTIONS) {
     const used = _state.connectionsToday + 1;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localProductDayKey();
     _state = { ..._state, connectionsToday: used };
     await AsyncStorage.setItem('connectionsToday', String(used));
     await AsyncStorage.setItem('countersDate', today);
@@ -501,11 +536,6 @@ export async function recordMatch(): Promise<boolean> {
   return result.ok;
 }
 
-/** Weeks since epoch — used for the weekly free Loft entry. */
-function currentWeek(): number {
-  return Math.floor(Date.now() / (7 * 86400 * 1000));
-}
-
 /**
  * The Loft is a Vigil space, but a free user gets ONE free entry PER WEEK to
  * taste it before being asked to upgrade. Guests never enter. Tracked locally by
@@ -514,19 +544,19 @@ function currentWeek(): number {
 export function canEnterLoft(): boolean {
   const t = getTier();
   if (t === 'vigil') return true;
-  if (t === 'free') return _state.loftFreeWeek !== currentWeek();
+  if (t === 'free') return _state.loftFreeWeek !== localProductWeekKey();
   return false;
 }
 
 /** Remaining free Loft entries this week for a free user (1 or 0). */
 export function loftFreeRemaining(): number {
   if (getTier() !== 'free') return 0;
-  return _state.loftFreeWeek === currentWeek() ? 0 : 1;
+  return _state.loftFreeWeek === localProductWeekKey() ? 0 : 1;
 }
 
 /** True if this Loft entry would consume the free user's weekly free entry. */
 export function loftEntryIsFreeTrial(): boolean {
-  return getTier() === 'free' && _state.loftFreeWeek !== currentWeek();
+  return getTier() === 'free' && _state.loftFreeWeek !== localProductWeekKey();
 }
 
 /**
@@ -536,7 +566,7 @@ export function loftEntryIsFreeTrial(): boolean {
  */
 export async function recordLoftEntry() {
   if (getTier() !== 'free') return;
-  const week = currentWeek();
+  const week = localProductWeekKey();
   if (_state.loftFreeWeek === week) return;
   _state = { ..._state, loftFreeWeek: week };
   await AsyncStorage.setItem('loftFreeWeek', String(week));
@@ -558,7 +588,7 @@ export async function recordRoomCreated() {
   if (getTier() !== 'free') return;
   await _resetDailyCountersIfNeeded();
   const used = _state.roomsToday + 1;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localProductDayKey();
   _state = { ..._state, roomsToday: used };
   await AsyncStorage.setItem('roomsToday', String(used));
   await AsyncStorage.setItem('countersDate', today);
@@ -574,7 +604,7 @@ export function getAvailableIdentityKinds(): IdentityKind[] {
 
 async function _resetDailyCountersIfNeeded() {
   const stored = await AsyncStorage.getItem('countersDate');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localProductDayKey();
   if (stored !== today) {
     _state = { ..._state, conversationsToday: 0, peopleTodayCount: 0, connectionsToday: 0, roomsToday: 0 };
     await AsyncStorage.setItem('conversationsToday', '0');

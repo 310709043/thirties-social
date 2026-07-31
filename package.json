@@ -49,8 +49,10 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test:identity": "node scripts/identity-regression.mjs",
+    "test:persona": "node scripts/persona-regression.mjs",
+    "test:time": "node scripts/time-regression.mjs",
     "test:security": "node scripts/security-regression.mjs",
-    "check": "npm run typecheck && npm run test:identity && npm run test:security"
+    "check": "npm run typecheck && npm run test:identity && npm run test:persona && npm run test:time && npm run test:security"
   },
   "private": true
 }

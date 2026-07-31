@@ -74,7 +74,7 @@ export const GlassCard = React.memo(function GlassCard({
       {children}
     </View>
   );
-  if (onPress) return <TouchableOpacity onPress={onPress} activeOpacity={0.85}>{inner}</TouchableOpacity>;
+  if (onPress) return <TouchableOpacity onPress={onPress} activeOpacity={0.85} accessibilityRole="button">{inner}</TouchableOpacity>;
   return inner;
 });
 
@@ -227,9 +227,9 @@ export const CountdownRing = React.memo(function CountdownRing({
 
 // ── Toggle ────────────────────────────────────────────────────
 export function Toggle({
-  p, on, onToggle,
+  p, on, onToggle, accessibilityLabel,
 }: {
-  p: Palette; on: boolean; onToggle?: () => void;
+  p: Palette; on: boolean; onToggle?: () => void; accessibilityLabel?: string;
 }) {
   const knobX = useRef(new Animated.Value(on ? 18 : 2)).current;
   const reduceMotion = useReduceMotion();
@@ -248,7 +248,13 @@ export function Toggle({
   }, [knobX, on, reduceMotion]);
 
   return (
-    <TouchableOpacity onPress={onToggle} activeOpacity={0.85} style={{
+    <TouchableOpacity
+      onPress={onToggle}
+      activeOpacity={0.85}
+      accessibilityRole="switch"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ checked: on, disabled: !onToggle }}
+      style={{
       width: 40, height: 24, borderRadius: 24,
       backgroundColor: on ? p.accent : p.line,
       justifyContent: 'center',

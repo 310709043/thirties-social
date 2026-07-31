@@ -16,7 +16,7 @@ import {
 import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, MATCH_WICK_COST } from '../hooks/useAppStore';
+import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, freeConnectionsRemaining, MATCH_WICK_COST } from '../hooks/useAppStore';
 import { useIsForeground } from '../lib/appState';
 import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchTonightRekindles, openRekindle, DbRekindle, sendNightLetter, hasSentTonightLetter, claimTonightLetter, replyToLetter, fetchMyLetterReplies, DbLetter, fetchArrivedEchoes, markEchoRead, DbEcho, createConversation, fetchMyLiveConversations, DbLiveConversation } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
@@ -147,9 +147,13 @@ function WaitStatus({
 }
 
 export default function MoodScreen({ navigation }: Props) {
-  const { seed, direction, lang, identityKind, wicks, gender, ageBracket, userId } = useAppStore();
+  const { seed, direction, lang, identityKind, wicks, gender, ageBracket, userId, vigil } = useAppStore();
   const p = DIRECTIONS[direction];
   const isGuestUser = getTier() === 'guest';
+  const openNewRoom = () => {
+    if (isGuestUser) navigation.push('Auth', { mode: 'register' });
+    else navigation.push('Room', { roomKey: 'new' });
+  };
   const [text, setText] = useState('');
   const [moodFocused, setMoodFocused] = useState(false);
   const [rooms, setRooms] = useState<DbRoom[]>([]);
@@ -447,8 +451,8 @@ export default function MoodScreen({ navigation }: Props) {
       Alert.alert(
         lang === 'en' ? 'That\'s enough for tonight' : '今晚先到這裡',
         lang === 'en'
-          ? `You've used today's free connections. Log in tomorrow for 2 more wicks — or top up / go Vigil for unlimited tonight.`
-          : `今天的免費配對用完了。明天登入會再得 2 燭芯，今晚想繼續可以購買燭芯，或升級守夜人享無限配對。`,
+          ? `You've used today's free 1-on-1s. Log in tomorrow for 2 more wicks — or top up / go Vigil for unlimited conversations tonight.`
+          : `今天的免費一對一已用完。明天登入會再得 2 燭芯；今晚想繼續，可以購買燭芯或升級守夜人。`,
         [
           { text: lang === 'en' ? 'OK' : '知道了', style: 'cancel' },
           { text: lang === 'en' ? 'Upgrade' : '升級', onPress: () => navigation.push('Upgrade') },
@@ -458,10 +462,10 @@ export default function MoodScreen({ navigation }: Props) {
     }
     const costs = matchCostsWick();
     Alert.alert(
-      lang === 'en' ? 'Start matching?' : '開始配對？',
+      lang === 'en' ? 'Find someone to talk with?' : '找一個人說說話？',
       costs
-        ? (lang === 'en' ? `This match costs ${MATCH_WICK_COST} wick.` : `這次配對將花 ${MATCH_WICK_COST} 燭芯。`)
-        : (lang === 'en' ? 'You can cancel before a match is found.' : '配對成功前可以取消。'),
+        ? (lang === 'en' ? `This 1-on-1 costs ${MATCH_WICK_COST} wick.` : `這次一對一將花 ${MATCH_WICK_COST} 燭芯。`)
+        : (lang === 'en' ? 'You can cancel before someone answers.' : '有人回應前都可以取消。'),
       [
         { text: lang === 'en' ? 'Cancel' : '取消', style: 'cancel' },
         { text: lang === 'en' ? 'Start' : '開始', onPress: () => startMatching(mode) },
@@ -672,8 +676,8 @@ export default function MoodScreen({ navigation }: Props) {
                 <View style={styles.inputFooter}>
                   <Text style={{ flex: 1, marginRight: 8, fontFamily: 'NotoSerifTC-Regular', fontSize: 10.5, color: p.muted }}>
                     {lang === 'en'
-                      ? 'shown once on the match card · your copy stays in this device diary'
-                      : '配對卡上讓對方看一次 · 你的副本只留在本機日記'}
+                      ? 'shown once before the conversation · your copy stays in this device diary'
+                      : '對話開始前讓對方看一次 · 你的副本只留在本機日記'}
                   </Text>
                   <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10, color: text.length > 240 ? p.accent : p.muted }}>
                     {text.length}/280
@@ -748,6 +752,25 @@ export default function MoodScreen({ navigation }: Props) {
                     : '可隨時離開 · 一鍵封鎖或檢舉 · 對話結束時清除訊息內容'}
                 </Text>
               </View>
+
+              <View
+                accessibilityRole="text"
+                style={{ marginTop: 10, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: p.glass, borderWidth: 0.5, borderColor: p.line }}
+              >
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, lineHeight: 18, color: p.inkSoft, textAlign: 'center' }}>
+                  {isGuestUser
+                    ? (lang === 'en'
+                      ? 'Guest mode · browse braziers first; create an account to speak, start a 1-on-1, or purchase.'
+                      : '訪客模式 · 可先瀏覽火盆；建立帳號後才能發言、一對一說話或購買。')
+                    : vigil
+                      ? (lang === 'en' ? 'Vigil · unlimited connections, no connection charge.' : '守夜會員 · 一對一連結不限次，不扣燭芯。')
+                      : gender === 'female'
+                        ? (lang === 'en' ? 'Women connect without a daily limit or connection charge.' : '女用戶一對一連結不限次，不扣燭芯。')
+                        : (lang === 'en'
+                          ? `${freeConnectionsRemaining()} free connections left today; then ${MATCH_WICK_COST} wick each.`
+                          : `今天還有 ${freeConnectionsRemaining()} 次免費連結；之後每次 ${MATCH_WICK_COST} 燭芯。`)}
+                </Text>
+              </View>
             </View>
           </FadeInUp>
 
@@ -764,7 +787,9 @@ export default function MoodScreen({ navigation }: Props) {
                   {lang === 'en' ? 'join a group, go deeper, or write slowly' : '加入一群人、靠近一點，或慢慢寫'}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => navigation.push('Room', { roomKey: 'new' })}>
+              <TouchableOpacity onPress={openNewRoom}
+                accessibilityRole="button"
+                accessibilityLabel={lang === 'en' ? 'Open a new brazier' : '開一個新火盆'}>
                 <Text style={[styles.openRoomLink, { color: p.accent }]}>
                   {lang === 'en' ? '+ open' : '+ 開一個'}
                 </Text>
@@ -778,6 +803,8 @@ export default function MoodScreen({ navigation }: Props) {
                     key={room.id}
                     onPress={() => navigation.push('Room', { roomKey: room.roomKey ?? 'custom', roomId: room.id })}
                     scaleTo={0.985}
+                    accessibilityRole="button"
+                    accessibilityLabel={room.customTopicZh || room.customTopicEn || (lang === 'en' ? 'Open brazier' : '進入火盆')}
                   >
                     <View style={[styles.roomItem, { backgroundColor: p.glass, borderColor: p.line }]}>
                       <View style={[styles.roomGlyph, { backgroundColor: p.accentSoft, borderColor: p.accent + '24' }]}>
@@ -801,7 +828,8 @@ export default function MoodScreen({ navigation }: Props) {
                   </PressableScale>
                 ))}
                 {activeRooms.length > 1 && (
-                  <TouchableOpacity onPress={() => setShowAllRooms(true)}
+                  <TouchableOpacity onPress={() => setShowAllRooms(true)} accessibilityRole="button"
+                    accessibilityLabel={lang === 'en' ? `See all ${activeRooms.length} braziers` : `查看全部 ${activeRooms.length} 個火盆`}
                     style={{ alignItems: 'center', paddingVertical: 8 }}>
                     <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
                       {lang === 'en'
@@ -812,7 +840,9 @@ export default function MoodScreen({ navigation }: Props) {
                 )}
               </View>
             ) : (
-              <PressableScale onPress={() => navigation.push('Room', { roomKey: 'new' })}>
+              <PressableScale onPress={openNewRoom}
+                accessibilityRole="button"
+                accessibilityLabel={lang === 'en' ? 'No braziers lit yet, start one' : '還沒有人生火，開一個火盆'}>
                 <View style={[styles.noRoomsCta, { borderColor: p.line, backgroundColor: p.glass }]}>
                   <BreathDot p={p} size={5} />
                   <Text style={[styles.noRoomsText, { color: p.muted }]}>
@@ -825,7 +855,8 @@ export default function MoodScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.secondaryRow}>
-            <PressableScale onPress={() => navigation.push('Loft')} scaleTo={0.975} style={styles.secondaryCardWrap}>
+            <PressableScale onPress={() => navigation.push('Loft')} scaleTo={0.975} style={styles.secondaryCardWrap}
+              accessibilityRole="button" accessibilityLabel={lang === 'en' ? 'Open the Loft' : '進入夜閣'}>
               <LinearGradient
                 colors={['#1f1014', '#2d161c', '#3a1e24']}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -842,7 +873,8 @@ export default function MoodScreen({ navigation }: Props) {
               </LinearGradient>
             </PressableScale>
 
-            <PressableScale onPress={openLetters} scaleTo={0.975} style={styles.secondaryCardWrap}>
+            <PressableScale onPress={openLetters} scaleTo={0.975} style={styles.secondaryCardWrap}
+              accessibilityRole="button" accessibilityLabel={lang === 'en' ? 'Open night letters' : '開啟夜信'}>
               <View style={[styles.secondaryCard, { backgroundColor: p.glass, borderColor: p.line }]}>
                 <LetterGlyph c={p.ink} accent={p.accent} />
                 <View style={{ flex: 1 }}>
@@ -872,7 +904,7 @@ export default function MoodScreen({ navigation }: Props) {
             >
               <View style={{ flex: 1 }}>
                 <Text style={[styles.exploreGateTitle, { color: p.ink }]}>
-                  {lang === 'en' ? 'First, focus on meeting one person' : '第一次，先專心遇見一個人'}
+                  {lang === 'en' ? 'First, just find one person to talk to' : '第一次，先專心找一個人說說話'}
                 </Text>
                 <Text style={[styles.exploreGateBody, { color: p.muted }]}>
                   {lang === 'en'
@@ -929,7 +961,7 @@ export default function MoodScreen({ navigation }: Props) {
                   onPress={() => {
                     const hottest = activeRooms[0];
                     if (hottest) navigation.push('Room', { roomKey: hottest.roomKey ?? 'custom', roomId: hottest.id });
-                    else navigation.push('Room', { roomKey: 'new' });
+                    else openNewRoom();
                   }}
                   style={[styles.waitAction, { backgroundColor: p.glass, borderColor: p.line }]}>
                   <BreathDot p={p} size={4} />
@@ -950,7 +982,7 @@ export default function MoodScreen({ navigation }: Props) {
             >
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
                 {isGuestUser
-                  ? (lang === 'en' ? 'Create an account to match' : '建立帳號，開始配對')
+                  ? (lang === 'en' ? 'Create an account to talk' : '建立帳號，找人說說話')
                   : tonightMode
                     ? t('moodEnter', lang)
                     : (lang === 'en' ? 'Choose how you feel tonight' : '先選擇今晚的狀態')}
@@ -1232,12 +1264,12 @@ function ReleaseWelcome({ p, lang, onDismiss }: { p: Palette; lang: string; onDi
     ? [
         ['A clearer night', 'Richer contrast, stronger cards and unmistakable selected states.'],
         ['A safer first hello', 'Intent, boundaries and conversation prompts now lead the flow.'],
-        ['Nothing charged too early', 'A match only counts after you actually speak.'],
+        ['Nothing charged too early', 'A one-to-one conversation only counts after you actually speak.'],
       ]
     : [
         ['夜晚更清楚', '更有層次的暮光色彩、卡片，以及一眼可辨的選中狀態。'],
         ['第一句更安心', '意圖、界線與破冰提示，現在會一路帶著你。'],
-        ['不會提早扣燭芯', '真正開口說話後，才會算一次配對。'],
+        ['不會提早扣燭芯', '真正開口說話後，才會算一次一對一。'],
       ];
 
   return (
@@ -1321,7 +1353,7 @@ function FirstTimeGuide({ p, lang, onDismiss }: { p: Palette; lang: string; onDi
 
   const rows = [
     { Glyph: MatchGlyph, title: lang === 'en' ? 'One person, 30 minutes' : '一個人，30 分鐘', alt: '',
-      desc: lang === 'en' ? 'Choose tonight’s intent, then meet anonymously' : '選今晚的狀態，再匿名遇見一個人' },
+      desc: lang === 'en' ? 'Choose how you feel tonight, then talk anonymously' : '選今晚的狀態，再匿名找一個人說說話' },
     { Glyph: SafetyGlyph, title: lang === 'en' ? 'You stay in control' : '主導權一直在你手上', alt: '',
       desc: lang === 'en' ? 'Leave, block or report at any moment' : '任何時候都能離開、封鎖或檢舉' },
     { Glyph: FreeTalkGlyph, title: lang === 'en' ? 'Talking stays free' : '說話本身免費', alt: '',

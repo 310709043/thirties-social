@@ -193,7 +193,7 @@ export default function MatchScreen({ navigation, route }: Props) {
           {/* Reassurance — accepting & leaving are free; a match only counts when you speak */}
           <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 12.5, lineHeight: 18, color: p.muted, textAlign: 'center', marginTop: 16, marginBottom: 12 }}>
             {!isOperator && matchCostsWick()
-              ? (lang === 'en' ? 'Free to enter · a match counts only when you speak (1 wick)' : '進去免費 · 開口說話才算一次配對（1 燭芯）')
+              ? (lang === 'en' ? 'Free to enter · the 1-on-1 counts only when you speak (1 wick)' : '進去免費 · 開口說話才算一次一對一（1 燭芯）')
               : (lang === 'en' ? "Don't feel it? Just leave — no cost, no pressure." : '沒感覺？直接離開就好 — 不扣任何東西，沒有壓力。')}
           </Text>
 
@@ -233,7 +233,7 @@ export default function MatchScreen({ navigation, route }: Props) {
               <TouchableOpacity
                 disabled={decisionBusy}
                 accessibilityRole="button"
-                accessibilityLabel={lang === 'en' ? 'Skip this match' : '略過這次配對'}
+                accessibilityLabel={lang === 'en' ? 'Not this conversation' : '略過這次對話'}
                 accessibilityState={{ disabled: decisionBusy }}
                 onPress={async () => {
                   if (decisionBusy) return;

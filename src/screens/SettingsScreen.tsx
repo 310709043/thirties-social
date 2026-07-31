@@ -19,9 +19,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
   const { direction, lang, identityKind, seed, autoFilter, slowMode, vigil, connectionsToday, gender } = useAppStore();
-  const unlimitedChats = vigil || gender === 'female';
   const p = DIRECTIONS[direction];
   const guest = isGuest();
+  const unlimitedChats = !guest && (vigil || gender === 'female');
 
   // Blocked list — blocking existed but there was NO way to see or undo it.
   const [blocked, setBlocked] = useState<string[]>([]);
@@ -35,8 +35,8 @@ export default function SettingsScreen({ navigation }: Props) {
     Alert.alert(
       lang === 'en' ? 'Unblock this person?' : '解除封鎖？',
       lang === 'en'
-        ? 'They may appear in the Loft and matching again.'
-        : '之後他們可能再次出現在夜閣與配對裡。',
+        ? 'They may appear in the Loft and 1-on-1 suggestions again.'
+        : '之後他們可能再次出現在夜閣與一對一建議裡。',
       [
         { text: lang === 'en' ? 'Keep blocked' : '維持封鎖', style: 'cancel' },
         { text: lang === 'en' ? 'Unblock' : '解除', style: 'destructive', onPress: async () => {
@@ -163,8 +163,11 @@ export default function SettingsScreen({ navigation }: Props) {
                 <SettingRow p={p}
                   title={lang === 'en' ? 'Auto-filter abusive language' : '自動過濾辱罵言詞'}
                   alt={lang === 'en' ? '自動過濾辱罵言詞' : 'Auto-filter abusive language'}
-                  sub={lang === 'en' ? 'On-device. We never see your conversation.' : '在裝置上完成。我們不會看到你的對話。'}
-                  control={<Toggle p={p} on={autoFilter} onToggle={() => setAutoFilter(!autoFilter)} />}
+                  sub={lang === 'en'
+                    ? 'Filtering runs on-device. Active messages still sync so the conversation works.'
+                    : '過濾在裝置上執行；進行中的訊息仍會同步，讓雙方能正常對話。'}
+                  control={<Toggle p={p} on={autoFilter} onToggle={() => setAutoFilter(!autoFilter)}
+                    accessibilityLabel={lang === 'en' ? 'Auto-filter abusive language' : '自動過濾辱罵言詞'} />}
 
                 />
                 <RowDivider p={p} />
@@ -172,19 +175,26 @@ export default function SettingsScreen({ navigation }: Props) {
                   title={lang === 'en' ? 'Slow mode after 22:00' : '夜間 22 點後緩衝模式'}
                   alt={lang === 'en' ? '夜間 22 點後緩衝模式' : 'Slow mode after 22:00'}
                   sub={lang === 'en' ? 'A pause before each message you send.' : '你按送出之前，給一個暫停。'}
-                  control={<Toggle p={p} on={slowMode} onToggle={() => setSlowMode(!slowMode)} />}
+                  control={<Toggle p={p} on={slowMode} onToggle={() => setSlowMode(!slowMode)}
+                    accessibilityLabel={lang === 'en' ? 'Slow mode after 22:00' : '夜間 22 點後緩衝模式'} />}
 
                 />
                 <RowDivider p={p} />
                 <SettingRow p={p}
-                  title={lang === 'en' ? 'Daily free matches' : '每日免費配對'}
-                  alt={lang === 'en' ? '每日免費配對' : 'Daily free matches'}
-                  sub={lang === 'en'
-                    ? 'Up to 10 free 1-on-1 connections a day, then 1 wick each. Resets at 03:00. Women and Vigil: unlimited.'
-                    : '每天 10 段免費一對一，用完後每段 1 燭芯。今晚 03:00 重新計算。女生與守夜會員不限次。'}
+                  title={lang === 'en' ? 'Daily free 1-on-1s' : '每日免費一對一'}
+                  alt={lang === 'en' ? '每日免費一對一' : 'Daily free 1-on-1s'}
+                  sub={guest
+                    ? (lang === 'en' ? 'Guest mode can browse. Create an account to start connecting.' : '訪客模式可瀏覽；建立帳號後才能開始連結。')
+                    : gender === 'female'
+                      ? (lang === 'en' ? 'Women have unlimited 1-on-1 connections with no connection charge.' : '女用戶一對一連結不限次，不扣燭芯。')
+                      : vigil
+                        ? (lang === 'en' ? 'Vigil includes unlimited 1-on-1 connections.' : '守夜會員享有不限次一對一連結。')
+                        : (lang === 'en'
+                          ? 'Up to 10 free 1-on-1 connections a day, then 1 wick each. Resets at 03:00.'
+                          : '每天 10 段免費一對一，用完後每段 1 燭芯；03:00 重新計算。')}
                   control={
                     <Text style={{ fontFamily: 'Inter-Regular', fontSize: 14, color: p.ink, fontWeight: '500' }}>
-                      {unlimitedChats ? '∞' : `${Math.min(connectionsToday, 10)}/10`}
+                      {guest ? '—' : unlimitedChats ? '∞' : `${Math.min(connectionsToday, 10)}/10`}
                     </Text>
                   }
                 />

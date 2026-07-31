@@ -25,6 +25,9 @@ export type AnalyticsEvent =
   | 'loft_gift'
   | 'loft_veil_lift'
   | 'photo_veil_send'
+  | 'paywall_view'
+  | 'purchase_start'
+  | 'purchase_result'
   | 'wick_purchase'
   | 'vigil_subscribe'
   | 'vigil_restore'
@@ -92,6 +95,10 @@ export const analytics = {
   loftGift: () => trackEvent('loft_gift'),
   loftVeilLift: (level: number) => trackEvent('loft_veil_lift', { level }),
   photoVeilSend: (conversationId: string) => trackEvent('photo_veil_send', { conversationId }),
+  paywallView: (persona: string, vigil: boolean) => trackEvent('paywall_view', { persona, vigil }),
+  purchaseStart: (product: string, persona: string) => trackEvent('purchase_start', { product, persona }),
+  purchaseResult: (product: string, persona: string, ok: boolean, error?: string) =>
+    trackEvent('purchase_result', { product, persona, ok, error: error?.slice(0, 80) }),
   wickPurchase: (amount: number) => trackEvent('wick_purchase', { amount }),
   vigilSubscribe: () => trackEvent('vigil_subscribe'),
   vigilRestore: () => trackEvent('vigil_restore'),

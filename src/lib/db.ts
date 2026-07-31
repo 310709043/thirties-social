@@ -358,8 +358,15 @@ export async function createRoom(params: {
     createdAt: serverTimestamp(),
     closesAt: Timestamp.fromDate(new Date(Date.now() + ROOM_LIFETIME_MS)),
   };
-  const ref = await addDoc(collection(db, 'rooms'), data);
-  return { id: ref.id, ...data } as DbRoom;
+  try {
+    const ref = await addDoc(collection(db, 'rooms'), data);
+    return { id: ref.id, ...data } as DbRoom;
+  } catch { return null; }
+}
+
+/** Delete a newly-created custom room when its required charge cannot settle. */
+export async function deleteOwnEmptyRoom(roomId: string): Promise<void> {
+  try { await deleteDoc(doc(db, 'rooms', roomId)); } catch {}
 }
 
 // ── Room Messages ─────────────────────────────────────────
@@ -473,10 +480,15 @@ export async function sendRoomMessage(params: {
     // Keep the brazier alive: every message resets its life to a full 24h. (The
     // old +12h reset could SHORTEN a fresh room's 24h — the first message cut
     // its remaining life in half, contradicting "each brazier burns 24 hours".)
-    await updateDoc(doc(db, 'rooms', params.roomId), {
-      messageCount: increment(1),
-      closesAt: Timestamp.fromDate(new Date(Date.now() + ROOM_LIFETIME_MS)),
-    });
+    try {
+      await updateDoc(doc(db, 'rooms', params.roomId), {
+        messageCount: increment(1),
+        closesAt: Timestamp.fromDate(new Date(Date.now() + ROOM_LIFETIME_MS)),
+      });
+    } catch {
+      // The message already exists. A failed metadata bump must not make the UI
+      // retry and duplicate the user's words.
+    }
     return true;
   } catch {
     return false;
@@ -1003,9 +1015,14 @@ export async function sendLoftMessage(params: {
       messageType: params.messageType ?? 'text',
       createdAt: serverTimestamp(),
     });
-    await updateDoc(doc(db, 'loftConversations', params.loftConversationId), {
-      messageCount: increment(1),
-    });
+    try {
+      await updateDoc(doc(db, 'loftConversations', params.loftConversationId), {
+        messageCount: increment(1),
+      });
+    } catch {
+      // Message delivery won. Do not report failure after the payload already
+      // committed, otherwise retrying a paid pulse creates a duplicate.
+    }
     void notifyOtherParty({ loftConversationId: params.loftConversationId });
     return true;
   } catch { return false; }
@@ -1028,6 +1045,17 @@ export function subscribeToLoftMessages(
   });
 }
 
+/** Remove message payloads as soon as an ephemeral Loft conversation ends. */
+export async function purgeLoftConversationMessages(loftConversationId: string): Promise<void> {
+  try {
+    const snap = await getDocs(collection(db, 'loftConversations', loftConversationId, 'messages'));
+    await Promise.all(snap.docs.map(message => deleteDoc(message.ref)));
+  } catch {
+    // Best effort from either participant. Rules also reject all new messages
+    // once ended/expired, so a cleanup retry cannot race with fresh content.
+  }
+}
+
 export async function endLoftConversation(loftConversationId: string): Promise<void> {
   try {
     // Stamp who ended it so the other side can show a "they left" notice
@@ -1037,6 +1065,7 @@ export async function endLoftConversation(loftConversationId: string): Promise<v
       endedReason: getCurrentUid() ?? 'ended',
     });
   } catch {}
+  await purgeLoftConversationMessages(loftConversationId);
 }
 
 /** Watch a Loft conversation for the other person leaving (endedAt gets stamped). */
@@ -1065,12 +1094,13 @@ export async function fetchLoftVeilLevel(loftConversationId: string): Promise<nu
 }
 
 /** Persist my veil-lift level for this Loft chat (per-viewer). */
-export async function bumpLoftVeilLevel(loftConversationId: string, level: number): Promise<void> {
+export async function bumpLoftVeilLevel(loftConversationId: string, level: number): Promise<boolean> {
   const uid = getCurrentUid();
-  if (!uid) return;
+  if (!uid) return false;
   try {
     await updateDoc(doc(db, 'loftConversations', loftConversationId), { [`veils.${uid}`]: level });
-  } catch {}
+    return true;
+  } catch { return false; }
 }
 
 /** A live whisper of mine tonight, shaped for the Loft's "ongoing" list. */
@@ -1931,9 +1961,14 @@ export async function sendConversationMessage(params: {
       messageType: params.messageType ?? 'text',
       createdAt: serverTimestamp(),
     });
-    await updateDoc(doc(db, 'conversations', params.conversationId), {
-      messageCount: increment(1),
-    });
+    try {
+      await updateDoc(doc(db, 'conversations', params.conversationId), {
+        messageCount: increment(1),
+      });
+    } catch {
+      // The payload is already delivered. Returning false here makes callers
+      // retry and duplicate messages (and previously paid actions).
+    }
     void notifyOtherParty({ conversationId: params.conversationId });
     return true;
   } catch { return false; }

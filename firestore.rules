@@ -85,6 +85,9 @@ service cloud.firestore {
                     // Sending a message bumps messageCount and extends closesAt.
                     && request.resource.data.diff(resource.data).affectedKeys()
                        .hasOnly(['messageCount', 'closesAt']);
+      allow delete: if request.auth != null
+                    && resource.data.creatorId == request.auth.uid
+                    && resource.data.isUserCreated == true;
 
       // Room messages subcollection
       match /messages/{msgId} {
@@ -93,6 +96,8 @@ service cloud.firestore {
                       && request.resource.data.senderId == request.auth.uid
                       && request.resource.data.content is string
                       && request.resource.data.content.size() <= 280
+                      && get(/databases/$(database)/documents/rooms/$(roomId)).data.isActive == true
+                      && get(/databases/$(database)/documents/rooms/$(roomId)).data.closesAt > request.time
                       && notBanned();
         // Only resonance reaction counts may be updated, and only riding the
         // same transaction as the caller's OWN reactions/{uid} subdoc change
@@ -390,6 +395,8 @@ service cloud.firestore {
                       && request.resource.data.senderId == request.auth.uid
                       && request.resource.data.content is string
                       && request.resource.data.content.size() <= 280
+                      && get(/databases/$(database)/documents/loftConversations/$(convId)).data.endedAt == null
+                      && get(/databases/$(database)/documents/loftConversations/$(convId)).data.expiresAt > request.time
                       && notBanned();
         allow update: if false;
         allow delete: if request.auth != null

@@ -13,6 +13,7 @@ import { useAppStore } from '../hooks/useAppStore';
 import { hapticSuccess } from '../lib/haptics';
 import { buyWickPack, buyVigilSubscription, restorePurchases, IAP_PRODUCT_IDS } from '../lib/purchases';
 import { isGuest } from '../lib/auth';
+import { analytics } from '../lib/analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Upgrade'>;
 
@@ -23,13 +24,18 @@ const WICK_PACKS = [
 ];
 
 export default function UpgradeScreen({ navigation }: Props) {
-  const { direction, lang, wicks, vigil } = useAppStore();
+  const { direction, lang, wicks, vigil, gender } = useAppStore();
+  const guest = isGuest();
   const p = DIRECTIONS[direction];
   const wickGlow = useRef(new Animated.Value(0.8)).current;
   // One purchase at a time — a second tap while the store sheet is opening
   // could stack two native purchase dialogs.
   const [buying, setBuying] = useState(false);
+  const buyingRef = useRef(false);
   const [showWickDetails, setShowWickDetails] = useState(false);
+  const persona = guest ? 'guest' : (gender ?? 'unknown');
+
+  useEffect(() => { analytics.paywallView(persona, vigil); }, [persona, vigil]);
 
   useEffect(() => {
     Animated.loop(
@@ -68,6 +74,10 @@ export default function UpgradeScreen({ navigation }: Props) {
         return lang === 'en'
           ? 'Purchases are unavailable in this build. Please install the app from Google Play and try again.'
           : '此安裝版本無法購買。請從 Google Play 商店安裝的正式版本中購買。';
+      case 'identity_not_ready':
+        return lang === 'en'
+          ? 'Your purchase account is still switching. Wait a moment and try again.'
+          : '購買帳號仍在切換中，請稍候再試。';
       case 'product_not_found':
         return lang === 'en'
           ? 'This item is not available in the store yet. Please try again later.'
@@ -80,7 +90,7 @@ export default function UpgradeScreen({ navigation }: Props) {
   };
 
   const handleBuyPack = async (amount: number) => {
-    if (buying || requireAccount()) return;
+    if (buyingRef.current || requireAccount()) return;
     const productMap: Record<number, string> = {
       10: IAP_PRODUCT_IDS.wick10,
       30: IAP_PRODUCT_IDS.wick30,
@@ -89,10 +99,15 @@ export default function UpgradeScreen({ navigation }: Props) {
     const productId = productMap[amount];
     if (!productId) return;
 
+    buyingRef.current = true;
     setBuying(true);
+    analytics.purchaseStart(productId, persona);
     const result = await buyWickPack(productId);
+    analytics.purchaseResult(productId, persona, result.ok, result.error);
+    buyingRef.current = false;
     setBuying(false);
     if (result.ok) {
+      analytics.wickPurchase(amount);
       hapticSuccess();
       // The wicks are granted by the backend webhook, so the balance updates a
       // beat later — say so, or the quiet pause reads as "nothing happened".
@@ -110,11 +125,16 @@ export default function UpgradeScreen({ navigation }: Props) {
   };
 
   const handleVigil = async () => {
-    if (buying || requireAccount()) return;
+    if (buyingRef.current || requireAccount()) return;
+    buyingRef.current = true;
     setBuying(true);
+    analytics.purchaseStart(IAP_PRODUCT_IDS.vigil, persona);
     const result = await buyVigilSubscription();
+    analytics.purchaseResult(IAP_PRODUCT_IDS.vigil, persona, result.ok, result.error);
+    buyingRef.current = false;
     setBuying(false);
     if (result.ok) {
+      analytics.vigilSubscribe();
       hapticSuccess();
       navigation.goBack();
     } else {
@@ -124,15 +144,30 @@ export default function UpgradeScreen({ navigation }: Props) {
   };
 
   const handleRestore = async () => {
+    if (buyingRef.current || requireAccount()) return;
+    buyingRef.current = true;
+    setBuying(true);
+    analytics.purchaseStart('restore', persona);
     const result = await restorePurchases();
+    analytics.purchaseResult('restore', persona, result.ok, result.error);
+    buyingRef.current = false;
+    setBuying(false);
     if (result.ok && result.restoredVigil) {
+      analytics.vigilRestore();
       hapticSuccess();
-    } else {
       Alert.alert(
-        lang === 'en' ? 'Nothing to restore' : '沒有可還原的購買',
-        lang === 'en'
-          ? 'No previous purchases found.'
-          : '找不到之前的購買記錄。',
+        lang === 'en' ? 'Purchases restored' : '購買已還原',
+        lang === 'en' ? 'Your Vigil access will update in a few seconds.' : '守夜會員狀態會在幾秒內更新。',
+      );
+    } else {
+      const errorText = result.error && result.error !== 'cancelled'
+        ? purchaseErrorText(result.error)
+        : '';
+      Alert.alert(
+        errorText
+          ? (lang === 'en' ? 'Restore failed' : '還原失敗')
+          : (lang === 'en' ? 'Nothing to restore' : '沒有可還原的購買'),
+        errorText || (lang === 'en' ? 'No previous purchases found.' : '找不到之前的購買記錄。'),
         [{ text: 'OK', style: 'cancel' }],
       );
     }
@@ -171,9 +206,13 @@ export default function UpgradeScreen({ navigation }: Props) {
                 {lang === 'en' ? 'THE SIMPLE RULE' : '只要記得這個規則'}
               </Text>
               <Text style={[styles.paymentPromiseBody, { color: p.inkSoft }]}>
-                {lang === 'en'
-                  ? 'Ordinary talking is free. Payment never improves your visibility or match ranking.'
-                  : '一般聊天免費；付費不會提高曝光，也不會讓你在配對中插隊。'}
+                {guest
+                  ? (lang === 'en'
+                    ? 'Guest mode is browse-only. Create an account before purchasing so your entitlement can be recovered.'
+                    : '訪客模式僅供瀏覽。購買前請先建立帳號，才能安全保存與還原權益。')
+                  : (lang === 'en'
+                    ? 'Ordinary talking is free. Payment never improves your visibility or puts you ahead of others.'
+                    : '一般聊天免費；付費不會提高曝光，也不會讓你排到別人前面。')}
               </Text>
             </View>
           </FadeInUp>
@@ -195,7 +234,13 @@ export default function UpgradeScreen({ navigation }: Props) {
                 </Text>
               </View>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, lineHeight: 22, marginTop: 12 }}>
-                {t('tierVigilBlurb', lang)}
+                {!guest && gender === 'female'
+                  ? (lang === 'en'
+                    ? 'You already have unlimited 1-on-1 conversations. Vigil adds the Loft every night, 5 wicks/day, all 16 identities, free rooms, and the ability to propose keeping each other.'
+                    : '你本來就享有不限次一對一。守夜會員另外提供每晚夜閣、每日 5 芯、全部 16 種身份、免費開火盆，以及主動提出「留下彼此」。')
+                  : (lang === 'en'
+                    ? 'Unlimited 1-on-1 conversations · Loft every night · 5 wicks/day · all 16 identities · free rooms · may propose keeping each other'
+                    : '不限次一對一 · 每晚夜閣 · 每日 5 芯 · 全部 16 種身份 · 免費開火盆 · 可提出「留下彼此」')}
               </Text>
               {vigil ? (
                 <>
@@ -242,7 +287,9 @@ export default function UpgradeScreen({ navigation }: Props) {
                   </Text>
                 </View>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, lineHeight: 20, color: p.muted }}>
-                  {t('tierFreeSub', lang)}
+                  {lang === 'en'
+                    ? '10 free 1-on-1s/day · Loft weekly · 2 wicks/day'
+                    : '每日 10 次免費一對一 · 每週夜閣 1 次 · 每日 2 芯'}
                 </Text>
               </View>
             </GlassCard>
@@ -312,8 +359,8 @@ export default function UpgradeScreen({ navigation }: Props) {
               <View style={[styles.wickNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.inkSoft, lineHeight: 20 }}>
                   {lang === 'en'
-                    ? 'Veiled photo (2), lifting a veil layer (1), +30 minutes (2 each), meeting again tomorrow (3 each), Loft pulse (1), a second room that day (2), and each match past the daily free allowance (1). Ordinary messages cost 0.'
-                    : '帶紗照片（2）、揭一層面紗（1）、續聊 30 分鐘（各 2）、約明晚重逢（各 3）、夜閣心跳（1）、當天第二個火盆（2）、超過每日免費額度的配對（1）。一般訊息為 0。'}
+                    ? `Veiled photo (2), lifting a veil layer (1), +30 minutes (2 each), meeting again tomorrow (3 each), Loft pulse (1), and a second room that day (2). ${!guest && gender === 'female' ? 'Women never pay a 1-on-1 connection charge.' : '1-on-1 connections past the daily free allowance cost 1.'} Ordinary messages cost 0.`
+                    : `帶紗照片（2）、揭一層面紗（1）、續聊 30 分鐘（各 2）、約明晚重逢（各 3）、夜閣心跳（1）、當天第二個火盆（2）。${!guest && gender === 'female' ? '女用戶的一對一連結不扣燭芯。' : '超過每日免費額度後，一對一連結每次 1 燭芯。'}一般訊息為 0。`}
                 </Text>
               </View>
             ) : null}

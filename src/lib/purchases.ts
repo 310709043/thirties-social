@@ -35,7 +35,9 @@ export const IAP_PRODUCT_IDS = {
 
 const VIGIL_ENTITLEMENT = 'vigil';
 
-let _configured = false;
+let _configuredUserId: string | null = null;
+let _requestedUserId: string | null = null;
+let _identityReady: Promise<void> = Promise.resolve();
 
 /**
  * Configure RevenueCat. appUserID must be the Firebase uid so the webhook's
@@ -43,11 +45,30 @@ let _configured = false;
  * ready.
  */
 export function initPurchases(appUserId: string): boolean {
-  if (_configured || !RC_API_KEY || !Purchases) return _configured;
+  if (!RC_API_KEY || !Purchases) return false;
+  if (_requestedUserId === appUserId) return true;
   try {
-    if (__DEV__ && LOG_LEVEL) Purchases.setLogLevel(LOG_LEVEL.WARN);
-    Purchases.configure({ apiKey: RC_API_KEY, appUserID: appUserId });
-    _configured = true;
+    _requestedUserId = appUserId;
+    if (!_configuredUserId) {
+      if (__DEV__ && LOG_LEVEL) Purchases.setLogLevel(LOG_LEVEL.WARN);
+      Purchases.configure({ apiKey: RC_API_KEY, appUserID: appUserId });
+      _configuredUserId = appUserId;
+      _identityReady = Promise.resolve();
+      return true;
+    }
+
+    // Firebase auth can change without restarting the native process. RevenueCat
+    // must follow that change or the webhook can grant a purchase to the UID that
+    // was signed in previously. Serialize switches so two rapid auth events
+    // cannot race each other.
+    _identityReady = _identityReady
+      .then(async () => {
+        await Purchases.logIn(appUserId);
+        _configuredUserId = appUserId;
+      })
+      .catch(e => {
+        console.warn('[purchases] identity switch failed', e);
+      });
     return true;
   } catch (e) {
     console.warn('[purchases] configure failed', e);
@@ -60,8 +81,10 @@ export function isPurchasesAvailable(): boolean {
 }
 
 async function purchaseProductId(productId: string): Promise<{ ok: boolean; error?: string }> {
-  if (!_configured || !Purchases) return { ok: false, error: 'not_configured' };
+  if (!_requestedUserId || !Purchases) return { ok: false, error: 'not_configured' };
   try {
+    await _identityReady;
+    if (_configuredUserId !== _requestedUserId) return { ok: false, error: 'identity_not_ready' };
     const products = await Purchases.getProducts([productId]);
     if (!products.length) return { ok: false, error: 'product_not_found' };
     await Purchases.purchaseStoreProduct(products[0]);
@@ -82,8 +105,12 @@ export function buyVigilSubscription(): Promise<{ ok: boolean; error?: string }>
 }
 
 export async function restorePurchases(): Promise<{ ok: boolean; restoredVigil: boolean; error?: string }> {
-  if (!_configured || !Purchases) return { ok: false, restoredVigil: false, error: 'not_configured' };
+  if (!_requestedUserId || !Purchases) return { ok: false, restoredVigil: false, error: 'not_configured' };
   try {
+    await _identityReady;
+    if (_configuredUserId !== _requestedUserId) {
+      return { ok: false, restoredVigil: false, error: 'identity_not_ready' };
+    }
     const info = await Purchases.restorePurchases();
     const restoredVigil = info?.entitlements?.active?.[VIGIL_ENTITLEMENT] != null;
     return { ok: true, restoredVigil };

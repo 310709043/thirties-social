@@ -17,7 +17,7 @@ import { subscribeToConversationMessages, sendConversationMessage, spendWicks, g
 import { scheduleRekindleReminder } from '../lib/notifications';
 import { filterMessage } from '../lib/filter';
 import { analytics } from '../lib/analytics';
-import { pickImage, uploadVeiledPhoto, getVeiledPhoto } from '../lib/photos';
+import { pickImage, uploadVeiledPhoto, getVeiledPhoto, deleteVeiledPhoto } from '../lib/photos';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ScreenCapture from 'expo-screen-capture';
 
@@ -51,11 +51,13 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [extendVotes, setExtendVotes] = useState<Record<string, boolean>>({});
   const [extended, setExtended] = useState(false);
   const [extendBusy, setExtendBusy] = useState(false);
+  const extendBusyRef = useRef(false);
   const otherUidRef = useRef<string | null>(null);
   const msgCountRef = useRef(0);
   const [rekindleVotes, setRekindleVotes] = useState<Record<string, boolean>>({});
   const [bondVotes, setBondVotes] = useState<Record<string, boolean>>({});
   const [rekindleBusy, setRekindleBusy] = useState(false);
+  const rekindleBusyRef = useRef(false);
   const [bondBusy, setBondBusy] = useState(false);
   // Once I've paid for a vote, hold the door until the snapshot confirms it —
   // the votes arrive via subscription with a delay, and a second tap inside
@@ -70,7 +72,9 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [showVeilSheet, setShowVeilSheet] = useState(false);
   const [veilSent, setVeilSent] = useState(false);
   const [veilSending, setVeilSending] = useState(false);
+  const veilSendingRef = useRef(false);
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
+  const pendingPaidPhotoRef = useRef<string | null>(null);
   const [otherTyping, setOtherTyping] = useState(false);
   const [otherLeft, setOtherLeft] = useState(false);
   const iLeftRef = useRef(false);
@@ -165,26 +169,39 @@ export default function ChatScreen({ navigation, route }: Props) {
   const iVotedExtend = !!(myUid && extendVotes[myUid]);
   const otherVotedExtend = Object.keys(extendVotes).some(k => k !== myUid && extendVotes[k]);
   const handleExtend = async () => {
-    if (extendBusy || extended || iVotedExtend || paidExtendRef.current || !conversationId) return;
-    if (wicks < EXTEND_WICK_COST) {
+    if (extendBusyRef.current || extended || iVotedExtend || !conversationId) return;
+    if (!paidExtendRef.current && wicks < EXTEND_WICK_COST) {
       Alert.alert(
         lang === 'en' ? 'Not enough wicks' : '燭芯不足',
         lang === 'en' ? `Extending costs ${EXTEND_WICK_COST} wicks from each side.` : `續燭需要雙方各 ${EXTEND_WICK_COST} 燭芯。`,
       );
       return;
     }
+    extendBusyRef.current = true;
     setExtendBusy(true);
-    const paid = await spendWicks(EXTEND_WICK_COST, 'extend', conversationId);
-    if (paid.ok) {
-      paidExtendRef.current = true;
+    try {
+      if (!paidExtendRef.current) {
+        const paid = await spendWicks(EXTEND_WICK_COST, 'extend', conversationId);
+        if (!paid.ok) {
+          Alert.alert(
+            lang === 'en' ? 'Payment failed' : '扣款失敗',
+            lang === 'en' ? 'No wicks were used. Please try again.' : '沒有扣除燭芯，請再試一次。',
+          );
+          return;
+        }
+        paidExtendRef.current = true;
+      }
       const ok = await voteExtendConversation(conversationId);
       if (!ok) {
-        // Vote write failed after payment — extremely rare; tell the user.
         Alert.alert(lang === 'en' ? 'Something went wrong' : '出了點問題',
-          lang === 'en' ? 'Please try again.' : '請再試一次。');
+          lang === 'en'
+            ? 'Your payment is saved. Try again — you will not be charged twice.'
+            : '付款已記錄。請再試一次，不會重複扣款。');
       }
+    } finally {
+      extendBusyRef.current = false;
+      setExtendBusy(false);
     }
-    setExtendBusy(false);
   };
 
   // 重逢 — vote to meet again tomorrow night (3 wicks each, mutual).
@@ -192,26 +209,47 @@ export default function ChatScreen({ navigation, route }: Props) {
   const otherVotedRekindle = Object.keys(rekindleVotes).some(k => k !== myUid && rekindleVotes[k]);
   const rekindleConfirmed = iVotedRekindle && otherVotedRekindle;
   const handleRekindle = async () => {
-    if (rekindleBusy || iVotedRekindle || paidRekindleRef.current || !conversationId || !otherSeed) return;
-    if (wicks < REKINDLE_WICK_COST) {
+    if (rekindleBusyRef.current || iVotedRekindle || !conversationId || !otherSeed) return;
+    if (!paidRekindleRef.current && wicks < REKINDLE_WICK_COST) {
       Alert.alert(
         lang === 'en' ? 'Not enough wicks' : '燭芯不足',
         lang === 'en' ? `Meeting again costs ${REKINDLE_WICK_COST} wicks from each side.` : `重逢需要雙方各 ${REKINDLE_WICK_COST} 燭芯。`,
       );
       return;
     }
+    rekindleBusyRef.current = true;
     setRekindleBusy(true);
-    const paid = await spendWicks(REKINDLE_WICK_COST, 'rekindle', conversationId);
-    if (paid.ok) {
-      paidRekindleRef.current = true;
+    try {
+      if (!paidRekindleRef.current) {
+        const paid = await spendWicks(REKINDLE_WICK_COST, 'rekindle', conversationId);
+        if (!paid.ok) {
+          Alert.alert(
+            lang === 'en' ? 'Payment failed' : '扣款失敗',
+            lang === 'en' ? 'No wicks were used. Please try again.' : '沒有扣除燭芯，請再試一次。',
+          );
+          return;
+        }
+        paidRekindleRef.current = true;
+      }
       const r = await voteRekindle({ conversationId, mySeed: seed, otherSeed });
+      if (!r) {
+        Alert.alert(
+          lang === 'en' ? 'Something went wrong' : '出了點問題',
+          lang === 'en'
+            ? 'Your payment is saved. Try again — you will not be charged twice.'
+            : '付款已記錄。請再試一次，不會重複扣款。',
+        );
+        return;
+      }
       if (r === 'confirmed') {
         hapticMedium();
         rekindleScheduledRef.current = true;
         void scheduleRekindleReminder(lang);
       }
+    } finally {
+      rekindleBusyRef.current = false;
+      setRekindleBusy(false);
     }
-    setRekindleBusy(false);
   };
 
   // 熟人 — keep each other (Vigil proposes; either side may accept for free).
@@ -701,41 +739,63 @@ export default function ChatScreen({ navigation, route }: Props) {
                   <TouchableOpacity
                     onPress={async () => {
                       // Guard against double-taps (each tap would upload + charge again).
-                      if (veilSending || !selectedPhotoUri || !conversationId || wicks < 2) return;
+                      if (veilSendingRef.current || !selectedPhotoUri || !conversationId || (!pendingPaidPhotoRef.current && wicks < 2)) return;
+                      veilSendingRef.current = true;
                       setVeilSending(true);
-                      // Upload FIRST, charge only once it's actually on Cloudinary — so a
-                      // failed upload never burns wicks. (A rare charge failure after upload
-                      // just orphans the asset, which is purged when the chat ends.)
-                      const photo = await uploadVeiledPhoto({ conversationId, uri: selectedPhotoUri });
-                      if (!photo) {
-                        setVeilSending(false);
-                        Alert.alert(lang === 'en' ? 'Upload failed' : '上傳失敗', lang === 'en' ? 'No wick was used. Please try again.' : '沒有扣燭芯，請再試一次。');
-                        return;
-                      }
-                      const result = await spendWicks(2, 'photo_veil', conversationId);
-                      if (result.ok) {
-                        await sendConversationMessage({
+                      try {
+                        let photoId = pendingPaidPhotoRef.current;
+                        if (!photoId) {
+                          // Upload before charging so a failed upload never burns wicks.
+                          const photo = await uploadVeiledPhoto({ conversationId, uri: selectedPhotoUri });
+                          if (!photo) {
+                            Alert.alert(lang === 'en' ? 'Upload failed' : '上傳失敗', lang === 'en' ? 'No wick was used. Please try again.' : '沒有扣燭芯，請再試一次。');
+                            return;
+                          }
+                          const result = await spendWicks(2, 'photo_veil', conversationId);
+                          if (!result.ok) {
+                            await deleteVeiledPhoto(photo.id);
+                            Alert.alert(lang === 'en' ? 'Payment failed' : '扣款失敗', lang === 'en' ? 'No wick was used. Please try again.' : '沒有扣燭芯，請再試一次。');
+                            return;
+                          }
+                          photoId = photo.id;
+                          pendingPaidPhotoRef.current = photo.id;
+                        }
+                        const sent = await sendConversationMessage({
                           conversationId,
-                          content: photo.id,
+                          content: photoId,
                           messageType: 'photo',
                         });
-                        hapticMedium();
-                        setVeilSent(true);
-                        analytics.photoVeilSend(conversationId);
+                        if (sent) {
+                          pendingPaidPhotoRef.current = null;
+                          hapticMedium();
+                          setVeilSent(true);
+                          analytics.photoVeilSend(conversationId);
+                        } else {
+                          Alert.alert(
+                            lang === 'en' ? 'Failed to send' : '送出失敗',
+                            lang === 'en'
+                              ? 'Your payment is saved. Try again — you will not be charged twice.'
+                              : '付款已記錄。請再試一次，不會重複扣款。',
+                          );
+                        }
+                      } finally {
+                        veilSendingRef.current = false;
+                        setVeilSending(false);
                       }
-                      setVeilSending(false);
                     }}
-                    disabled={veilSending || !selectedPhotoUri || wicks < 2}
-                    style={[styles.sendVeilBtn, { backgroundColor: (selectedPhotoUri && wicks >= 2) ? p.ink : p.line }]}>
+                    disabled={veilSending || !selectedPhotoUri || (!pendingPaidPhotoRef.current && wicks < 2)}
+                    style={[styles.sendVeilBtn, { backgroundColor: (selectedPhotoUri && (pendingPaidPhotoRef.current || wicks >= 2)) ? p.ink : p.line }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: (selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
+                      <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: (selectedPhotoUri && (pendingPaidPhotoRef.current || wicks >= 2)) ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontWeight: '500' }}>
                         {veilSending
                           ? (lang === 'en' ? 'Sending…' : '送出中…')
                           : (lang === 'en' ? 'Send veiled photo' : '送出帶紗照片')}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <WickGlyph size={11} color={(selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : '#fff') : p.muted} />
-                        <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: (selectedPhotoUri && wicks >= 2) ? (p.dark ? '#1a1530' : 'rgba(255,255,255,0.7)') : p.muted }}>2</Text>
+                        <WickGlyph size={11} color={(selectedPhotoUri && (pendingPaidPhotoRef.current || wicks >= 2)) ? (p.dark ? '#1a1530' : '#fff') : p.muted} />
+                        <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, color: (selectedPhotoUri && (pendingPaidPhotoRef.current || wicks >= 2)) ? (p.dark ? '#1a1530' : 'rgba(255,255,255,0.7)') : p.muted }}>
+                          {pendingPaidPhotoRef.current ? 0 : 2}
+                        </Text>
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -746,7 +806,11 @@ export default function ChatScreen({ navigation, route }: Props) {
                     </Text>
                   </View>
                 )}
-                <TouchableOpacity onPress={() => { setShowVeilSheet(false); setVeilSent(false); setSelectedPhotoUri(null); }} style={{ alignItems: 'center', paddingVertical: 10 }}>
+                <TouchableOpacity onPress={() => {
+                  setShowVeilSheet(false);
+                  setVeilSent(false);
+                  if (!pendingPaidPhotoRef.current) setSelectedPhotoUri(null);
+                }} style={{ alignItems: 'center', paddingVertical: 10 }}>
                   <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted }}>
                     {lang === 'en' ? 'close' : '關閉'}
                   </Text>
@@ -767,6 +831,7 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
   const [veilStep, setVeilStep] = React.useState(0);
   const [photoUrl, setPhotoUrl] = React.useState<string | null>(null);
   const [working, setWorking] = React.useState(false);
+  const workingRef = React.useRef(false);
   const revealed = veilStep >= 3;
 
   // Persist how far this photo was lifted (per photo, on this device) so paid
@@ -796,7 +861,7 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
   const cloudBlurForStep = (step: number) => (step >= 3 ? 300 : step === 2 ? 1000 : 1600);
 
   const liftVeil = async () => {
-    if (working || isMe || revealed || !m.photoId) return;
+    if (workingRef.current || isMe || revealed || !m.photoId) return;
     // Anti photo-grab: build some conversation before any layer lifts.
     if (!canRevealVeil) {
       Alert.alert(
@@ -809,8 +874,10 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
     }
     if (veilStep === 0) {
       // First layer is free — fetch the photo (kept blurred until fully lifted).
+      workingRef.current = true;
       setWorking(true);
       const photo = await getVeiledPhoto(m.photoId);
+      workingRef.current = false;
       setWorking(false);
       if (photo?.url) { setPhotoUrl(photo.url); setVeilStep(1); persistVeil(1); }
       return;
@@ -823,8 +890,10 @@ function ChatBubble({ p, m, lang, onReport, wicks, conversationId, canRevealVeil
       );
       return;
     }
+    workingRef.current = true;
     setWorking(true);
     const result = await spendWicks(1, 'veil_reveal', conversationId);
+    workingRef.current = false;
     setWorking(false);
     if (result.ok) setVeilStep(s => { const next = s + 1; persistVeil(next); return next; });
   };

@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, TextInput,
-  StyleSheet, KeyboardAvoidingView,
+  StyleSheet, KeyboardAvoidingView, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -191,24 +191,33 @@ export default function SetupScreen({ navigation, route }: Props) {
     if (!stepReady || saving) return;
     setSaving(true);
     const genderMap: Record<string, Gender> = { f: 'female', m: 'male', x: 'nonbinary' };
-    await setProfileFields({
-      gender: genderMap[gender!] ?? 'nonbinary',
-      ageBracket: age!,
-      relationshipStatus: toSlug(MARRIAGE_ZH, MARRIAGE_EN, MARRIAGE_SLUGS, marriage) ?? marriage!,
-      relationshipShape: toSlug(SHAPE_ZH, SHAPE_EN, SHAPE_SLUGS, shape),
-      seeking: toSlugs(SEEKING_ZH, SEEKING_EN, SEEKING_SLUGS, seeking),
-      boundary: toSlug(BOUNDARY_ZH, BOUNDARY_EN, BOUNDARY_SLUGS, boundary) ?? boundary!,
-      freeTimes: toSlugs(WHEN_ZH, WHEN_EN, WHEN_SLUGS, when),
-      region: toSlug(REGION_ZH, REGION_EN, REGION_SLUGS, region),
-      quote: line.trim() || null,
-    });
-    if (editMode) {
-      analytics.profileEdit();
-      navigation.goBack();
-    } else {
-      await setSetupDone();
-      analytics.setupComplete(genderMap[gender!] ?? 'nonbinary');
-      navigation.replace('Mood');
+    try {
+      await setProfileFields({
+        gender: genderMap[gender!] ?? 'nonbinary',
+        ageBracket: age!,
+        relationshipStatus: toSlug(MARRIAGE_ZH, MARRIAGE_EN, MARRIAGE_SLUGS, marriage) ?? marriage!,
+        relationshipShape: toSlug(SHAPE_ZH, SHAPE_EN, SHAPE_SLUGS, shape),
+        seeking: toSlugs(SEEKING_ZH, SEEKING_EN, SEEKING_SLUGS, seeking),
+        boundary: toSlug(BOUNDARY_ZH, BOUNDARY_EN, BOUNDARY_SLUGS, boundary) ?? boundary!,
+        freeTimes: toSlugs(WHEN_ZH, WHEN_EN, WHEN_SLUGS, when),
+        region: toSlug(REGION_ZH, REGION_EN, REGION_SLUGS, region),
+        quote: line.trim() || null,
+      });
+      if (editMode) {
+        analytics.profileEdit();
+        navigation.goBack();
+      } else {
+        await setSetupDone();
+        analytics.setupComplete(genderMap[gender!] ?? 'nonbinary');
+        navigation.replace('Mood');
+      }
+    } catch {
+      Alert.alert(
+        lang === 'en' ? 'Could not save' : '無法儲存',
+        lang === 'en' ? 'Check your connection and try again.' : '請檢查網路後再試一次。',
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -271,7 +280,7 @@ export default function SetupScreen({ navigation, route }: Props) {
                   <SectionIntro
                     p={p}
                     eyebrow={zh ? '第一步 · 基本輪廓' : 'Step one · basics'}
-                    title={zh ? '先讓對的人認出你' : 'Help the right person find you'}
+                    title={zh ? '先讓別人認得出今晚的你' : 'Help others recognise you tonight'}
                     body={zh
                       ? '只顯示必要的輪廓，不使用真名。之後可隨時從個人頁修改。'
                       : 'Only the essentials, never your real name. You can edit these later from your profile.'}
@@ -327,8 +336,8 @@ export default function SetupScreen({ navigation, route }: Props) {
                     eyebrow={zh ? '第二步 · 關係現況' : 'Step two · relationship'}
                     title={zh ? '說清楚，才不會彼此猜測' : 'Clarity creates safer connections'}
                     body={zh
-                      ? '這些資訊會用來改善配對，也能幫助雙方在開始前理解彼此情境。'
-                      : 'These answers improve matching and help both people understand the context before talking.'}
+                      ? '這些資訊會幫你找到比較談得來的人，也讓雙方在開始前理解彼此情境。'
+                      : 'These answers help connect you with a compatible conversation partner and give both people context before talking.'}
                   />
                   <ChipRow
                     p={p}
@@ -348,8 +357,8 @@ export default function SetupScreen({ navigation, route }: Props) {
                   <View style={[styles.trustNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '35' }]}>
                     <Text style={[styles.trustText, { color: p.inkSoft }]}>
                       {zh
-                        ? '誠實不等於公開。這些內容只用於配對與你允許顯示的個人頁。'
-                        : 'Honest does not mean public. These answers are used for matching and the profile details you choose to show.'}
+                        ? '誠實不等於公開。這些內容只用於安排一對一對話，以及你允許顯示的個人頁。'
+                        : 'Honest does not mean public. These answers are used to arrange 1-on-1 conversations and for profile details you choose to show.'}
                     </Text>
                   </View>
                 </>
@@ -429,8 +438,8 @@ export default function SetupScreen({ navigation, route }: Props) {
                   <View style={[styles.trustNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '35' }]}>
                     <Text style={[styles.trustText, { color: p.inkSoft }]}>
                       {zh
-                        ? '燭影私語限年滿 18 歲使用。你的年齡區間與配對資料會安全儲存，且不會顯示真實身分。'
-                        : 'Candle Whisper is for adults 18+. Your age range and matching profile are stored securely without revealing your real identity.'}
+                        ? '燭影私語限年滿 18 歲使用。你的年齡區間與對話偏好會安全儲存，且不會顯示真實身分。'
+                        : 'Candle Whisper is for adults 18+. Your age range and conversation preferences are stored securely without revealing your real identity.'}
                     </Text>
                   </View>
                 </>

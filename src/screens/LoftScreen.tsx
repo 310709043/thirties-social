@@ -39,6 +39,8 @@ export default function LoftScreen({ navigation }: Props) {
   const [loftPhotoUri, setLoftPhotoUri] = useState<string | null>(null);
   const [loftPhoto, setLoftPhoto] = useState<{ url: string; publicId: string } | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const uploadingPhotoRef = useRef(false);
+  const entryRequestRef = useRef(false);
   // Optional Loft PIN lock.
   const [pinMode, setPinMode] = useState<'none' | 'enter' | 'set'>('none');
   const [pinInput, setPinInput] = useState('');
@@ -48,6 +50,8 @@ export default function LoftScreen({ navigation }: Props) {
 
   // The actual entry (free-trial confirm + create the session). Gated by PIN.
   const runEntry = async (isReEntry = false) => {
+    if (entryRequestRef.current) return;
+    entryRequestRef.current = true;
     if (!isReEntry && loftEntryIsFreeTrial()) {
       const go = await new Promise<boolean>(resolve => {
         Alert.alert(
@@ -61,15 +65,20 @@ export default function LoftScreen({ navigation }: Props) {
           ],
         );
       });
-      if (!go) return;
+      if (!go) { entryRequestRef.current = false; return; }
     }
     const nightName = getLoftName(seed, lang);
-    const result = await enterLoft(nightName, loftPhoto);
+    let result: Awaited<ReturnType<typeof enterLoft>>;
+    try {
+      result = await enterLoft(nightName, loftPhoto);
+    } catch {
+      result = { ok: false, error: 'network_error' };
+    }
     if (result.ok) {
       // Only a FRESH visit consumes the weekly free entry — walking back in
       // tonight (result.reused) is free. Remember tonight locally so the
       // upgrade gate lets re-entries straight through.
-      if (!result.reused) await recordLoftEntry();
+      if (!result.reused) await recordLoftEntry().catch(() => {});
       AsyncStorage.setItem('loftNightEntered', localNightDate()).catch(() => {});
       hapticMedium();
       setEntering(true);
@@ -83,17 +92,20 @@ export default function LoftScreen({ navigation }: Props) {
         [{ text: 'OK', style: 'cancel' }],
       );
     }
+    entryRequestRef.current = false;
   };
 
   // Bring a photo into the Loft. It's uploaded now (so entry is instant) and
   // others only ever see a heavily blurred version; it's purged after the night.
   const pickLoftPhoto = async () => {
-    if (uploadingPhoto) return;
+    if (uploadingPhotoRef.current) return;
     const uri = await pickImage();
     if (!uri) return;
     setLoftPhotoUri(uri);
+    uploadingPhotoRef.current = true;
     setUploadingPhoto(true);
     const up = await uploadLoftPhoto(uri);
+    uploadingPhotoRef.current = false;
     setUploadingPhoto(false);
     if (up) {
       setLoftPhoto(up);
@@ -496,6 +508,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const [sessions, setSessions] = React.useState<DbLoftSession[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [connecting, setConnecting] = React.useState<string | null>(null);
+  const connectingRef = React.useRef(false);
   // Whispers already burning tonight (mine, both directions) + how many
   // messages I'd seen in each — the delta is the unread ember.
   const [whispers, setWhispers] = React.useState<DbLoftWhisper[]>([]);
@@ -504,6 +517,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const [responses, setResponses] = React.useState<DbRitualResponse[]>([]);
   const [ritualText, setRitualText] = React.useState('');
   const [posting, setPosting] = React.useState(false);
+  const postingRef = React.useRef(false);
   // Gender is the only filter — age now shows on each card instead (choosing an
   // exact age range in a small nightly pool mostly produced an empty list, and
   // the old chips compared '18−24' (unicode minus) against '18-24' in the DB,
@@ -551,7 +565,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
 
   const submitRitual = async () => {
     const c = ritualText.trim();
-    if (!c || posting) return;
+    if (!c || postingRef.current) return;
     // The ritual answer is broadcast to everyone in the Loft, so it must pass the
     // same content filter as chat messages.
     const check = filterMessage(c);
@@ -564,14 +578,16 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
       );
       return;
     }
+    postingRef.current = true;
     setPosting(true);
     const ok = await postRitualResponse({ content: c, seed, name: myName });
+    postingRef.current = false;
     setPosting(false);
     if (ok) setRitualText('');
   };
 
   const handlePickPerson = async (session: DbLoftSession) => {
-    if (connecting) return;
+    if (connectingRef.current) return;
     // Already whispering with them tonight (either of us opened it) → walk
     // straight back into the same room instead of creating anything.
     const ongoing = whispers.find(w => w.otherId === session.userId);
@@ -579,6 +595,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
       onEnter(ongoing.otherId, ongoing.id, ongoing.otherName || session.nightName, ongoing.expiresAt, session.photoUrl);
       return;
     }
+    connectingRef.current = true;
     setConnecting(session.userId);
     let conv = null;
     try {
@@ -592,6 +609,7 @@ function LoftInside({ lang, wicks, onBack, onEnter }: any) {
     } catch (e) {
       console.warn('[Loft] handlePickPerson createLoftConversation threw:', e);
     }
+    connectingRef.current = false;
     setConnecting(null);
     if (conv) {
       onEnter(session.userId, conv.id, session.nightName, conv.expiresAt, session.photoUrl);

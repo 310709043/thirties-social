@@ -9,8 +9,8 @@ const COPY: Record<string, { zh: string; en: string }> = {
   // Onboarding
   ob1Title:        { zh: '這裡沒有人要你完美', en: 'No one needs you to be perfect here' },
   ob1Body:         { zh: '不用名字、不用照片。你只是一個今晚想被聽見的人。', en: 'No name, no face — just someone who wants to be heard tonight.' },
-  ob2Title:        { zh: '遇見一個人，安心說 30 分鐘', en: 'Meet one person, talk safely for 30 minutes' },
-  ob2Body:         { zh: '選今晚的狀態，我們替你找一個人。可隨時離開、封鎖或檢舉；對話結束時內容會刪除。', en: 'Choose how you feel tonight and we will find one person. Leave, block or report at any time; messages are deleted when the conversation ends.' },
+  ob2Title:        { zh: '說出口，就讓它慢慢熄滅', en: 'Say it — then let it fade' },
+  ob2Body:         { zh: '和一個人靜靜說說話，結束後對話就會刪除，沒有人能回頭翻看。隨時可以離開、封鎖或檢舉。', en: 'Talk quietly with one person; when it ends the conversation is deleted and no one can scroll back. Leave, block or report any time.' },
   ob3Title:        { zh: '在這裡，大家都一樣', en: 'Here, everyone is the same' },
   ob3Body:         { zh: '可以待在火盆旁、找一個人說說話，或只是靜靜看著。不用有事，也可以來。', en: 'Sit by a brazier, find one person to talk to, or just watch quietly. You don\'t need a reason to be here.' },
   obContinue:      { zh: '我準備好了',       en: 'I am ready' },
@@ -22,11 +22,11 @@ const COPY: Record<string, { zh: string; en: string }> = {
   moodHeader:      { zh: '此刻，你是什麼樣子都可以', en: 'Right now, you can be however you are' },
   moodPrompt:      { zh: '不用很難過，也不用假裝沒事。想說再說。', en: "No need to be sad, no need to pretend you're fine. Say it only if you want." },
   moodPlaceholder: { zh: '想說的、不想說的，都放這裡⋯⋯', en: 'What you want to say, or not — leave it here…' },
-  moodEnter:       { zh: '遇見一個人',       en: 'Meet someone' },
+  moodEnter:       { zh: '和一個人說說話',   en: 'Talk with someone' },
   moodSkip:        { zh: '什麼都不想說，先待著就好', en: 'Nothing to say — just stay a while' },
   moodSuggested:   { zh: '今晚有人在說',     en: 'People are talking about' },
   // First-time guidance — answers "what can I do here?"
-  moodGuide:       { zh: '可以寫下此刻、找個火盆待著，或讓我幫你配一個人，靜靜說說話。', en: 'Write how you feel, sit by a brazier, or let me match you with someone to talk quietly.' },
+  moodGuide:       { zh: '可以寫下此刻、找個火盆待著，或和一個人靜靜說說話。', en: 'Write how you feel, sit by a brazier, or talk quietly with one person.' },
 
   // Rooms
   room_lonely:     { zh: '今晚很孤單',       en: 'lonely tonight' },
@@ -126,13 +126,13 @@ const COPY: Record<string, { zh: string; en: string }> = {
   // Wicks / subscription
   wickName:         { zh: '燭芯',             en: 'Wicks' },
   wickBalance:      { zh: '剩餘',             en: 'balance' },
-  upgradeTitle:     { zh: '聊天免費，額外選擇才付費', en: 'Talking is free; extras are optional' },
+  upgradeTitle:     { zh: '兩種陪你的方式',   en: 'Two ways to stay' },
   upgradeBlurb:     { zh: '不收廣告。不賣資料。不用會員等級換取曝光。', en: 'No ads. No data sold. No tiers buy you visibility.' },
-  tierFree:         { zh: '免費方案',          en: 'Free' },
-  tierFreeSub:      { zh: '每日 10 次配對 · 每週夜閣 1 次 · 每日 2 芯', en: '10 matches/day · Loft weekly · 2 wicks/day' },
+  tierFree:         { zh: '一根蠟燭',         en: 'One Candle' },
+  tierFreeSub:      { zh: '每日 10 次一對一 · 每週夜閣 1 次 · 每日 2 芯', en: '10 one-to-one conversations/day · Loft weekly · 2 wicks/day' },
   tierVigil:        { zh: '守夜會員',         en: 'Vigil' },
   tierVigilPrice:   { zh: 'NT$ 390 / 月',     en: 'NT$ 390 / mo' },
-  tierVigilBlurb:   { zh: '適合經常使用的人：無限配對、夜閣無限進出、每日 5 芯，以及全部匿名身份樣式。', en: 'For frequent use: unlimited matching, unlimited Loft access, 5 daily wicks and every anonymous identity style.' },
+  tierVigilBlurb:   { zh: '不限次一對一 · 夜閣無限進出 · 每日 5 芯 · 全部 16 種身份 · 免費開火盆 · 可提出「留下彼此」', en: 'Unlimited one-to-one conversations · Loft every night · 5 wicks/day · all 16 identities · free rooms · may propose "keeping each other"' },
   wicksTitle:       { zh: '一次性 · 燭芯',    en: 'One-off · Wicks' },
   wicksBlurb:       { zh: '燭芯只用於額外次數與雙方自願的靠近功能；一般聊天不扣燭芯。', en: 'Wicks are only for extra usage and mutually chosen closer features; ordinary talking costs no wicks.' },
   wick10:           { zh: '10 芯',            en: '10 wicks' },

@@ -12,6 +12,14 @@ const conversationRules = rules.slice(
   rules.indexOf('match /conversations/{convId}'),
   rules.indexOf('// ── Awake presence'),
 );
+const loftRules = rules.slice(
+  rules.indexOf('match /loftConversations/{convId}'),
+  rules.indexOf('// ── Match Queue'),
+);
+const roomRules = rules.slice(
+  rules.indexOf('match /rooms/{roomId}'),
+  rules.indexOf('// ── Conversations'),
+);
 
 let failures = 0;
 function check(name, pattern, source = rules) {
@@ -48,6 +56,31 @@ check(
   'expired conversations reject new messages',
   /messages\/\{msgId\}[\s\S]*?allow create:[\s\S]*?expiresAt > request\.time/,
   conversationRules,
+);
+check(
+  'Loft close purges ephemeral message payloads',
+  /endLoftConversation[\s\S]*?purgeLoftConversationMessages\(loftConversationId\)/,
+  dbSource,
+);
+check(
+  'ended Loft conversations reject new messages',
+  /messages\/\{msgId\}[\s\S]*?allow create:[\s\S]*?endedAt == null/,
+  loftRules,
+);
+check(
+  'expired Loft conversations reject new messages',
+  /messages\/\{msgId\}[\s\S]*?allow create:[\s\S]*?expiresAt > request\.time/,
+  loftRules,
+);
+check(
+  'expired rooms reject new messages',
+  /messages\/\{msgId\}[\s\S]*?allow create:[\s\S]*?closesAt > request\.time/,
+  roomRules,
+);
+check(
+  'a failed paid room can be rolled back by its creator',
+  /allow delete:[\s\S]*?creatorId == request\.auth\.uid[\s\S]*?isUserCreated == true/,
+  roomRules,
 );
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall security-policy checks passed');

@@ -69,10 +69,10 @@ export function PressableScale({
       }}
       onLongPress={onLongPress}
       disabled={disabled}
-      accessibilityRole={accessibilityRole}
+      accessibilityRole={accessibilityRole ?? (onPress ? 'button' : undefined)}
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
-      accessibilityState={accessibilityState}
+      accessibilityState={{ ...accessibilityState, disabled }}
     >
       <Animated.View style={[style, { transform: [{ scale }] }]}>
         {children}

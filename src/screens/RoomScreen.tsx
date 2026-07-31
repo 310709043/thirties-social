@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Alert,
   TextInput, StyleSheet, RefreshControl, KeyboardAvoidingView,
@@ -11,8 +11,8 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkeleton } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, canCreateRoom, getTier, ROOM_CREATE_COST, canMatch, MATCH_WICK_COST, roomCreateCostsWick, recordRoomCreated } from '../hooks/useAppStore';
-import { getOrCreatePresetRoom, getRoomById, subscribeToRoomMessages, sendRoomMessage, createRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence, spendWicks, reactToRoomMessage } from '../lib/db';
+import { useAppStore, canCreateRoom, getTier, ROOM_CREATE_COST, canMatch, MATCH_WICK_COST, matchCostsWick, freeConnectionsRemaining, roomCreateCostsWick, recordRoomCreated } from '../hooks/useAppStore';
+import { getOrCreatePresetRoom, getRoomById, subscribeToRoomMessages, sendRoomMessage, createRoom, deleteOwnEmptyRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence, spendWicks, reactToRoomMessage } from '../lib/db';
 import { RESONANCE_SYMBOLS, resonanceLabel } from '../lib/resonance';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
@@ -24,7 +24,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Room'>;
 
 export default function RoomScreen({ navigation, route }: Props) {
   const { roomKey, roomId: paramRoomId } = route.params;
-  const { seed, direction, lang, identityKind, deviceId, wicks } = useAppStore();
+  const { seed, direction, lang, identityKind, deviceId, wicks, gender, vigil } = useAppStore();
   const p = DIRECTIONS[direction];
   const [inviting, setInviting] = useState<{senderId: string; seed: string; zh: string; en: string; age: number} | null>(null);
   const [inviteSent, setInviteSent] = useState(false);
@@ -32,6 +32,7 @@ export default function RoomScreen({ navigation, route }: Props) {
   const [roomTopic, setRoomTopic] = useState('');
   const [roomCreated, setRoomCreated] = useState(false);
   const [creatingRoom, setCreatingRoom] = useState(false);
+  const creatingRoomRef = useRef(false);
   const [identitySeed, setIdentitySeed] = useState(seed);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [room, setRoom] = useState<DbRoom | null>(null);
@@ -40,6 +41,7 @@ export default function RoomScreen({ navigation, route }: Props) {
   // each live snapshot REPLACES liveMessages, and older pages must survive that.
   const [olderMessages, setOlderMessages] = useState<DbRoomMessage[]>([]);
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [inputText, setInputText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -107,16 +109,9 @@ export default function RoomScreen({ navigation, route }: Props) {
   // Guests can join rooms but not open them.
   const openCreateRoom = () => {
     if (!canCreateRoom()) {
-      Alert.alert(
-        lang === 'en' ? 'Create an account to open a room' : '開火盆需要先建立帳號',
-        lang === 'en'
-          ? 'Guests can join rooms. Create an account to open your own.'
-          : '訪客可以參與火盆。建立帳號後即可開設自己的火盆。',
-        [
-          { text: lang === 'en' ? 'Not now' : '稍後', style: 'cancel' },
-          { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
-        ],
-      );
+      // A guest who tapped "+ open" expressed clear intent. Route straight to
+      // registration instead of leaving them on an empty, unusable room shell.
+      navigation.replace('Auth', { mode: 'register' });
       return;
     }
     setShowCreateRoom(true);
@@ -226,7 +221,7 @@ export default function RoomScreen({ navigation, route }: Props) {
   }, [inviteSent]);
 
   const handleSend = async () => {
-    if (!inputText.trim()) return;
+    if (sendingRef.current || !inputText.trim()) return;
     if (!roomId) {
       Alert.alert(
         lang === 'en' ? 'Still loading' : '載入中',
@@ -250,8 +245,11 @@ export default function RoomScreen({ navigation, route }: Props) {
       );
       return;
     }
+    const content = inputText.trim();
+    sendingRef.current = true;
     setSending(true);
-    const result = await sendRoomMessage({ roomId, content: inputText.trim(), senderSeed: identitySeed });
+    const result = await sendRoomMessage({ roomId, content, senderSeed: identitySeed });
+    sendingRef.current = false;
     setSending(false);
     if (result === true) {
       setInputText('');
@@ -467,6 +465,8 @@ export default function RoomScreen({ navigation, route }: Props) {
           ) : isGuestUser ? (
             // Guests can watch the room, but speaking requires an account.
             <TouchableOpacity onPress={promptRegister}
+              accessibilityRole="button"
+              accessibilityLabel={lang === 'en' ? 'Create an account to speak in this brazier' : '建立帳號，在火盆發言'}
               style={[styles.identityComposerRow, { backgroundColor: p.surface, borderColor: p.line, justifyContent: 'center', gap: 8 }]}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center' }}>
                 {lang === 'en' ? 'You’re watching as a guest · ' : '你正以訪客身分旁觀 · '}
@@ -521,7 +521,7 @@ export default function RoomScreen({ navigation, route }: Props) {
                   </GlassCard>
                   <TouchableOpacity
                     onPress={async () => {
-                      if (creatingRoom || roomTopic.trim().length === 0) return;
+                      if (creatingRoomRef.current || roomTopic.trim().length === 0) return;
                       const free = getTier() === 'free';
                       // Free users get 1 free room/day; beyond that it costs wicks. Vigil free.
                       const mustPay = roomCreateCostsWick();
@@ -538,15 +538,33 @@ export default function RoomScreen({ navigation, route }: Props) {
                         );
                         return;
                       }
+                      creatingRoomRef.current = true;
                       setCreatingRoom(true);
                       const newRoom = await createRoom({ topicZh: roomTopic.trim() });
                       if (newRoom) {
-                        if (mustPay) await spendWicks(ROOM_CREATE_COST, 'open_room');
-                        else if (free) await recordRoomCreated();
+                        if (mustPay) {
+                          const paid = await spendWicks(ROOM_CREATE_COST, 'open_room', newRoom.id);
+                          if (!paid.ok) {
+                            await deleteOwnEmptyRoom(newRoom.id);
+                            Alert.alert(
+                              lang === 'en' ? 'Could not open room' : '無法開啟火盆',
+                              lang === 'en' ? 'No wicks were used. Please try again.' : '沒有扣除燭芯，請再試一次。',
+                            );
+                            creatingRoomRef.current = false;
+                            setCreatingRoom(false);
+                            return;
+                          }
+                        } else if (free) await recordRoomCreated();
                         setRoomId(newRoom.id);
                         setRoom(newRoom);
                         setRoomCreated(true);
+                      } else {
+                        Alert.alert(
+                          lang === 'en' ? 'Could not open room' : '無法開啟火盆',
+                          lang === 'en' ? 'Check your connection and try again.' : '請檢查網路後再試一次。',
+                        );
                       }
+                      creatingRoomRef.current = false;
                       setCreatingRoom(false);
                     }}
                     disabled={creatingRoom || roomTopic.trim().length === 0}
@@ -613,15 +631,26 @@ export default function RoomScreen({ navigation, route }: Props) {
                       ? 'A 30-minute window opens. They see your sigil — nothing else — and get a knock when you speak.'
                       : '會開啟一段 30 分鐘的窗口。對方只看到你的識別，你開口時他們會收到輕輕的一聲敲門。'}
                   </Text>
+                  <Text style={[styles.inviteHint, { color: p.accent, marginTop: -4 }]}>
+                    {vigil
+                      ? (lang === 'en' ? 'Vigil connection · no limit, no connection charge.' : '守夜連結 · 不限次、不扣燭芯。')
+                      : gender === 'female'
+                        ? (lang === 'en' ? 'Women connect without a daily limit or connection charge.' : '女用戶一對一連結不限次，不扣燭芯。')
+                        : matchCostsWick()
+                          ? (lang === 'en' ? `Speaking in this connection costs ${MATCH_WICK_COST} wick.` : `在這段連結開口後會扣 ${MATCH_WICK_COST} 燭芯。`)
+                          : (lang === 'en'
+                            ? `${freeConnectionsRemaining()} free connections left today.`
+                            : `今天還有 ${freeConnectionsRemaining()} 次免費連結。`)}
+                  </Text>
                   <TouchableOpacity
                     onPress={() => {
                       // Same daily free-connection quota as random matching.
                       if (!canMatch()) {
                         Alert.alert(
-                          lang === 'en' ? 'Out of free connections' : '今日免費配對已用完',
+                          lang === 'en' ? 'Out of free 1-on-1s' : '今日免費一對一已用完',
                           lang === 'en'
                             ? `You've used today's free connections. Each now costs ${MATCH_WICK_COST} wick — top up, or go Vigil for unlimited.`
-                            : `今日免費配對已用完，之後每次需 ${MATCH_WICK_COST} 燭芯。可購買燭芯，或升級守夜人享無限。`,
+                            : `今日免費一對一已用完，之後每次需 ${MATCH_WICK_COST} 燭芯。可購買燭芯，或升級守夜人享無限。`,
                           [
                             { text: lang === 'en' ? 'OK' : '知道了', style: 'cancel' },
                             { text: lang === 'en' ? 'Upgrade' : '升級', onPress: () => navigation.push('Upgrade') },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, Image, Alert, ActivityIndicator,
 } from 'react-native';
@@ -69,22 +69,27 @@ export default function ProfileScreen({ navigation }: Props) {
     gender, ageBracket, relationshipStatus, relationshipShape, seeking, boundary, freeTimes, region, quote, loftVisible,
   } = useAppStore();
   const p = DIRECTIONS[direction];
+  const tier = getTier();
   const [album, setAlbum] = useState<AlbumPhoto[]>([]);
   const [uploading, setUploading] = useState(false);
+  const uploadingRef = useRef(false);
   const [diary, setDiary] = useState<DiaryEntry[]>([]);
   const [diaryExpanded, setDiaryExpanded] = useState(false);
   const [bonds, setBonds] = useState<DbBond[]>([]);
   const [openingBond, setOpeningBond] = useState<string | null>(null);
+  const openingBondRef = useRef(false);
   const [showIdentityStyles, setShowIdentityStyles] = useState(false);
   useEffect(() => { getAlbum().then(setAlbum); getDiaryEntries().then(setDiary); fetchMyBonds().then(setBonds); }, []);
 
   const openBondChat = async (bond: DbBond) => {
-    if (openingBond) return;
+    if (openingBondRef.current) return;
     const uid = getCurrentUid();
     const otherId = bond.users.find(u => u !== uid);
     if (!otherId) return;
+    openingBondRef.current = true;
     setOpeningBond(bond.id);
     const conv = await createConversation({ userBId: otherId });
+    openingBondRef.current = false;
     setOpeningBond(null);
     if (conv) {
       navigation.push('Chat', {
@@ -132,7 +137,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const ALBUM_MAX = 6;
   const addPhoto = async () => {
-    if (uploading || album.length >= ALBUM_MAX) return;
+    if (uploadingRef.current || album.length >= ALBUM_MAX) return;
     // Guests can browse but not build a profile — nudge them to create an account.
     if (getTier() === 'guest') {
       Alert.alert(
@@ -147,8 +152,10 @@ export default function ProfileScreen({ navigation }: Props) {
     }
     const uri = await pickImage();
     if (!uri) return;
+    uploadingRef.current = true;
     setUploading(true);
     const up = await uploadAlbumPhoto(uri);
+    uploadingRef.current = false;
     setUploading(false);
     if (up && (await addAlbumPhoto(up))) {
       setAlbum(a => [...a, up]);
@@ -224,6 +231,8 @@ export default function ProfileScreen({ navigation }: Props) {
                 </Text>
               </View>
               <TouchableOpacity onPress={() => navigation.push('Upgrade')}
+                accessibilityRole="button"
+                accessibilityLabel={lang === 'en' ? `${wicks} wicks, buy more` : `${wicks} 燭芯，購買更多`}
                 style={{ alignItems: 'center', gap: 2, backgroundColor: p.accentSoft, borderWidth: 0.5, borderColor: p.accent + '40', borderRadius: 14, padding: 10 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <WickGlyph size={12} color={p.accent} />
@@ -236,9 +245,18 @@ export default function ProfileScreen({ navigation }: Props) {
             </View>
             <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: p.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.ink }}>
-                {vigil ? (lang === 'en' ? 'Vigil member' : '守夜會員') : (lang === 'en' ? 'Free plan' : '免費方案')}
+                {tier === 'guest'
+                  ? (lang === 'en' ? 'Guest mode · browse only' : '訪客模式 · 僅供瀏覽')
+                  : vigil
+                  ? (lang === 'en' ? 'Vigil member · unlimited' : '守夜會員 · 不限次')
+                  : gender === 'female'
+                    ? (lang === 'en' ? 'Free plan · unlimited connections' : '免費方案 · 連結不限次')
+                    : (lang === 'en' ? 'Free plan · daily allowance' : '免費方案 · 每日免費額度')}
               </Text>
-              <TouchableOpacity onPress={() => navigation.push('Upgrade')}>
+              <TouchableOpacity onPress={() => navigation.push('Upgrade')} accessibilityRole="button"
+                accessibilityLabel={vigil
+                  ? (lang === 'en' ? 'Manage Vigil membership' : '管理守夜會員')
+                  : (lang === 'en' ? 'Upgrade to Vigil' : '升級守夜會員')}>
                 <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
                   {vigil ? (lang === 'en' ? 'manage' : '管理') : (lang === 'en' ? 'upgrade →' : '升級 →')}
                 </Text>
@@ -308,7 +326,7 @@ export default function ProfileScreen({ navigation }: Props) {
                     ? (lang === 'en' ? currentStyle.en : currentStyle.zh)
                     : (lang === 'en' ? 'Current style' : '目前樣式')}
                   {' · '}
-                  {lang === 'en' ? 'appearance only, never affects matching' : '只改外觀，不影響配對'}
+                  {lang === 'en' ? 'appearance only, never affects who you meet' : '只改外觀，不影響遇見誰'}
                 </Text>
               </View>
               <Text style={{ color: p.accent, fontSize: 18 }}>{showIdentityStyles ? '−' : '+'}</Text>
@@ -359,6 +377,9 @@ export default function ProfileScreen({ navigation }: Props) {
               </Text>
             </View>
             <TouchableOpacity onPress={() => setLoftVisible(!loftVisible)}
+              accessibilityRole="switch"
+              accessibilityLabel={lang === 'en' ? 'Show my page in the Loft' : '在夜閣顯示我的頁面'}
+              accessibilityState={{ checked: loftVisible }}
               style={{ width: 40, height: 24, borderRadius: 24, backgroundColor: loftVisible ? '#e8a557' : 'rgba(245,226,196,0.2)', justifyContent: 'center' }}
               activeOpacity={0.8}>
               <View style={{ position: 'absolute', left: loftVisible ? 18 : 2, top: 2, width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' }} />
@@ -414,8 +435,8 @@ export default function ProfileScreen({ navigation }: Props) {
               <GlassCard p={p} padding={20} radius={18}>
                 <Text style={{ fontFamily: lang === 'en' ? 'EBGaramond-Italic' : 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center', lineHeight: 22 }}>
                   {lang === 'en'
-                    ? 'What you write before matching is kept here — only on this device, only for you.'
-                    : '你配對前寫下的心情會留在這裡。只存在這台裝置上，只有你看得到。'}
+                    ? 'What you write before a conversation is kept here — only on this device, only for you.'
+                    : '你在對話前寫下的心情會留在這裡。只存在這台裝置上，只有你看得到。'}
                 </Text>
               </GlassCard>
             ) : (
@@ -460,6 +481,9 @@ export default function ProfileScreen({ navigation }: Props) {
               ))}
               {album.length < ALBUM_MAX && (
                 <TouchableOpacity onPress={addPhoto} disabled={uploading}
+                  accessibilityRole="button"
+                  accessibilityLabel={lang === 'en' ? 'Add a profile photo' : '新增個人照片'}
+                  accessibilityState={{ disabled: uploading }}
                   style={{ width: 100, height: 100, borderRadius: 12, borderWidth: 1, borderColor: p.line, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', backgroundColor: p.glass }}>
                   {uploading ? <ActivityIndicator color={p.accent} /> : <Text style={{ fontSize: 28, color: p.muted }}>＋</Text>}
                 </TouchableOpacity>

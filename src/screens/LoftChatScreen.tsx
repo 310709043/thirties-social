@@ -61,8 +61,12 @@ export default function LoftChatScreen({ navigation, route }: Props) {
   const [veilLevel, setVeilLevel] = useState(1);
   const [showVeil, setShowVeil] = useState(false);
   const [lifting, setLifting] = useState(false);
+  const liftingRef = useRef(false);
   const [otherLeft, setOtherLeft] = useState(false);
   const iLeftRef = useRef(false);
+  const textSendingRef = useRef(false);
+  const paidPulsePendingRef = useRef(false);
+  const paidVeilLevelRef = useRef<number | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   // Subscribe to real-time messages
@@ -143,7 +147,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
   const photoRevealed = veilLevel >= 4;
 
   const sendText = async () => {
-    if (!message.trim() || !loftConversationId) return;
+    if (textSendingRef.current || !message.trim() || !loftConversationId) return;
     // Same rule as the 1:1 chat: the filter only runs if the user turned it on.
     const check = autoFilter ? filterMessage(message.trim()) : { blocked: false };
     if (check.blocked) {
@@ -153,7 +157,10 @@ export default function LoftChatScreen({ navigation, route }: Props) {
       );
       return;
     }
-    const ok = await sendLoftMessage({ loftConversationId, content: message.trim() });
+    const content = message.trim();
+    textSendingRef.current = true;
+    const ok = await sendLoftMessage({ loftConversationId, content });
+    textSendingRef.current = false;
     if (!ok) {
       Alert.alert(
         lang === 'en' ? 'Failed to send' : '\u9001\u51FA\u5931\u6557',
@@ -172,24 +179,31 @@ export default function LoftChatScreen({ navigation, route }: Props) {
     if (pulseBusyRef.current || !loftConversationId) return;
     pulseBusyRef.current = true;
     try {
-      const result = await spendWicks(1, 'pulse', loftConversationId);
-      if (!result.ok) {
-        // Testers read a silent failure as a dead button — say why it failed.
-        hapticWarning();
-        Alert.alert(
-          lang === 'en' ? 'Not enough wicks' : '燭芯不夠了',
-          lang === 'en'
-            ? 'A pulse costs 1 wick. You can get more in the shop.'
-            : '悸動需要 1 燭芯。可以到商店補一些。',
-        );
-        return;
+      if (!paidPulsePendingRef.current) {
+        const result = await spendWicks(1, 'pulse', loftConversationId);
+        if (!result.ok) {
+          // Testers read a silent failure as a dead button — say why it failed.
+          hapticWarning();
+          Alert.alert(
+            lang === 'en' ? 'Not enough wicks' : '燭芯不夠了',
+            lang === 'en'
+              ? 'A pulse costs 1 wick. You can get more in the shop.'
+              : '悸動需要 1 燭芯。可以到商店補一些。',
+          );
+          return;
+        }
+        paidPulsePendingRef.current = true;
       }
       hapticMedium();
       const ok = await sendLoftMessage({ loftConversationId, content: emoji, messageType: 'pulse' });
-      if (!ok) {
+      if (ok) {
+        paidPulsePendingRef.current = false;
+      } else {
         Alert.alert(
           lang === 'en' ? 'Failed to send' : '送出失敗',
-          lang === 'en' ? 'Please try again.' : '請稍後再試一次。',
+          lang === 'en'
+            ? 'Your payment is saved. Try again — you will not be charged twice.'
+            : '付款已記錄。請再試一次，不會重複扣款。',
         );
       }
     } finally {
@@ -426,25 +440,47 @@ export default function LoftChatScreen({ navigation, route }: Props) {
                   // buys reach/efficiency; advancing intimacy is paid by everyone.
                   // Persist the new level so it survives re-entry and is never
                   // charged twice. Guard against double-taps while the write is in flight.
-                  if (lifting || wicks < VEIL_LIFT_COST) return;
+                  const next = veilLevel + 1;
+                  if (liftingRef.current || (paidVeilLevelRef.current !== next && wicks < VEIL_LIFT_COST)) return;
+                  liftingRef.current = true;
                   setLifting(true);
-                  const r = await spendWicks(VEIL_LIFT_COST, 'veil_lift', loftConversationId);
-                  if (r.ok) {
-                    const next = veilLevel + 1;
-                    setVeilLevel(next);
-                    if (loftConversationId) await bumpLoftVeilLevel(loftConversationId, next);
+                  if (paidVeilLevelRef.current !== next) {
+                    const r = await spendWicks(VEIL_LIFT_COST, 'veil_lift', loftConversationId);
+                    if (!r.ok) {
+                      liftingRef.current = false;
+                      setLifting(false);
+                      Alert.alert(
+                        lang === 'en' ? 'Payment failed' : '扣款失敗',
+                        lang === 'en' ? 'No wicks were used. Please try again.' : '沒有扣除燭芯，請再試一次。',
+                      );
+                      return;
+                    }
+                    paidVeilLevelRef.current = next;
                   }
+                  const saved = await bumpLoftVeilLevel(loftConversationId, next);
+                  if (saved) {
+                    setVeilLevel(next);
+                    paidVeilLevelRef.current = null;
+                  } else {
+                    Alert.alert(
+                      lang === 'en' ? 'Could not save' : '無法儲存',
+                      lang === 'en'
+                        ? 'Your payment is saved. Try again — you will not be charged twice.'
+                        : '付款已記錄。請再試一次，不會重複扣款。',
+                    );
+                  }
+                  liftingRef.current = false;
                   setLifting(false);
                 }}
-                  disabled={wicks < VEIL_LIFT_COST || lifting}
-                  style={[styles.liftBtn, { backgroundColor: wicks >= VEIL_LIFT_COST ? L.ink : L.line }]}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: wicks >= VEIL_LIFT_COST ? '#f5e2c4' : L.muted }}>
+                  disabled={(paidVeilLevelRef.current !== veilLevel + 1 && wicks < VEIL_LIFT_COST) || lifting}
+                  style={[styles.liftBtn, { backgroundColor: (paidVeilLevelRef.current === veilLevel + 1 || wicks >= VEIL_LIFT_COST) ? L.ink : L.line }]}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: (paidVeilLevelRef.current === veilLevel + 1 || wicks >= VEIL_LIFT_COST) ? '#f5e2c4' : L.muted }}>
                     {t(`veilLift${veilLevel + 1}` as any, lang)}
                   </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    <WickGlyph size={12} color={wicks >= VEIL_LIFT_COST ? '#f5e2c4' : L.muted} />
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: wicks >= VEIL_LIFT_COST ? '#f5e2c4' : L.muted }}>
-                      {VEIL_LIFT_COST}
+                    <WickGlyph size={12} color={(paidVeilLevelRef.current === veilLevel + 1 || wicks >= VEIL_LIFT_COST) ? '#f5e2c4' : L.muted} />
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: (paidVeilLevelRef.current === veilLevel + 1 || wicks >= VEIL_LIFT_COST) ? '#f5e2c4' : L.muted }}>
+                      {paidVeilLevelRef.current === veilLevel + 1 ? 0 : VEIL_LIFT_COST}
                     </Text>
                   </View>
                 </TouchableOpacity>
