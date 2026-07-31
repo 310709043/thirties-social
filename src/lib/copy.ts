@@ -10,9 +10,9 @@ const COPY: Record<string, { zh: string; en: string }> = {
   ob1Title:        { zh: '這裡沒有人要你完美', en: 'No one needs you to be perfect here' },
   ob1Body:         { zh: '不用名字、不用照片。你只是一個今晚想被聽見的人。', en: 'No name, no face — just someone who wants to be heard tonight.' },
   ob2Title:        { zh: '說出口，就讓它慢慢熄滅', en: 'Say it — then let it fade' },
-  ob2Body:         { zh: '和一個人靜靜說說話，結束後對話就會刪除，沒有人能回頭翻看。隨時可以離開、封鎖或檢舉。', en: 'Talk quietly with one person; when it ends the conversation is deleted and no one can scroll back. Leave, block or report any time.' },
+  ob2Body:         { zh: '和一個人靜靜說說話。結束了，對話就刪掉，誰都翻不回來。', en: 'Talk quietly with one person. When it ends, the conversation is gone — no one can scroll back.' },
   ob3Title:        { zh: '在這裡，大家都一樣', en: 'Here, everyone is the same' },
-  ob3Body:         { zh: '可以待在火盆旁、找一個人說說話，或只是靜靜看著。不用有事，也可以來。', en: 'Sit by a brazier, find one person to talk to, or just watch quietly. You don\'t need a reason to be here.' },
+  ob3Body:         { zh: '待在火盆旁、找個人說話，或只是看著。沒事也能來。', en: 'Sit by a brazier, find someone to talk to, or just watch. No reason needed.' },
   obContinue:      { zh: '我準備好了',       en: 'I am ready' },
   obSigil:         { zh: '今晚的識別符',     en: "Tonight's sigil" },
   obSigilHint:     { zh: '這是你今天的樣子。明天它會換掉。', en: 'This is how you appear today. Tomorrow it changes.' },
@@ -26,7 +26,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   moodSkip:        { zh: '什麼都不想說，先待著就好', en: 'Nothing to say — just stay a while' },
   moodSuggested:   { zh: '今晚有人在說',     en: 'People are talking about' },
   // First-time guidance — answers "what can I do here?"
-  moodGuide:       { zh: '可以寫下此刻、找個火盆待著，或和一個人靜靜說說話。', en: 'Write how you feel, sit by a brazier, or talk quietly with one person.' },
+  moodGuide:       { zh: '寫下此刻、找個火盆待著，或找人靜靜說說話。', en: 'Write how you feel, sit by a brazier, or find someone to talk to.' },
 
   // Rooms
   room_lonely:     { zh: '今晚很孤單',       en: 'lonely tonight' },
@@ -127,14 +127,14 @@ const COPY: Record<string, { zh: string; en: string }> = {
   wickName:         { zh: '燭芯',             en: 'Wicks' },
   wickBalance:      { zh: '剩餘',             en: 'balance' },
   upgradeTitle:     { zh: '兩種陪你的方式',   en: 'Two ways to stay' },
-  upgradeBlurb:     { zh: '不收廣告。不賣資料。不用會員等級換取曝光。', en: 'No ads. No data sold. No tiers buy you visibility.' },
+  upgradeBlurb:     { zh: '沒有廣告，也不賣你的資料。付費只是多一點選擇。', en: 'No ads, and we never sell your data. Paying just gives you a bit more choice.' },
   tierFree:         { zh: '一根蠟燭',         en: 'One Candle' },
   tierFreeSub:      { zh: '每日 10 次一對一 · 每週夜閣 1 次 · 每日 2 芯', en: '10 one-to-one conversations/day · Loft weekly · 2 wicks/day' },
   tierVigil:        { zh: '守夜會員',         en: 'Vigil' },
   tierVigilPrice:   { zh: 'NT$ 390 / 月',     en: 'NT$ 390 / mo' },
   tierVigilBlurb:   { zh: '不限次一對一 · 夜閣無限進出 · 每日 5 芯 · 全部 16 種身份 · 免費開火盆 · 可提出「留下彼此」', en: 'Unlimited one-to-one conversations · Loft every night · 5 wicks/day · all 16 identities · free rooms · may propose "keeping each other"' },
   wicksTitle:       { zh: '一次性 · 燭芯',    en: 'One-off · Wicks' },
-  wicksBlurb:       { zh: '燭芯只用於額外次數與雙方自願的靠近功能；一般聊天不扣燭芯。', en: 'Wicks are only for extra usage and mutually chosen closer features; ordinary talking costs no wicks.' },
+  wicksBlurb:       { zh: '聊天不用花燭芯。想多聊、想靠近一點時，才用得到。', en: 'Talking is free. Wicks are only for more time, or getting a little closer.' },
   wick10:           { zh: '10 芯',            en: '10 wicks' },
   wick30:           { zh: '30 芯',            en: '30 wicks' },
   wick100:          { zh: '100 芯',           en: '100 wicks' },
@@ -157,7 +157,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
 
   // Tonight mode — state picker before entering match / loft
   tonightModeTitle:   { zh: '今晚你在哪個位置？', en: 'Where are you tonight?' },
-  tonightModeHint:    { zh: '對方會看到這個，幫你們找到同頻的人', en: 'The other person sees this — so you find someone on the same wavelength' },
+  tonightModeHint:    { zh: '對方會看到，好知道今晚怎麼陪你', en: 'They\'ll see this, so they know how to be there for you tonight' },
   modeJustHere:       { zh: '只想待著',       en: 'Just here' },
   modeJustHereDesc:   { zh: '不用說話，存在就好', en: 'No words needed — just being' },
   modeWantToTalk:     { zh: '想說說話',       en: 'Want to talk' },
