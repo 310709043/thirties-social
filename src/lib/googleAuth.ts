@@ -34,8 +34,17 @@ const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 let _configured = false;
 export function configureGoogle(): void {
   if (_configured || !WEB_CLIENT_ID || !GS) return;
-  GS.configure({ webClientId: WEB_CLIENT_ID });
-  _configured = true;
+  // iOS needs an iosClientId / GoogleService-Info.plist to configure Google
+  // Sign-In; without it the native module hard-fails at startup. This app
+  // ships Android-only, so skip Google config on iOS entirely (the button
+  // hides itself via isGoogleAvailable()).
+  if (Platform.OS === 'ios') return;
+  try {
+    GS.configure({ webClientId: WEB_CLIENT_ID });
+    _configured = true;
+  } catch {
+    // don't let an unconfigurable Google Sign-In crash app startup
+  }
 }
 
 /** True only when both a web client id and the native module are present. */
