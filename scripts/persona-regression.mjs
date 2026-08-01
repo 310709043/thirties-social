@@ -17,6 +17,9 @@ function check(name, condition) {
 const guest = connectionPolicy({ guest: true, vigil: false, gender: 'female', connectionsToday: 0, wicks: 99 });
 check('guest stays browse-only even with cached female profile and wicks', !guest.canConnect && !guest.unlimited && !guest.costsWick);
 
+const unconfigured = connectionPolicy({ guest: false, vigil: true, gender: null, connectionsToday: 0, wicks: 99 });
+check('an unconfigured profile is blocked without being assigned a gender journey', unconfigured.persona === 'unconfigured' && !unconfigured.canConnect && !unconfigured.unlimited && !unconfigured.costsWick);
+
 const woman = connectionPolicy({ guest: false, vigil: false, gender: 'female', connectionsToday: 999, wicks: 0 });
 check('registered women have unlimited zero-charge connections', woman.canConnect && woman.unlimited && !woman.costsWick);
 

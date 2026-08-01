@@ -1,4 +1,4 @@
-export type ConnectionPersona = 'guest' | 'female' | 'male' | 'nonbinary';
+export type ConnectionPersona = 'guest' | 'female' | 'male' | 'unconfigured';
 
 export interface ConnectionPolicy {
   persona: ConnectionPersona;
@@ -16,7 +16,7 @@ export interface ConnectionPolicy {
 export function connectionPolicy(params: {
   guest: boolean;
   vigil: boolean;
-  gender: 'female' | 'male' | 'nonbinary' | null;
+  gender: 'female' | 'male' | null;
   connectionsToday: number;
   wicks: number;
   dailyAllowance?: number;
@@ -30,9 +30,14 @@ export function connectionPolicy(params: {
       ? 'female'
       : params.gender === 'male'
         ? 'male'
-        : 'nonbinary';
+        : 'unconfigured';
 
   if (params.guest) {
+    return { persona, canConnect: false, unlimited: false, costsWick: false, freeRemaining: 0 };
+  }
+  // Never infer a paid or free journey from an absent/legacy profile value.
+  // The user must explicitly choose one of the currently supported options.
+  if (params.gender === null) {
     return { persona, canConnect: false, unlimited: false, costsWick: false, freeRemaining: 0 };
   }
   if (params.vigil || params.gender === 'female') {

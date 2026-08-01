@@ -22,7 +22,7 @@ create table users (
   is_banned           boolean not null default false,
   ban_reason          text,
   -- Setup profile fields (all optional after setup)
-  gender              text check (gender in ('female', 'male', 'nonbinary')),
+  gender              text check (gender in ('female', 'male')),
   age_bracket         text check (age_bracket in ('25-29', '30-34', '35-39', '40-44', '45+')),
   relationship_status text check (relationship_status in ('married', 'longterm', 'separated', 'single', 'complicated')),
   seeking             text[] default '{}',          -- ['listen', 'vent', 'connect', 'loft']

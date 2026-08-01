@@ -82,8 +82,7 @@ https://thirties-landing.vercel.app/?utm_source={platform}&utm_medium=organic_so
 目前官網需要先與 App 對齊：
 
 - 訪客可以瀏覽，但互動前需要建立帳號。
-- 女性一對一不限次；男性／非二元每天 10 次免費，之後才是 1 燭芯。
+- 女性一對一不限次；男性每天 10 次免費，之後才是 1 燭芯。
 - 進行中的訊息會同步；結束時才清除內容。
 - 不宣稱系統能阻止所有截圖。
 - Google Play 公開商品頁尚未開放，社群只能導向 Alpha 報名頁。
-

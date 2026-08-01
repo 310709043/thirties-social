@@ -25,7 +25,14 @@ service cloud.firestore {
              && request.resource.data.freeMatchesUsed is int
              && request.resource.data.freeMatchesUsed == 0
              && request.resource.data.loftFreeUsed is int
-             && request.resource.data.loftFreeUsed == 0;
+             && request.resource.data.loftFreeUsed == 0
+             && request.resource.data.gender == null;
+    }
+
+    function validProfileGender() {
+      return request.resource.data.gender == null
+             || request.resource.data.gender == 'female'
+             || request.resource.data.gender == 'male';
     }
 
     // ── Users ──────────────────────────────────────────
@@ -38,6 +45,7 @@ service cloud.firestore {
       // client-side). Wick increases, vigil and lastRewardDate are server-only
       // (RevenueCat webhook + daily-reward endpoint).
       allow update: if request.auth != null && request.auth.uid == userId
+                    && validProfileGender()
                     && !('isBanned' in request.resource.data.diff(resource.data).affectedKeys())
                     && !('banReason' in request.resource.data.diff(resource.data).affectedKeys())
                     && !('vigil' in request.resource.data.diff(resource.data).affectedKeys())

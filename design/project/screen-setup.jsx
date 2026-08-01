@@ -38,7 +38,6 @@ function SetupChipRow({ p, label, alt, options, value, onPick, multi = false }) 
 function ScreenSetup({ p, lang, identityKind, seed, onDone }) {
   const zh = lang !== 'en';
   const [gender, setGender] = React.useState(null);
-  const [loftRole, setLoftRole] = React.useState(null); // for non-binary: chosen loft role
   const [age, setAge] = React.useState(null);
   const [marriage, setMarriage] = React.useState(null);
   const [shape, setShape] = React.useState(null);
@@ -49,7 +48,7 @@ function ScreenSetup({ p, lang, identityKind, seed, onDone }) {
   const [picks, setPicks] = React.useState([]);
   const [line, setLine] = React.useState('');
 
-  const ready = gender && age && marriage && seeking.length > 0 && boundary && (gender !== 'x' || loftRole);
+  const ready = gender && age && marriage && seeking.length > 0 && boundary;
 
   return (
     <VaporBackground p={p}>
@@ -71,14 +70,13 @@ function ScreenSetup({ p, lang, identityKind, seed, onDone }) {
           ? '這裡的人多半身邊都有一個人。誠實一點，配對才會準。公園永遠不顯示這些，只有夜閣看得到——而且只有你允許的部分。'
           : 'Most people here have someone beside them. Be honest — the matching depends on it. The Park never shows any of this; only the Loft can, and only what you allow.'}</div>
 
-        {/* gender — drives the asymmetric economy; non-binary chooses their loft role */}
+        {/* gender — drives the asymmetric economy */}
         <div style={{ marginTop: 24 }}>
           <Cap p={p}>{zh ? '我是' : 'I am'}</Cap>
-          <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {[
               { v: 'f', zh: '女生', en: 'Woman', note_zh: '夜閣免費 · 請求由你決定', note_en: 'Loft free · you approve requests' },
               { v: 'm', zh: '男生', en: 'Man',   note_zh: '夜閣憑燭芯 · 她同意才扣', note_en: 'Wicks · charged on consent' },
-              { v: 'x', zh: '非二元 · 其他', en: 'Non-binary · other', note_zh: '夜閣角色由你選', note_en: 'You choose your Loft role' },
             ].map(g => (
               <div key={g.v} onClick={() => setGender(g.v)} style={{
                 padding: '14px 10px', borderRadius: 16, cursor: 'pointer',
@@ -97,35 +95,6 @@ function ScreenSetup({ p, lang, identityKind, seed, onDone }) {
               </div>
             ))}
           </div>
-
-          {/* loft role picker — only for non-binary: economy follows ROLE, not gender */}
-          {gender === 'x' && (
-            <div style={{
-              marginTop: 10, padding: '13px 14px', borderRadius: 14,
-              background: p.accentSoft, border: `0.5px solid ${p.accent}40`,
-            }}>
-              <div style={{ fontFamily: '"Noto Serif TC", serif', fontSize: 13, color: p.ink, lineHeight: 1.5 }}>
-                {zh ? '在夜閣，你想當：' : 'In the Loft, you want to be:'}
-              </div>
-              <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {[
-                  { v: 'recv', zh: '被請求的一方', en: 'The one asked', note_zh: '免費進場 · 同意才扣對方的芯', note_en: 'free entry · you approve' },
-                  { v: 'send', zh: '發起請求的一方', en: 'The one asking', note_zh: '憑燭芯 · 對方同意才扣', note_en: 'wicks · charged on consent' },
-                ].map(r => (
-                  <button key={r.v} onClick={() => setLoftRole(r.v)} style={{
-                    padding: '10px 10px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
-                    background: loftRole === r.v ? p.ink : p.surface,
-                    color: loftRole === r.v ? (p.dark ? '#1a1530' : '#fff') : p.ink,
-                    border: `0.5px solid ${loftRole === r.v ? p.ink : p.line}`,
-                    fontFamily: '"Noto Serif TC", serif', fontSize: 12.5, lineHeight: 1.45,
-                  }}>
-                    <div style={{ fontWeight: 500 }}>{zh ? r.zh : r.en}</div>
-                    <div style={{ fontSize: 10, opacity: 0.65, marginTop: 3 }}>{zh ? r.note_zh : r.note_en}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         <SetupChipRow p={p} label={zh ? '年齡' : 'Age'} alt={zh ? 'age' : '年齡'}

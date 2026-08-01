@@ -151,7 +151,7 @@ export default function SetupScreen({ navigation, route }: Props) {
 
   const [step, setStep] = useState<ProfileStep>(0);
   const [gender, setGender] = useState<string | null>(() => editMode
-    ? ({ female: 'f', male: 'm', nonbinary: 'x' } as Record<string, string>)[savedGender ?? ''] ?? null
+    ? ({ female: 'f', male: 'm' } as Record<string, string>)[savedGender ?? ''] ?? null
     : null);
   const [age, setAge] = useState<string | null>(() => editMode ? savedAge : null);
   const [marriage, setMarriage] = useState<string | null>(() => editMode
@@ -189,11 +189,12 @@ export default function SetupScreen({ navigation, route }: Props) {
 
   const handleDone = async () => {
     if (!stepReady || saving) return;
+    const selectedGender: Gender | null = gender === 'f' ? 'female' : gender === 'm' ? 'male' : null;
+    if (!selectedGender) return;
     setSaving(true);
-    const genderMap: Record<string, Gender> = { f: 'female', m: 'male', x: 'nonbinary' };
     try {
       await setProfileFields({
-        gender: genderMap[gender!] ?? 'nonbinary',
+        gender: selectedGender,
         ageBracket: age!,
         relationshipStatus: toSlug(MARRIAGE_ZH, MARRIAGE_EN, MARRIAGE_SLUGS, marriage) ?? marriage!,
         relationshipShape: toSlug(SHAPE_ZH, SHAPE_EN, SHAPE_SLUGS, shape),
@@ -208,7 +209,7 @@ export default function SetupScreen({ navigation, route }: Props) {
         navigation.goBack();
       } else {
         await setSetupDone();
-        analytics.setupComplete(genderMap[gender!] ?? 'nonbinary');
+        analytics.setupComplete(selectedGender);
         navigation.replace('Mood');
       }
     } catch {
@@ -292,7 +293,6 @@ export default function SetupScreen({ navigation, route }: Props) {
                       {[
                         { value: 'f', zh: '女生', en: 'Woman' },
                         { value: 'm', zh: '男生', en: 'Man' },
-                        { value: 'x', zh: '非二元', en: 'Non-binary' },
                       ].map(item => {
                         const selected = gender === item.value;
                         return (

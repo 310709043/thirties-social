@@ -31,7 +31,7 @@ export default function MatchScreen({ navigation, route }: Props) {
   } = route.params;
   const genderLabel = otherGender === 'female' ? (lang === 'en' ? 'Woman' : '女生')
     : otherGender === 'male' ? (lang === 'en' ? 'Man' : '男生')
-    : otherGender === 'nonbinary' ? (lang === 'en' ? 'Non-binary' : '非二元') : null;
+    : null;
   const aboutLine = [genderLabel, otherAge].filter(Boolean).join(' · ');
   const modeLabel = otherTonightMode === 'just_here' ? (lang === 'en' ? 'Just here' : '只想待著')
     : otherTonightMode === 'want_to_talk' ? (lang === 'en' ? 'Wants to talk' : '想說說話')

@@ -20,7 +20,7 @@ Generated from full codebase audit. Each phase lists specific file changes, depe
 **File:** `src/screens/SetupScreen.tsx`
 
 - `handleDone` currently only calls `setSetupDone()`. Change to:
-  1. Map client gender values (`'f'`→`'female'`, `'m'`→`'male'`, `'x'`→`'nonbinary'`) to Supabase/Firestore values
+  1. Map client gender values (`'f'`→`'female'`, `'m'`→`'male'`) to Supabase/Firestore values
   2. Call `updateUser({ gender, ageBracket, relationshipStatus, seeking, boundary, region, quote })` before `setSetupDone()`
   3. Call `setGender(gender)` to push to AppState
 - Also needs `import { updateUser } from '../lib/db'`
@@ -36,13 +36,12 @@ Same for `relationshipStatus` — client values (Chinese or English chips) need 
 
 **Decision needed:** `seeking` chip values differ between zh/en and Supabase enums. Client chips: `['一個樹洞', '情感陪伴', '曖昧', '線上親密', '不設限']`. Supabase expects: `['listen', 'vent', 'connect', 'loft']`. Need a bidirectional mapping.
 
-### 0C. Non-binary role selection
-**File:** `src/screens/SetupScreen.tsx`
+### 0C. Retire unsupported legacy gender values
+**Files:** `src/hooks/useAppStore.ts`, `supabase/migrations/006_limit_gender_options.sql`
 
-When gender `'x'` is selected, show a sub-selector for "Loft role":
-- Options: "進入時當傾聽者" / "進入時當傾訴者" / "今晚再說"
-- Store as `loft_role: 'listener' | 'speaker' | 'undecided'` (new field on DbUser)
-- This controls gender-based pricing: women free, men 5 wicks, non-binary chooses
+- Accept only `female` and `male` from local or server profile data.
+- Normalize any unknown historical value to `null` and mark setup incomplete.
+- Require the user to choose again instead of assigning a pricing journey implicitly.
 
 ### 0D. Display saved data in ProfileScreen
 **File:** `src/screens/ProfileScreen.tsx`
@@ -58,7 +57,7 @@ When gender `'x'` is selected, show a sub-selector for "Loft role":
 **File:** `src/screens/LoftScreen.tsx`
 
 - Read `gender` from AppState
-- Enforce pricing: `gender === 'f'` → free entry (bypass `enterLoft` wick spend or call with 0 cost), `gender === 'm'` → 5 wicks, `gender === 'x'` → check `loft_role` field
+- Enforce pricing: `gender === 'f'` → free entry (bypass `enterLoft` wick spend or call with 0 cost), `gender === 'm'` → 5 wicks
 - Modify `enterLoft()` in `src/lib/db.ts` to accept an optional `overrideCost` parameter, or handle it client-side before calling
 
 ### 0F. Fix gendered Chinese pronouns in copy
@@ -426,7 +425,6 @@ Phase 8 (Supabase) — after Phase 7, if desired
 | 1 | IAP library for SDK 56 | expo-in-app-purchases vs react-native-iap vs RevenueCat | Check SDK 56 compat first |
 | 2 | Server-side receipt validation | Firebase Cloud Function vs RevenueCat vs deferred | Basic client now, Cloud Function before full launch |
 | 3 | Matching algorithm | FIFO vs preference-based vs gender-aware | Preference-based (seeking tags) |
-| 4 | Non-binary Loft role | listener/speaker/undecided | All three options |
 | 5 | Privacy policy hosting | GitHub Pages vs Vercel vs Cloudflare Pages | Cloudflare Pages (free, fast) |
 | 6 | Supabase migration timing | Now vs after App Store launch | After launch |
 | 7 | Free tier conversation limit | Enforce 3/day or leave unlimited | Enforce 3/day (drives Vigil conversion) |
@@ -438,7 +436,7 @@ Phase 8 (Supabase) — after Phase 7, if desired
 
 ### Phase 0 (8 files)
 - `src/hooks/useAppStore.ts` — gender in AppState + setGender
-- `src/screens/SetupScreen.tsx` — save all fields to DB + non-binary role
+- `src/screens/SetupScreen.tsx` — save all fields to DB + binary gender selection
 - `src/screens/ProfileScreen.tsx` — display real user data
 - `src/screens/LoftScreen.tsx` — gender pricing
 - `src/lib/db.ts` — updateUser calls, enterLoft cost override

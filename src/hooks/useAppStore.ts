@@ -25,7 +25,12 @@ async function getDeviceId(): Promise<string> {
   return id;
 }
 
-export type Gender = 'female' | 'male' | 'nonbinary';
+export type Gender = 'female' | 'male';
+
+/** Accept only values that still exist in the profile UI and product policy. */
+export function normalizeGender(value: unknown): Gender | null {
+  return value === 'female' || value === 'male' ? value : null;
+}
 
 interface AppState {
   deviceId: string;
@@ -113,7 +118,7 @@ export async function initStore() {
     AsyncStorage.getItem('wicks'),
     AsyncStorage.getItem('vigil'),
     AsyncStorage.getItem('lang') as Promise<Lang | null>,
-    AsyncStorage.getItem('gender') as Promise<Gender | null>,
+    AsyncStorage.getItem('gender'),
     AsyncStorage.getItem('ageBracket'),
     AsyncStorage.getItem('relationshipStatus'),
     AsyncStorage.getItem('relationshipShape'),
@@ -135,12 +140,19 @@ export async function initStore() {
     AsyncStorage.getItem('loftFreeWeek'),
     AsyncStorage.getItem('guestMatchUsed'),
   ]);
+  const normalizedStoredGender = normalizeGender(storedGender);
+  if (storedGender != null && normalizedStoredGender === null) {
+    await Promise.all([
+      AsyncStorage.removeItem('gender'),
+      AsyncStorage.setItem('setup_done', '0'),
+    ]);
+  }
   _state = {
     ..._state, deviceId, seed,
     direction: storedDir || DEFAULT_DIRECTION, lang: storedLang || 'zh',
-    onboardingDone: storedDone === '1', setupDone: storedSetup === '1',
+    onboardingDone: storedDone === '1', setupDone: storedSetup === '1' && normalizedStoredGender !== null,
     wicks: storedWicks != null ? safeWicks(storedWicks) : 3, vigil: storedVigil === '1',
-    gender: storedGender, ageBracket: storedAge, relationshipStatus: storedRelation,
+    gender: normalizedStoredGender, ageBracket: storedAge, relationshipStatus: storedRelation,
     relationshipShape: storedShape,
     seeking: storedSeeking ? JSON.parse(storedSeeking) : [],
     boundary: storedBoundary,
@@ -195,6 +207,12 @@ async function _syncWithFirebase(
         if (hasServerField(key) || clearMissingAccountField) return AsyncStorage.removeItem(key);
         return Promise.resolve();
       };
+      const rawServerGender = serverNullable('gender', _state.gender);
+      const serverGender = normalizeGender(rawServerGender);
+      const serverSetupDone = options.preserveLocalSetup === false
+        ? dbUser.setupDone
+        : dbUser.setupDone || _state.setupDone;
+      const setupDone = serverSetupDone && serverGender !== null;
       _state = {
         // wicks: coerce through safeWicks so a missing/corrupt ("undefined"/NaN)
         // field can never surface as NaN in the UI or get re-persisted.
@@ -202,13 +220,11 @@ async function _syncWithFirebase(
         wicks: safeWicks(dbUser.wicks), vigil: dbUser.vigil,
         // setupDone is sticky: once finished locally, a fresh/incomplete server
         // doc must never force the user to fill in their profile again.
-        setupDone: options.preserveLocalSetup === false
-          ? dbUser.setupDone
-          : dbUser.setupDone || _state.setupDone,
+        setupDone,
         isBanned: dbUser.isBanned, banReason: dbUser.banReason,
         banExpiresAt: (dbUser as any).banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
-        gender: serverNullable('gender', _state.gender) as Gender | null,
+        gender: serverGender,
         ageBracket: serverNullable('ageBracket', _state.ageBracket),
         relationshipStatus: serverNullable('relationshipStatus', _state.relationshipStatus),
         relationshipShape: serverNullable('relationshipShape', _state.relationshipShape),
@@ -229,10 +245,10 @@ async function _syncWithFirebase(
       await Promise.all([
         AsyncStorage.setItem('wicks', String(safeWicks(dbUser.wicks))),
         AsyncStorage.setItem('vigil', dbUser.vigil ? '1' : '0'),
-        AsyncStorage.setItem('setup_done', dbUser.setupDone ? '1' : '0'),
+        AsyncStorage.setItem('setup_done', setupDone ? '1' : '0'),
         AsyncStorage.setItem('direction', serverDirection),
         AsyncStorage.setItem('lang', serverLang),
-        persistNullable('gender', dbUser.gender),
+        persistNullable('gender', serverGender),
         persistNullable('ageBracket', dbUser.ageBracket),
         persistNullable('relationshipStatus', dbUser.relationshipStatus),
         persistNullable('relationshipShape', (dbUser as any).relationshipShape),
@@ -252,6 +268,11 @@ async function _syncWithFirebase(
       if (!('autoFilter' in (dbUser as any))) {
         updateUser({ autoFilter: false } as any).catch(() => {});
       }
+      // Retire any old/unknown stored value without assigning a new identity on
+      // the user's behalf. They will return to setup and choose explicitly.
+      if (rawServerGender != null && serverGender === null) {
+        updateUser({ gender: null, setupDone: false }).catch(() => {});
+      }
     } else {
       _state = { ..._state, userId, dbSynced: true };
     }
@@ -263,12 +284,15 @@ async function _syncWithFirebase(
       const hasUpdatedField = (key: string) => Object.prototype.hasOwnProperty.call(updated, key);
       const updatedNullable = (key: string, local: string | null): string | null =>
         hasUpdatedField(key) ? ((updated as any)[key] ?? null) : local;
+      const updatedGender = normalizeGender(updatedNullable('gender', _state.gender));
+      const updatedSetupDone = updated.setupDone && updatedGender !== null;
       _state = {
         ..._state, wicks: safeWicks(updated.wicks), vigil: updated.vigil,
         isBanned: updated.isBanned, banReason: updated.banReason,
         banExpiresAt: (updated as any).banExpiresAt?.toMillis?.() ?? null,
         lastRewardDate: lastReward, rewardPending: lastReward !== today,
-        gender: updatedNullable('gender', _state.gender) as Gender | null,
+        setupDone: updatedSetupDone,
+        gender: updatedGender,
         ageBracket: updatedNullable('ageBracket', _state.ageBracket),
         relationshipStatus: updatedNullable('relationshipStatus', _state.relationshipStatus),
         relationshipShape: updatedNullable('relationshipShape', _state.relationshipShape),
@@ -286,6 +310,9 @@ async function _syncWithFirebase(
       // Persist a guaranteed-finite balance (safeWicks) so a cold start never
       // reads back the string "undefined" → NaN.
       AsyncStorage.setItem('wicks', String(safeWicks(updated.wicks)));
+      AsyncStorage.setItem('setup_done', updatedSetupDone ? '1' : '0');
+      if (updatedGender) AsyncStorage.setItem('gender', updatedGender);
+      else AsyncStorage.removeItem('gender');
       notify();
     });
   } catch (e) {
@@ -462,7 +489,7 @@ export function getTier(): Tier {
  * A "connection" = starting a 1:1 chat, whether via random match or a room
  * invite. Vigil is unlimited. Women match free and unlimited — they are the
  * scarce side of this marketplace, and every barrier on them starves the whole
- * app. Guests browse only. Free men/nonbinary users get FREE_DAILY_CONNECTIONS
+ * app. Guests browse only. Free men get FREE_DAILY_CONNECTIONS
  * per day, then each costs MATCH_WICK_COST wicks.
  */
 export function canMatch(): boolean {
@@ -519,6 +546,7 @@ export async function recordMatch(): Promise<boolean> {
     // though every current screen routes them to registration before matching.
     return false;
   }
+  if (_state.gender === null) return false;
   if (getTier() !== 'free') return true;
   if (_state.gender === 'female') return true; // women never consume quota or wicks
   await _resetDailyCountersIfNeeded();

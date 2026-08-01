@@ -35,7 +35,12 @@ check(
 check('new profiles start with exactly 3 wicks', /request\.resource\.data\.wicks == 3/);
 check('new profiles cannot self-grant Vigil', /request\.resource\.data\.vigil == false/);
 check('new profiles cannot start unmoderated', /request\.resource\.data\.isBanned == false/);
+check('new profiles start with gender unconfigured', /validNewUser\(\)[\s\S]*?request\.resource\.data\.gender == null/);
 check('user create invokes the protected initializer', /allow create:[\s\S]*?validNewUser\(\);/);
+check(
+  'profile writes accept only the two supported gender values',
+  /function validProfileGender\(\)[\s\S]*?gender == null[\s\S]*?gender == 'female'[\s\S]*?gender == 'male'[\s\S]*?allow update:[\s\S]*?validProfileGender\(\)/,
+);
 check('wick balances cannot go below zero', /request\.resource\.data\.wicks >= 0/);
 check(
   'banned profiles cannot be deleted client-side',
