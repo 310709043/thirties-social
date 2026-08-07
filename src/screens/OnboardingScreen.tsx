@@ -205,10 +205,12 @@ export default function OnboardingScreen({ navigation }: Props) {
               onPress={async () => {
                 setShowAgeGate(false);
                 analytics.onboardingComplete();
-                // 匿名優先：18+ 確認後直接以訪客身分進場，跳過 email 表單，守住
-                // 「不用註冊 · 不用真名」的核心定位。想登入既有帳號的人走上方
-                // 「已有帳號？登入」入口；email 綁定是設定裡的可選項，不是入場門檻。
-                // 匿名登入若在弱網下失敗，背景重試(_scheduleFirebaseRetry)會補上 uid。
+                // 匿名優先 (delayed signup)：18+ 確認後直接以訪客身分進場、先瀏覽
+                // 感受氛圍，把註冊牆從「一進門」延到「想互動時」——配對/發訊仍需註冊
+                // (見 MoodScreen 的 guest gate)，但先體驗價值再要求承諾，轉化更好。
+                // 與 landing「訪客可以先瀏覽，想互動時再建立帳號」一致。登入既有帳號走
+                // 上方入口；註冊會 linkWithCredential 保留同一 uid。弱網下匿名登入失敗，
+                // 背景重試 (_scheduleFirebaseRetry) 會補上 uid。
                 try { await ensureAnonAuth(); } catch {}
                 await syncAfterAuth();
                 await setOnboardingDone();
