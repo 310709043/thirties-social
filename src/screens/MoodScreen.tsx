@@ -21,6 +21,8 @@ import { useIsForeground } from '../lib/appState';
 import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchTonightRekindles, openRekindle, DbRekindle, sendNightLetter, hasSentTonightLetter, claimTonightLetter, replyToLetter, fetchMyLetterReplies, DbLetter, fetchArrivedEchoes, markEchoRead, DbEcho, createConversation, fetchMyLiveConversations, DbLiveConversation } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
 import { analytics } from '../lib/analytics';
+import { looksLikeCrisis } from '../lib/crisis';
+import { CrisisSupportCard } from '../components/CrisisSupportCard';
 import { addDiaryEntry } from '../lib/diary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../lib/motion';
@@ -156,6 +158,9 @@ export default function MoodScreen({ navigation }: Props) {
   };
   const [text, setText] = useState('');
   const [moodFocused, setMoodFocused] = useState(false);
+  // 自傷念頭 → 溫柔浮現求助資源。每次進場最多一次，不阻擋配對。
+  const [showSupport, setShowSupport] = useState(false);
+  const supportShownRef = useRef(false);
   const [rooms, setRooms] = useState<DbRoom[]>([]);
   const [waiting, setWaiting] = useState(false);
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -478,6 +483,11 @@ export default function MoodScreen({ navigation }: Props) {
   const startMatching = async (mode: TonightMode) => {
     setWaiting(true);
     analytics.matchSearch(text.length);
+    // 「說出口」是最可能吐露自傷念頭的地方：本機偵測，不阻擋配對，只溫柔浮現資源。
+    if (!supportShownRef.current && looksLikeCrisis(text)) {
+      supportShownRef.current = true;
+      setShowSupport(true);
+    }
     // Whatever they wrote tonight is kept for them — it becomes a diary entry
     // (local-only) they can reread on their profile page.
     if (text.trim()) void addDiaryEntry(text);
@@ -1164,6 +1174,7 @@ export default function MoodScreen({ navigation }: Props) {
         <ReleaseWelcome p={p} lang={lang} onDismiss={dismissReleaseWelcome} />
       )}
       {!showReleaseWelcome && showGuide && <FirstTimeGuide p={p} lang={lang} onDismiss={dismissGuide} />}
+      {showSupport && <CrisisSupportCard p={p} lang={lang} onDismiss={() => setShowSupport(false)} />}
     </VaporBackground>
   );
 }

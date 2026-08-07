@@ -18,6 +18,8 @@ import {
 } from '../lib/db';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
 import { filterMessage } from '../lib/filter';
+import { looksLikeCrisis } from '../lib/crisis';
+import { CrisisSupportCard } from '../components/CrisisSupportCard';
 import * as ScreenCapture from 'expo-screen-capture';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -58,6 +60,9 @@ export default function LoftChatScreen({ navigation, route }: Props) {
 
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<DbLoftMessage[]>([]);
+  // 自傷念頭 → 溫柔浮現求助資源。每次進場最多一次，不阻擋送出。
+  const [showSupport, setShowSupport] = useState(false);
+  const supportShownRef = useRef(false);
   const [veilLevel, setVeilLevel] = useState(1);
   const [showVeil, setShowVeil] = useState(false);
   const [lifting, setLifting] = useState(false);
@@ -149,6 +154,11 @@ export default function LoftChatScreen({ navigation, route }: Props) {
   const sendText = async () => {
     if (textSendingRef.current || !message.trim() || !loftConversationId) return;
     // Same rule as the 1:1 chat: the filter only runs if the user turned it on.
+    // 本機、不阻擋的自傷念頭偵測：訊息照常送出，只把 1995 求助資源溫柔推到眼前。
+    if (!supportShownRef.current && looksLikeCrisis(message.trim())) {
+      supportShownRef.current = true;
+      setShowSupport(true);
+    }
     const check = autoFilter ? filterMessage(message.trim()) : { blocked: false };
     if (check.blocked) {
       Alert.alert(
@@ -494,6 +504,7 @@ export default function LoftChatScreen({ navigation, route }: Props) {
           </View>
         </View>
       )}
+      {showSupport && <CrisisSupportCard p={L} lang={lang} onDismiss={() => setShowSupport(false)} />}
     </LinearGradient>
   );
 }
