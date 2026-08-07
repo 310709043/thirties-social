@@ -74,8 +74,8 @@ export const SUPPORT = {
   lineNumber: '1995',
   titleZh: '你不需要一個人撐',
   titleEn: 'You don’t have to carry this alone',
-  bodyZh: '如果現在很難受，安心專線 1995 有人 24 小時願意聽你說。撥打免付費。',
-  bodyEn: 'If tonight feels too heavy, Taiwan’s Mental Health Line 1995 is open 24h, free to call.',
+  bodyZh: '如果現在很難受，安心專線 1995 有人 24 小時願意聽你說。',
+  bodyEn: 'If tonight feels too heavy, Taiwan’s Mental Health Line 1995 is open 24h.',
   dismissZh: '我知道了',
   dismissEn: 'Okay',
 };

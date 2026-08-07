@@ -16,7 +16,8 @@ import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch } fr
 import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationDoc, voteExtendConversation, voteRekindle, voteBond, stampConversationSeed } from '../lib/db';
 import { scheduleRekindleReminder } from '../lib/notifications';
 import { filterMessage } from '../lib/filter';
-import { looksLikeCrisis, SUPPORT } from '../lib/crisis';
+import { looksLikeCrisis } from '../lib/crisis';
+import { CrisisSupportCard } from '../components/CrisisSupportCard';
 import { analytics } from '../lib/analytics';
 import { pickImage, uploadVeiledPhoto, getVeiledPhoto, deleteVeiledPhoto } from '../lib/photos';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -829,24 +830,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             </View>
           )}
           {showSupport && (
-            <View style={[styles.sheetOverlay, { justifyContent: 'center', paddingHorizontal: 28 }]}>
-              <GlassCard p={p} padding={24} radius={22}>
-                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 17, color: p.ink, textAlign: 'center', marginBottom: 12 }}>
-                  {lang === 'en' ? SUPPORT.titleEn : SUPPORT.titleZh}
-                </Text>
-                <Text style={{ fontFamily: 'NotoSerifTC-Light', fontSize: 14, lineHeight: 22, color: p.muted, textAlign: 'center', marginBottom: 8 }}>
-                  {lang === 'en' ? SUPPORT.bodyEn : SUPPORT.bodyZh}
-                </Text>
-                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 30, fontWeight: '700', color: p.accent, textAlign: 'center', marginBottom: 18 }}>
-                  {SUPPORT.lineNumber}
-                </Text>
-                <TouchableOpacity onPress={() => setShowSupport(false)} style={{ alignItems: 'center', paddingVertical: 10 }}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink }}>
-                    {lang === 'en' ? SUPPORT.dismissEn : SUPPORT.dismissZh}
-                  </Text>
-                </TouchableOpacity>
-              </GlassCard>
-            </View>
+            <CrisisSupportCard p={p} lang={lang} onDismiss={() => setShowSupport(false)} />
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>
