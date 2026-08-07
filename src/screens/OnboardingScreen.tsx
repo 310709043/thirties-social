@@ -9,9 +9,11 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { VaporBackground, SoftButton, Logo, FadeInUp } from '../components/ui';
-import { useAppStore } from '../hooks/useAppStore';
+import { useAppStore, setOnboardingDone, syncAfterAuth } from '../hooks/useAppStore';
 import { MOTION, USE_NATIVE_DRIVER, useReduceMotion } from '../lib/motion';
 import { analytics } from '../lib/analytics';
+import { ensureAnonAuth } from '../lib/db';
+import { hapticSuccess } from '../lib/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 
@@ -200,10 +202,19 @@ export default function OnboardingScreen({ navigation }: Props) {
               variant="primary"
               size="lg"
               full
-              onPress={() => {
+              onPress={async () => {
                 setShowAgeGate(false);
                 analytics.onboardingComplete();
-                navigation.replace('Auth', { mode: 'register' });
+                // 匿名優先：18+ 確認後直接以訪客身分進場，跳過 email 表單，守住
+                // 「不用註冊 · 不用真名」的核心定位。想登入既有帳號的人走上方
+                // 「已有帳號？登入」入口；email 綁定是設定裡的可選項，不是入場門檻。
+                // 匿名登入若在弱網下失敗，背景重試(_scheduleFirebaseRetry)會補上 uid。
+                try { await ensureAnonAuth(); } catch {}
+                await syncAfterAuth();
+                await setOnboardingDone();
+                analytics.authSuccess('guest');
+                hapticSuccess();
+                navigation.replace('Setup');
               }}
             >
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.dark ? '#1a1530' : '#fff' }}>
