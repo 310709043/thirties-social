@@ -180,6 +180,30 @@ export async function initStore() {
 
 let _userUnsubscribe: (() => void) | null = null;
 
+// Cold-start weak-network self-heal. If the first anonymous sign-in / sync fails
+// (a momentary blip the instant the app opens), a new user would otherwise sit
+// on a working-looking UI with no uid — matching and posting fail silently until
+// they manually relaunch. So we retry the background sync with exponential
+// backoff. Monotonic cap (no infinite loop on a truly offline device); a live
+// dbSynced guard skips the retry if some other path already recovered.
+let _syncRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let _syncRetryCount = 0;
+const MAX_SYNC_RETRIES = 3;
+
+function _scheduleFirebaseRetry(
+  deviceId: string,
+  seed: string,
+  options: { preserveLocalSetup?: boolean },
+) {
+  if (_syncRetryTimer || _syncRetryCount >= MAX_SYNC_RETRIES) return;
+  const delay = 2000 * Math.pow(2, _syncRetryCount); // 2s → 4s → 8s
+  _syncRetryCount++;
+  _syncRetryTimer = setTimeout(() => {
+    _syncRetryTimer = null;
+    if (!_state.dbSynced) _syncWithFirebase(deviceId, seed, options);
+  }, delay);
+}
+
 async function _syncWithFirebase(
   deviceId: string,
   seed: string,
@@ -319,6 +343,9 @@ async function _syncWithFirebase(
     console.warn('[store] Firebase sync failed, running offline:', e);
     _state = { ..._state, dbSynced: false };
     notify();
+    // Weak-network self-heal: keep trying in the background so a new user isn't
+    // stranded uid-less. Bails after MAX_SYNC_RETRIES (see _scheduleFirebaseRetry).
+    _scheduleFirebaseRetry(deviceId, seed, options);
   }
 }
 
