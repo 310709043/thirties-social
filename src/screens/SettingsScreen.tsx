@@ -13,6 +13,7 @@ import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setLang, setAutoFilter, setSlowMode } from '../hooks/useAppStore';
 import { deleteAccount, getUser, getCurrentUid, unblockUser } from '../lib/db';
 import { logout, isGuest } from '../lib/auth';
+import { analytics } from '../lib/analytics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
@@ -273,6 +274,7 @@ export default function SettingsScreen({ navigation }: Props) {
                         { text: lang === 'en' ? 'Delete' : '刪除', style: 'destructive', onPress: async () => {
                           const result = await deleteAccount();
                           if (result.ok) {
+                            analytics.accountDelete();
                             await AsyncStorage.clear();
                             navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
                           } else {

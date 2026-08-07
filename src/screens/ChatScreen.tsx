@@ -16,6 +16,7 @@ import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch } fr
 import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationDoc, voteExtendConversation, voteRekindle, voteBond, stampConversationSeed } from '../lib/db';
 import { scheduleRekindleReminder } from '../lib/notifications';
 import { filterMessage } from '../lib/filter';
+import { looksLikeCrisis, SUPPORT } from '../lib/crisis';
 import { analytics } from '../lib/analytics';
 import { pickImage, uploadVeiledPhoto, getVeiledPhoto, deleteVeiledPhoto } from '../lib/photos';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -77,6 +78,9 @@ export default function ChatScreen({ navigation, route }: Props) {
   const pendingPaidPhotoRef = useRef<string | null>(null);
   const [otherTyping, setOtherTyping] = useState(false);
   const [otherLeft, setOtherLeft] = useState(false);
+  // 自傷念頭 → 溫柔浮現求助資源。每段對話最多一次，不打斷、不阻擋送出。
+  const [showSupport, setShowSupport] = useState(false);
+  const supportShownRef = useRef(false);
   const iLeftRef = useRef(false);
   const [pausing, setPausing] = useState(false);
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -351,6 +355,12 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
     pauseReadyRef.current = false;
     const messageText = inputText.trim();
+    // 本機、不阻擋的自傷念頭偵測：訊息照常送出，只把 1995 求助資源溫柔推到眼前。
+    // 不記錄、不上傳任何訊息內容，也不下判斷——只是把資源放在旁邊。
+    if (!supportShownRef.current && looksLikeCrisis(messageText)) {
+      supportShownRef.current = true;
+      setShowSupport(true);
+    }
     const check = autoFilter ? filterMessage(messageText) : { blocked: false };
     if (check.blocked) {
       Alert.alert(
@@ -816,6 +826,26 @@ export default function ChatScreen({ navigation, route }: Props) {
                   </Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          )}
+          {showSupport && (
+            <View style={[styles.sheetOverlay, { justifyContent: 'center', paddingHorizontal: 28 }]}>
+              <GlassCard p={p} padding={24} radius={22}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 17, color: p.ink, textAlign: 'center', marginBottom: 12 }}>
+                  {lang === 'en' ? SUPPORT.titleEn : SUPPORT.titleZh}
+                </Text>
+                <Text style={{ fontFamily: 'NotoSerifTC-Light', fontSize: 14, lineHeight: 22, color: p.muted, textAlign: 'center', marginBottom: 8 }}>
+                  {lang === 'en' ? SUPPORT.bodyEn : SUPPORT.bodyZh}
+                </Text>
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 30, fontWeight: '700', color: p.accent, textAlign: 'center', marginBottom: 18 }}>
+                  {SUPPORT.lineNumber}
+                </Text>
+                <TouchableOpacity onPress={() => setShowSupport(false)} style={{ alignItems: 'center', paddingVertical: 10 }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink }}>
+                    {lang === 'en' ? SUPPORT.dismissEn : SUPPORT.dismissZh}
+                  </Text>
+                </TouchableOpacity>
+              </GlassCard>
             </View>
           )}
         </KeyboardAvoidingView>
