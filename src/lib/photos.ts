@@ -140,7 +140,14 @@ export async function uploadAlbumPhoto(uri: string): Promise<{ url: string; publ
 // the blur transform off the URL and grab a clear face). We bake the privacy in
 // at upload time: downscale to a tiny width so even the raw asset is a low-detail
 // smudge. Displayed blurred on top, it reads as fog; grabbed raw, it's unusable.
-// (Full strict-transformation lockdown is a Cloudinary-dashboard follow-up.)
+//
+// NOTE: do NOT enable Cloudinary "strict transformations" as a follow-up.
+// Evaluated 2026-08-08 and rejected: display blur is applied via dynamic
+// `e_blur:<amount>` URL params (see ChatScreen/LoftChat/LoftScreen), so strict
+// mode would 401 every photo in production and the amounts can't be pre-allowed.
+// It's also pointless now — the raw asset is already downscaled to 96/140px, so
+// the attack it guards against (strip transform → grab a sharp face) can't work.
+// Privacy here is baked into pixels, not the transform.
 export async function uploadLoftPhoto(uri: string): Promise<{ url: string; publicId: string } | null> {
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
     console.warn('[photos] Cloudinary not configured');
