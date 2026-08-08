@@ -59,10 +59,12 @@ export default function App() {
       setStoreReady(true);
       // Crash reports whose write lost the race with the crash go out now.
       flushCrashQueue();
-      registerForPushNotifications().then(() => {
-        // Re-engagement: one local reminder a night when the window opens.
-        // Pass the user's language so an EN user doesn't get a Chinese reminder.
-        scheduleNightlyReminder(getStoreLang());
+      // Launch: adopt notification permission only if it was ALREADY granted —
+      // never raise the OS prompt on a cold start (deferred to a contextual moment,
+      // see registerForPushNotifications). The nightly re-engagement reminder is
+      // likewise only scheduled once we actually hold permission.
+      registerForPushNotifications(/* promptIfNeeded */ false).then(token => {
+        if (token) scheduleNightlyReminder(getStoreLang());
       });
     });
     configureGoogle();

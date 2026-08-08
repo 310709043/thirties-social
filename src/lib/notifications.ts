@@ -21,7 +21,7 @@ if (Platform.OS !== 'web') {
   });
 }
 
-export async function registerForPushNotifications(): Promise<string | null> {
+export async function registerForPushNotifications(promptIfNeeded = false): Promise<string | null> {
   if (Platform.OS === 'web') return null;
   try {
     // Check permissions
@@ -29,6 +29,13 @@ export async function registerForPushNotifications(): Promise<string | null> {
     let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
+      // Deferred permission — NEVER prompt on cold launch. Asking for notifications
+      // before the user has felt any value is a textbook anti-pattern (Apple HIG /
+      // Google Material) and, on a trust-first app, makes the very first screen feel
+      // spammy. Only a deliberate, contextual moment (promptIfNeeded=true, e.g. after
+      // the first real conversation) may raise the OS prompt. At launch we just adopt
+      // permission that was already granted.
+      if (!promptIfNeeded) return null;
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }

@@ -14,7 +14,7 @@ import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch } from '../hooks/useAppStore';
 import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationDoc, voteExtendConversation, voteRekindle, voteBond, stampConversationSeed } from '../lib/db';
-import { scheduleRekindleReminder } from '../lib/notifications';
+import { scheduleRekindleReminder, registerForPushNotifications, scheduleNightlyReminder } from '../lib/notifications';
 import { filterMessage } from '../lib/filter';
 import { looksLikeCrisis } from '../lib/crisis';
 import { CrisisSupportCard } from '../components/CrisisSupportCard';
@@ -388,6 +388,16 @@ export default function ChatScreen({ navigation, route }: Props) {
         // After the first real conversation begins, the home screen can reveal
         // optional spaces without overwhelming a brand-new user.
         AsyncStorage.setItem('coreExperienceSeen', '1');
+        // Contextual notification opt-in: now that they've actually been heard
+        // once, it's a natural moment to offer a gentle nightly reminder (never on
+        // cold launch — see registerForPushNotifications). Asked at most once.
+        AsyncStorage.getItem('notifAsked').then(asked => {
+          if (asked) return;
+          AsyncStorage.setItem('notifAsked', '1');
+          registerForPushNotifications(true).then(token => {
+            if (token) scheduleNightlyReminder(lang === 'en' ? 'en' : 'zh');
+          });
+        });
         // A match "counts" only once you actually speak — charge on the first
         // message you send, never for entering an empty chat.
         if (matchCharge && !chargedRef.current) {
