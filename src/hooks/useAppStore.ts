@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { getDailySeed } from '../lib/identity';
-import { Direction, DEFAULT_DIRECTION } from '../lib/theme';
+import { Direction, autoDirection } from '../lib/theme';
 import { Lang } from '../lib/copy';
 import { IdentityKind } from '../lib/identity';
 import { ensureAnonAuth, upsertUser, updateUser, subscribeToUser, claimDailyRewardServer, spendWicks } from '../lib/db';
@@ -37,6 +37,7 @@ interface AppState {
   userId: string;
   seed: string;
   direction: Direction;
+  themeAuto: boolean; // true = follow time-of-day (day light / night dark); false = user pinned
   lang: Lang;
   identityKind: IdentityKind;
   onboardingDone: boolean;
@@ -94,7 +95,7 @@ export const ROOM_CREATE_COST = 2;
 export const FREE_LOFT_ALLOWANCE = 1;
 
 let _state: AppState = {
-  deviceId: '', userId: '', seed: 'default', direction: DEFAULT_DIRECTION,
+  deviceId: '', userId: '', seed: 'default', direction: autoDirection(), themeAuto: true,
   lang: 'zh', identityKind: 'sigil', onboardingDone: false, setupDone: false,
   dbSynced: false, wicks: 3, vigil: false, isBanned: false, banReason: null,
   banExpiresAt: null, lastRewardDate: null, rewardPending: false,
@@ -147,9 +148,13 @@ export async function initStore() {
       AsyncStorage.setItem('setup_done', '0'),
     ]);
   }
+  // Theme: default to time-of-day auto (day light / night dark). Only honour a
+  // stored fixed direction if the user explicitly pinned one (themeAuto stored '0').
+  const storedThemeAuto = await AsyncStorage.getItem('themeAuto');
+  const themeAuto = storedThemeAuto !== '0';
   _state = {
-    ..._state, deviceId, seed,
-    direction: storedDir || DEFAULT_DIRECTION, lang: storedLang || 'zh',
+    ..._state, deviceId, seed, themeAuto,
+    direction: themeAuto ? autoDirection() : (storedDir || autoDirection()), lang: storedLang || 'zh',
     onboardingDone: storedDone === '1', setupDone: storedSetup === '1' && normalizedStoredGender !== null,
     wicks: storedWicks != null ? safeWicks(storedWicks) : 3, vigil: storedVigil === '1',
     gender: normalizedStoredGender, ageBracket: storedAge, relationshipStatus: storedRelation,
@@ -215,10 +220,13 @@ async function _syncWithFirebase(
     if (dbUser) {
       const today = new Date().toISOString().slice(0, 10);
       const lastReward = (dbUser as any).lastRewardDate ?? null;
-      const serverDirection: Direction =
-        dbUser.direction === 'mist' || dbUser.direction === 'nocturne' || dbUser.direction === 'ink'
-          ? dbUser.direction
-          : _state.direction;
+      // In auto mode the theme follows the clock, so the server's stored direction
+      // must NOT override it. Only a user-pinned theme (themeAuto=false) reads back.
+      const serverDirection: Direction = _state.themeAuto
+        ? autoDirection()
+        : (dbUser.direction === 'mist' || dbUser.direction === 'nocturne' || dbUser.direction === 'ink'
+            ? dbUser.direction
+            : _state.direction);
       const serverLang: Lang = dbUser.lang === 'en' ? 'en' : 'zh';
       const clearMissingAccountField = options.preserveLocalSetup === false;
       const hasServerField = (key: string) => Object.prototype.hasOwnProperty.call(dbUser, key);
@@ -377,11 +385,27 @@ export async function checkAndClaimDailyReward(): Promise<{ rewarded: boolean; a
 
 export function getState() { return _state; }
 
+// Explicitly pin a theme (from a future manual picker) — turns OFF auto mode.
 export async function setDirection(d: Direction) {
-  _state = { ..._state, direction: d };
-  await AsyncStorage.setItem('direction', d);
+  _state = { ..._state, direction: d, themeAuto: false };
+  await AsyncStorage.multiSet([['direction', d], ['themeAuto', '0']]);
   notify();
   if (_state.userId) updateUser({ direction: d });
+}
+
+// Toggle time-of-day auto theme. When turning it on, immediately follow the clock.
+export async function setThemeAuto(on: boolean) {
+  _state = { ..._state, themeAuto: on, direction: on ? autoDirection() : _state.direction };
+  await AsyncStorage.setItem('themeAuto', on ? '1' : '0');
+  notify();
+}
+
+// Re-evaluate the clock-based theme (call when the app returns to foreground so it
+// switches across the 06:00 / 18:00 day-night boundary during a long session).
+export function refreshTheme() {
+  if (!_state.themeAuto) return;
+  const d = autoDirection();
+  if (d !== _state.direction) { _state = { ..._state, direction: d }; notify(); }
 }
 
 export async function setLang(l: Lang) {

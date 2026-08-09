@@ -128,6 +128,18 @@ export const LOFT_PALETTE = {
 
 export const DEFAULT_DIRECTION: Direction = 'nocturne';
 
+// Time-of-day auto theme: warm light "mist" by day, candlelit dark "nocturne" at
+// night — a night-companionship app should dim as night falls, and warm up by day.
+// This is the default unless a user explicitly pins a fixed theme (themeAuto=false).
+//   Day   06:00–17:59 → mist (light)
+//   Night 18:00–05:59 → nocturne (dark)
+export function autoDirectionForHour(hour: number): Direction {
+  return hour >= 6 && hour < 18 ? 'mist' : 'nocturne';
+}
+export function autoDirection(): Direction {
+  return autoDirectionForHour(new Date().getHours());
+}
+
 // Type scale — one consistent hierarchy so screens stop using ad-hoc sizes
 // (the "no font hierarchy → visual fatigue" feedback). Pair with palette colours.
 export const TYPE = {

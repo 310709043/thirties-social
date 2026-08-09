@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, AppState } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { initStore, useAppStore, getState } from './src/hooks/useAppStore';
+import { initStore, useAppStore, getState, refreshTheme } from './src/hooks/useAppStore';
 import { initPurchases } from './src/lib/purchases';
 import { registerForPushNotifications, addNotificationListener, scheduleNightlyReminder, getInitialNotificationResponse } from './src/lib/notifications';
 import { analytics } from './src/lib/analytics';
@@ -104,6 +104,13 @@ export default function App() {
       removeListeners();
       unsubscribeAuth();
     };
+  }, []);
+
+  // Auto day/night theme: re-evaluate the clock whenever the app returns to the
+  // foreground, so a session that spans the 06:00 / 18:00 boundary shifts light↔dark.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => { if (s === 'active') refreshTheme(); });
+    return () => sub.remove();
   }, []);
 
   // Treat a font-load ERROR the same as "loaded": if a .ttf ever fails to
