@@ -2,7 +2,7 @@
 
 import React, { ReactNode, useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, Animated,
+  View, Text, TouchableOpacity, Animated, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -83,11 +83,12 @@ type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'accent' | 'danger';
 type BtnSize = 'sm' | 'md' | 'lg';
 
 export const SoftButton = React.memo(function SoftButton({
-  p, children, onPress, variant = 'primary', size = 'md', full = false, style, disabled = false,
+  p, children, onPress, variant = 'primary', size = 'md', full = false, style, disabled = false, loading = false,
 }: {
   p: Palette; children: ReactNode; onPress?: () => void;
-  variant?: BtnVariant; size?: BtnSize; full?: boolean; style?: ViewStyle; disabled?: boolean;
+  variant?: BtnVariant; size?: BtnSize; full?: boolean; style?: ViewStyle; disabled?: boolean; loading?: boolean;
 }) {
+  const isDisabled = disabled || loading;
   const sizes = {
     sm: { height: 36, fontSize: 13, paddingH: 14 },
     md: { height: 48, fontSize: 15, paddingH: 22 },
@@ -106,10 +107,10 @@ export const SoftButton = React.memo(function SoftButton({
   return (
     <PressableScale
       onPress={onPress}
-      disabled={disabled}
+      disabled={isDisabled}
       scaleTo={0.975}
       accessibilityRole="button"
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={[{
         height: sizes.height,
         paddingHorizontal: sizes.paddingH,
@@ -122,7 +123,9 @@ export const SoftButton = React.memo(function SoftButton({
         flexDirection: 'row',
         gap: 8,
         width: full ? '100%' : undefined,
-        opacity: disabled ? 0.5 : 1,
+        // Loading keeps full opacity (spinner conveys the state); only a plain
+        // disabled button dims.
+        opacity: disabled && !loading ? 0.5 : 1,
         shadowColor: variant === 'primary' || variant === 'accent' ? p.ink : 'transparent',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: disabled || (variant !== 'primary' && variant !== 'accent') ? 0 : (p.dark ? 0.18 : 0.22),
@@ -130,9 +133,11 @@ export const SoftButton = React.memo(function SoftButton({
         elevation: disabled || (variant !== 'primary' && variant !== 'accent') ? 0 : 5,
       }, style]}
     >
-      {typeof children === 'string'
-        ? <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: sizes.fontSize, color: v.color, fontWeight: '500' }}>{children}</Text>
-        : children}
+      {loading
+        ? <ActivityIndicator size="small" color={v.color} />
+        : typeof children === 'string'
+          ? <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: sizes.fontSize, color: v.color, fontWeight: '500' }}>{children}</Text>
+          : children}
     </PressableScale>
   );
 });
