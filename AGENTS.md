@@ -1,5 +1,8 @@
 # 產品鐵律（PRODUCT MANDATE — 動任何程式碼前必讀）
 
+> 📌 **當前進度 / 跨 AI 交接狀態：見 repo 根 [`HANDOFF.md`](HANDOFF.md)**（v23 送審中、社群帳號、build 方式、檔案在哪）。
+> ⚠️ Claude 的記憶與 Codex 的筆記**彼此讀不到** —— 任何要共享的狀態,一律寫進 repo（HANDOFF.md / marketing/），不要只寫在各自記憶裡。
+
 燭影私語 / Candle Whisper 是**匿名情緒陪伴空間**。以下是不可違反的定位，任何改動都必須守住：
 
 1. **陪伴，不是約會（NOT a dating app）。** 北極星是「每晚想打開的陪伴空間」。

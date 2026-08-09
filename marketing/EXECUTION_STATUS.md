@@ -1,6 +1,17 @@
 # 社群啟動執行狀態
 
-最後更新：2026-08-01（Asia/Taipei）
+最後更新：2026-08-09（Claude 更新；前次 Codex 2026-08-01）
+
+---
+
+## ⏫ 更新（2026-08-09，Claude；跨 AI 共享狀態總覽見 repo 根 `HANDOFF.md`）
+
+- **Facebook 大頭貼：已設好**（真人手動上傳，燭火門 logo，顯示正常）。⏳ FB 封面仍待補（檔案：`~/Downloads/燭影_fb封面.png` 或 `marketing/assets/channel-cover-master-v1.png`）。
+- **Instagram `@candlewhispertw`：帳號 + 大頭貼已建好**；⏳ **0 貼文，待發第一篇**（圖可用 `marketing/assets/social-key-visual-v1.png`，caption 已擬）。
+- ⚠️ **已確認：AI 無法替真人上傳本機檔案。** Claude 的 `file_upload` 拒絕本機路徑；Codex 擴充卡在檔案讀取（就是本文件下方「檔案選擇器拒絕讀取本機檔案」那道牆）。→ 建帳號 / 寫簡介文案 / 導航到上傳頁 / 生成圖檔，AI 都能做；**唯獨「在系統檔案視窗選本機檔上傳」只有真人能點**（FB 大頭貼就是這樣真人點成的）。
+- App 側：**v23（versionCode 24）已送 Google 審查**（含深色燭光主題+白天淺/夜晚深自動切換+危機卡+通知修復等），詳見 `HANDOFF.md`。
+
+---
 
 ## 已完成
 
