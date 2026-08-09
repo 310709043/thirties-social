@@ -56,26 +56,28 @@ export const DIRECTIONS: Record<Direction, Palette> = {
   },
   nocturne: {
     key: 'nocturne',
-    nameZh: '夜',
-    nameEn: 'Nocturne',
-    blurb: 'Interesting · deep ink',
+    nameZh: '燭',
+    nameEn: 'Candle',
+    blurb: 'Intimate · candlelit dark',
     dark: true,
-    bg: ['#0d1224', '#15172e', '#1a1530', '#0f1426'],
+    // Warm candlelit near-black — the "燭影" (candle-shadow) brand fantasy: an ember
+    // glowing in the dark, cream serif on warm black. Set as the default direction.
+    bg: ['#2a1a1e', '#1c1116', '#12090c', '#0b0608'],
     bgAngle: 160,
-    bgSolid: '#13152a',
-    glow: 'rgba(120,110,200,0.32)',
-    ink: '#ece8f4',
-    inkSoft: 'rgba(236,232,244,0.78)',
-    muted: 'rgba(220,212,232,0.5)',
-    faint: 'rgba(220,212,232,0.28)',
-    line: 'rgba(220,212,232,0.1)',
-    surface: 'rgba(255,255,255,0.04)',
-    surfaceSolid: '#1a1c34',
-    glass: 'rgba(255,255,255,0.06)',
+    bgSolid: '#170f13',
+    glow: 'rgba(232,165,87,0.30)',
+    ink: '#f5e2c4',
+    inkSoft: 'rgba(245,226,196,0.82)',
+    muted: 'rgba(245,226,196,0.5)',
+    faint: 'rgba(245,226,196,0.28)',
+    line: 'rgba(245,226,196,0.13)',
+    surface: 'rgba(255,240,224,0.05)',
+    surfaceSolid: '#1e1418',
+    glass: 'rgba(255,240,224,0.06)',
     glassBlur: 28,
-    accent: '#e0c08a',
-    accentSoft: 'rgba(224,192,138,0.16)',
-    danger: '#e09080',
+    accent: '#e8a557',
+    accentSoft: 'rgba(232,165,87,0.15)',
+    danger: '#e0806e',
     statusDark: true,
   },
   ink: {
@@ -124,7 +126,7 @@ export const LOFT_PALETTE = {
   statusDark: true,
 };
 
-export const DEFAULT_DIRECTION: Direction = 'mist';
+export const DEFAULT_DIRECTION: Direction = 'nocturne';
 
 // Type scale — one consistent hierarchy so screens stop using ad-hoc sizes
 // (the "no font hierarchy → visual fatigue" feedback). Pair with palette colours.
