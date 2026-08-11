@@ -41,5 +41,7 @@
 
 ## ✅ 下一步(依序)
 1. 等 Google 審 v23 → 核准信到 `xiangyi10200@gmail.com` → 到 Play「發布總覽」**按發布**(控管型)。
-2. 放測試者前:**補活的預設火盆**(目前 0 個;`ensureOfficialRooms` 靠開 app 觸發,或加後台每晚 cron)、真人上**值班台**(`thirties-admin /dashboard/operator`)。
+2. 放測試者前:真人上**值班台**(`thirties-admin /dashboard/operator`)。
+   - 🔥 **火盆自動化已做(2026-08-09,Claude)**:根因是 app 端 `ensureOfficialRooms` 只在「有人開 app 進主畫面」時才建火盆(`MoodScreen.tsx:226`),而後台 `cleanup-rooms` cron 又會刪過期房 → 一天沒人開就變 0 個火盆、陌生人打開見空城。**修法**:在 `thirties-admin` 新增 `src/lib/ensureOfficialRooms.ts`(server 版,逐字複製 app 的題庫/FNV-1a hash/roomKey/房間文件結構,並把夜間日期做 UTC→台灣時區校正),接進 `cleanup-rooms` cron(Hobby 只有 2 cron 槽、已滿,故搭在刪除後補種;idempotent、與 client 同 key 不重複)。**tsc/eslint 過、時區與題庫已用腳本對拍一致**。⏳ **待部署**(`cd ~/thirties-admin && npx vercel --prod`)——部署後每天 04:00 UTC(台灣 12:00)自動補種當晚兩把火盆。⚠️ 只解「空城壞掉感」,**不生出真人**;真人氣仍靠第一晚揪人劇本。要立刻補種當晚:部署後手動打 cron 端點(帶 `CRON_SECRET`)或開一次 app 即可。
 3. 招募:FB 補封面、IG 發第一篇(caption 見 `marketing/` 或問 Claude)、發 Dcard/Threads/PTT 導 `thirties-landing.vercel.app` 報名。報名表已串 Google Sheet(端到端測過)。
+   - 🕯️ **第一晚「揪人同時上線」執行單**:`marketing/FIRST_NIGHT_RECRUITING.md`(分波名單模板 + 三段邀請訊息 + 值班時間表 + Go/No-Go 成功線)。專攻冷啟動「同一時段湊 5–10 人」;逐步傍晚時程/話術仍見 OneDrive `第一晚上線執行卡.md` / `陪聊值班話術手冊.md`(本單不重複那些)。
