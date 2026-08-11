@@ -50,7 +50,8 @@
 - 🔴 **曾經是壞的**:首發(2026-08-10 週一)`status: failed / error: "Failed to decode"` —— 因為圖是 **PNG,而 IG Graph API 只吃 JPEG**。(用唯讀查 `instagramPublicationJobs` 確認的。)
 - ✅ **已修(2026-08-12)**:8 張圖(週一/五×4 週)轉 **JPEG**、`content.ts` 路徑改 `.jpg`、landing + admin 都已 `vercel --prod`,線上驗過回 `image/jpeg`。**下一則圖貼文(週五 8/14)應會成功發出**。⚠️ **週三是 Reels(.mp4)另一條路徑、尚未驗證**,盯下次週三跑;8/10 那則失敗的不會補發(日期已過)。**最終確認**=下次跑完再查一次 `instagramPublicationJobs` 該 dateKey 是否 `published`。
 - **分工**:IG = 自動(3 篇/週);**手動發文(`marketing/POSTING_CADENCE_2X_WEEKLY.md`)只做 FB / 之後 Threads,別重複發 IG。**
-- ⚠️ `thirties-landing` **無 GitHub remote**(本地 git + 靠 `vercel --prod` 部署上線);JPG 已本地 commit,但沒 GitHub 備份 —— 之後補 remote。
+- ✅ `thirties-landing` **已備份 GitHub**(private,`github.com/310709043/thirties-landing`,2026-08-12 建);仍靠 `vercel --prod` 部署上線。圖(png/mp4)依 `.gitignore` 不進 git(Remotion 生成、備 OneDrive),但我加的 **.jpg 有進 git**。
+- 🔴 **JPEG 修復很脆弱**:IG 圖是 **Remotion 渲染輸出 PNG**(`npm run render:instagram`),我的 JPEG 是**下游手動 `sips` 轉的**。**若有人重跑 render,又會產出 PNG → IG 再次「Failed to decode」**。根治要嘛改 Remotion 輸出 JPEG、要嘛在 `render:instagram` 後加一步自動轉 JPEG。目前先靠已 commit + 已部署的 .jpg 撐著。
 
 ### 素材位置
 - `marketing/assets/`:`profile-avatar-1080.png`(大頭貼)、`channel-cover-master-v1.png`(封面)、`social-key-visual-v1.png`(貼文主視覺)。
