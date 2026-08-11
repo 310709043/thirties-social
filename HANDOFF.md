@@ -14,11 +14,26 @@
   - 🎨 深色燭光**預設主題** + **白天淺/夜晚深自動切換**(06–17 mist 淺 / 18–05 nocturne 深)。程式:`theme.ts` `autoDirection()` / `useAppStore` `themeAuto`+`refreshTheme` / `App.tsx` AppState 前景重算。
   - 🕯️ 危機求助卡(自傷字眼→浮現 1995)、弱網冷啟動自癒重試、匿名優先入場(18+ 後直接匿名進 Setup)、通知反模式修復(啟動不跳權限、送出首則訊息後才情境式問一次)、`SoftButton` 加 `loading` prop。
 
+- **⏳ 待下個 build(v24)的純 JS 改動(已 commit `main`,尚未建置;純 JS 但不能單獨 OTA,要跟 build 走):**
+  - ⚡ **火盆大廳輪詢改 focus-gated**(`MoodScreen.tsx` `subscribeToActiveRooms` 從 `useEffect([])` 改 `useFocusEffect`)。原本大廳在 native stack 下整晚常駐輪詢(進聊天室也還在背景跑)= 規模下最大讀取來源;改成離開大廳就暫停、回來即刷新。100 人一晚讀取量估可砍 3–5 成。⚠️ 這是 Firestore 讀取優化,**真正的容量前提仍是 Firebase 要在 Blaze**(Spark 免費每日 5萬讀,100 人開場約 10 分鐘就爆停)——見下方「容量/成本」。
+
 ### Build 方式(重要)
 - **`eas build -p android --profile production`**(EAS 雲端,~15–20 分)。**簽章金鑰在 EAS,本地 Gradle 簽不出 Play 能收的 AAB**,所以只能用 EAS。
 - 上次 build 的 AAB:`~/Downloads/燭影私語_v23_vc24.aab`(82MB)。
 - Play 上傳:`eas submit` **未設定**(無 service account)→ 目前是**手動下載 AAB → Play Console 上傳**。
 - ⚠️ 模擬器 demo 坑:`expo run:ios --configuration Release` 跑**內嵌 bundle、不連 Metro** → 改了 JS 要**重 build** 才看得到(Metro 熱載入對 Release 無效)。首次乾淨 build ~40 分,之後 native 快取 ~數分。
+
+---
+
+## ⚠️ 容量 / 成本(Firebase 方案 — 放量前必看,2026-08-11 盤點)
+
+即時路徑(配對/聊天/火盆)是 **client 直連 Firestore**,不經後端,所以「多少人能同時上線」= Firestore 問題,不是機器馬力。
+
+- 🔴 **頭號風險是 Firebase 方案,不是流量。** 若在**免費 Spark**(每日 5萬讀/2萬寫 硬上限):**100 人同時上線,開場約 8–10 分鐘就把讀取配額燒光 → Firestore 對所有人回 `RESOURCE_EXHAUSTED`,app 當晚停擺到太平洋午夜配額重置**(硬停,非變慢)。
+  - 架構強烈暗示目前在 Spark(照片走 Cloudinary 非 Firebase Storage、後端走 Vercel 非 Cloud Functions = 刻意繞開需 Blaze 的功能)。**放量前務必去 Console → Usage and billing 確認,若非 Blaze 要升級**(升 Blaze=綁卡按量計費=花錢,老闆自己操作)。
+- 🟢 **錢不是問題**:估 100 人 × 3 小時 ≈ 100 萬讀 + 8 萬寫;在 Blaze ≈ **$0.7 美元/晚**(就算低估 3 倍也才 ~$2)。天天 100 人也才 ~$20–60/月。
+- 建議:上 Blaze 同時設 **Cloud Billing 預算告警**($5/天 或 $50/月 + email),當「跑掉的迴圈 bug」跳電開關。
+- 讀取優化已做一項(見上「待下個 build」火盆大廳 focus-gate);其餘設計(訊息計數器熱點、心跳頻率)已查為「優雅降級、不會壞」。
 
 ---
 

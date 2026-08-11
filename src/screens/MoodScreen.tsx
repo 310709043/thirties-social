@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, Alert, Animated, KeyboardAvoidingView,
@@ -7,6 +7,7 @@ import Svg, { Path, Circle, Line, Defs, RadialGradient as SvgRadialGradient, Sto
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS, Palette } from '../lib/theme';
 import { t } from '../lib/copy';
@@ -211,7 +212,15 @@ export default function MoodScreen({ navigation }: Props) {
   const activeRoomsRef = useRef(activeRooms);
   activeRoomsRef.current = activeRooms;
 
-  useEffect(() => { return subscribeToActiveRooms(setRooms); }, []);
+  // Poll the lobby only while this screen is focused. In a native stack the Mood
+  // screen stays MOUNTED under pushed screens (chat / room / loft), so a plain
+  // useEffect kept every user polling the lobby all evening even while inside a
+  // chat — the single biggest read source at scale (100 users × 25s × N rooms).
+  // useFocusEffect pauses the poll on blur and re-runs (immediate refresh) on
+  // return. setRooms is a stable state setter, so the empty dep list is correct.
+  useFocusEffect(
+    useCallback(() => subscribeToActiveRooms(setRooms), []),
+  );
 
   // Cold-start warmth: make sure tonight's official braziers exist, count who's
   // awake (honest number), and surface any reunion waiting for me tonight.
