@@ -116,3 +116,26 @@ NT$100–300/天 小測 3–5 天 → 看 CPL + 報名後有沒有真的留下�
 ```
 
 > 一句話:**廣告是「放大器」,不是「引擎」。** 先有一個能留住人的晚上(引擎),再用廣告放大。順序反了 = 燒錢。
+
+---
+
+## 10. 廣告追蹤連結(UTM — 不裝 Pixel 版)
+
+> **決定(2026-08):不裝 Meta Pixel。** Pixel 會與 `thirties-landing` 的 `privacy.html` 直接衝突(政策白紙黑字寫「不收集跨網站廣告追蹤檔案、不投放廣告、不與第三方分享」)。改用 UTM——landing 已把這 4 個參數(`utm_source/medium/campaign/content`)寫進報名 Sheet 來源欄 + GA4,足夠算出每支廣告的 CPL。要裝 Pixel 需先誠實改隱私政策(見第 0/6 節精神)。
+>
+> 用法:每支廣告的「網站網址」直接貼對應連結。`utm_campaign` 全部相同(roll up 成一個活動),用 `utm_source`(fb/ig)+ `utm_content`(創意 A/B/C)區分。`#join` 直接落到報名區。
+
+**Facebook**
+- A｜被聽見:`https://thirties-landing.vercel.app/?utm_source=facebook&utm_medium=paid_social&utm_campaign=alpha_recruit&utm_content=a_listen#join`
+- B｜深夜:`https://thirties-landing.vercel.app/?utm_source=facebook&utm_medium=paid_social&utm_campaign=alpha_recruit&utm_content=b_latenight#join`
+- C｜樹洞:`https://thirties-landing.vercel.app/?utm_source=facebook&utm_medium=paid_social&utm_campaign=alpha_recruit&utm_content=c_treehole#join`
+
+**Instagram**
+- A｜被聽見:`https://thirties-landing.vercel.app/?utm_source=instagram&utm_medium=paid_social&utm_campaign=alpha_recruit&utm_content=a_listen#join`
+- B｜深夜:`https://thirties-landing.vercel.app/?utm_source=instagram&utm_medium=paid_social&utm_campaign=alpha_recruit&utm_content=b_latenight#join`
+- C｜樹洞:`https://thirties-landing.vercel.app/?utm_source=instagram&utm_medium=paid_social&utm_campaign=alpha_recruit&utm_content=c_treehole#join`
+
+**怎麼看結果**
+- **報名 Sheet**:來源欄會出現 `src=facebook…content=a_listen` 這種字串 → 數哪個 `content=` 帶進最多報名。
+- **GA4**(`G-9517819BJE`):報表用 `utm_content` 維度比 A/B/C、用 `utm_source` 比 FB vs IG 的 form_submit 數。
+- **CPL**:各廣告花費 ÷ 該連結帶進的報名數。哪版 CPL 最低 = 贏家,加碼它、砍掉其餘。
