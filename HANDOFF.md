@@ -52,6 +52,7 @@
 - **分工**:IG = 自動(3 篇/週);**手動發文(`marketing/POSTING_CADENCE_2X_WEEKLY.md`)只做 FB / 之後 Threads,別重複發 IG。**
 - ✅ `thirties-landing` **已備份 GitHub**(private,`github.com/310709043/thirties-landing`,2026-08-12 建);仍靠 `vercel --prod` 部署上線。圖(png/mp4)依 `.gitignore` 不進 git(Remotion 生成、備 OneDrive),但我加的 **.jpg 有進 git**。
 - ✅ **JPEG 修復已根治(2026-08-12)**:`thirties-landing` 的 `video/scripts/render-instagram.mjs` 已改成 **still 輸出 JPEG**(`--image-format=jpeg --jpeg-quality=90`,副檔名也改 `.jpg`)。所以**重跑 `render:instagram` 不會再產出 PNG、不會再讓 IG 壞**。8 張正式圖已用修好的管線重渲(正宗 JFIF JPEG)、重部署、線上驗過 `image/jpeg`。(週三 Reels 仍是 `.mp4`,未變。)
+- ✅ **Reels(.mp4)路徑已主動驗證(2026-08-12,健康)**:4 支影片 H.264 / 1080×1920(9:16)/ 30fps / 15s / AAC / ~1.2MB **全符合 IG Reels 要求**;MIME `video/mp4`、可達;publisher 碼正確(`media_type=REELS`+`video_url`+`share_to_feed`,含超時續傳)。**不是 PNG 那種鐵定壞的 bug。** ⚠️ 唯一潛在隱憂:影片處理 timeout **40s**(受 serverless `maxDuration=60s` 限),若 IG 轉碼 >40s → 存 container 待「下次 cron 續傳」,但 cron 一天一次(Hobby)、IG container ~24h 過期 → 極端情況可能卡住失敗。短片通常 <40s,今晚應成功;受 Hobby 限制不易根治。**真正確認=今晚(8/12)21:30 台北跑完再 probe `instagramPublicationJobs`。**
 
 ### 素材位置
 - `marketing/assets/`:`profile-avatar-1080.png`(大頭貼)、`channel-cover-master-v1.png`(封面)、`social-key-visual-v1.png`(貼文主視覺)。
