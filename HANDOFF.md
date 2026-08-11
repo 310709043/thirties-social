@@ -41,9 +41,16 @@
 
 - **統一 handle:`@candlewhispertw`**(備選 `@candlewhisperapp`)。
 - **Facebook 專頁**(`facebook.com/profile.php?id=61592516140200`):名稱/簡介/連結/釘選招募貼文都有;**大頭貼已設好(2026-08-09)**;⏳**封面待補**。
-- **Instagram `@candlewhispertw`**:帳號 + 大頭貼**已建**;⏳ **0 貼文,待發第一篇**。
+- **Instagram `@candlewhispertw`**:帳號 + 大頭貼**已建**;貼文由**自動發文器**負責(見下「社群發文自動化」)。
 - **LinkedIn** 公司頁 + 首篇貼文已發。
 - **其他**(Threads/TikTok/YT/LINE/X/Bilibili/小紅書):待完成(需真人驗證,見 EXECUTION_STATUS.md)。
+
+### 🤖 社群發文自動化(重要 — 2026-08-12 盤點+修復)
+- **IG 有一套 Codex 建的自動發文器**(不是手動):`thirties-admin` cron `/api/cron/instagram-publish`,每天 13:30 UTC 跑,**只在週一/三/五發**(台北時間),12 則內容 4 週常青輪替,內容寫死在 `src/lib/instagram/content.ts`(語氣守鐵律 + alpha CTA + UTM)。憑證(`INSTAGRAM_*` ×5)已設在 Vercel Production。走 IG Graph API、圖**公開掛在 landing** 讓 IG 用 URL 抓 → **繞過「AI 不能傳本機檔」那道牆**(所以上面那條硬限制對 IG 自動發不適用)。
+- 🔴 **曾經是壞的**:首發(2026-08-10 週一)`status: failed / error: "Failed to decode"` —— 因為圖是 **PNG,而 IG Graph API 只吃 JPEG**。(用唯讀查 `instagramPublicationJobs` 確認的。)
+- ✅ **已修(2026-08-12)**:8 張圖(週一/五×4 週)轉 **JPEG**、`content.ts` 路徑改 `.jpg`、landing + admin 都已 `vercel --prod`,線上驗過回 `image/jpeg`。**下一則圖貼文(週五 8/14)應會成功發出**。⚠️ **週三是 Reels(.mp4)另一條路徑、尚未驗證**,盯下次週三跑;8/10 那則失敗的不會補發(日期已過)。**最終確認**=下次跑完再查一次 `instagramPublicationJobs` 該 dateKey 是否 `published`。
+- **分工**:IG = 自動(3 篇/週);**手動發文(`marketing/POSTING_CADENCE_2X_WEEKLY.md`)只做 FB / 之後 Threads,別重複發 IG。**
+- ⚠️ `thirties-landing` **無 GitHub remote**(本地 git + 靠 `vercel --prod` 部署上線);JPG 已本地 commit,但沒 GitHub 備份 —— 之後補 remote。
 
 ### 素材位置
 - `marketing/assets/`:`profile-avatar-1080.png`(大頭貼)、`channel-cover-master-v1.png`(封面)、`social-key-visual-v1.png`(貼文主視覺)。
