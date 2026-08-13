@@ -53,7 +53,8 @@
 - 👁️ **失敗可見性(2026-08-12)**:後台 **`/dashboard/instagram`** 顯示自動發文開關狀態 + 每筆 job(日期/內容/類型/狀態/嘗試/錯誤)+ 有失敗就紅字警示。治「壞了沒人看」根因(PNG bug 曾靜默失敗 3 天)。**上線後養成登入瞄一眼的習慣。**
 - ✅ `thirties-landing` **已備份 GitHub**(private,`github.com/310709043/thirties-landing`,2026-08-12 建);仍靠 `vercel --prod` 部署上線。圖(png/mp4)依 `.gitignore` 不進 git(Remotion 生成、備 OneDrive),但我加的 **.jpg 有進 git**。
 - ✅ **JPEG 修復已根治(2026-08-12)**:`thirties-landing` 的 `video/scripts/render-instagram.mjs` 已改成 **still 輸出 JPEG**(`--image-format=jpeg --jpeg-quality=90`,副檔名也改 `.jpg`)。所以**重跑 `render:instagram` 不會再產出 PNG、不會再讓 IG 壞**。8 張正式圖已用修好的管線重渲(正宗 JFIF JPEG)、重部署、線上驗過 `image/jpeg`。(週三 Reels 仍是 `.mp4`,未變。)
-- ✅ **Reels(.mp4)路徑已主動驗證(2026-08-12,健康)**:4 支影片 H.264 / 1080×1920(9:16)/ 30fps / 15s / AAC / ~1.2MB **全符合 IG Reels 要求**;MIME `video/mp4`、可達;publisher 碼正確(`media_type=REELS`+`video_url`+`share_to_feed`,含超時續傳)。**不是 PNG 那種鐵定壞的 bug。** ⚠️ 唯一潛在隱憂:影片處理 timeout **40s**(受 serverless `maxDuration=60s` 限),若 IG 轉碼 >40s → 存 container 待「下次 cron 續傳」,但 cron 一天一次(Hobby)、IG container ~24h 過期 → 極端情況可能卡住失敗。短片通常 <40s,今晚應成功;受 Hobby 限制不易根治。**真正確認=今晚(8/12)21:30 台北跑完再 probe `instagramPublicationJobs`。**
+- ❌→✅ **Reels 其實壞了、已修(2026-08-13 訂正)**:我 8/12 寫「Reels 規格健康」是**錯的**——規格檢查**漏看了 pixel format**。週三 Reels(week-1-wednesday)8/12 實跑 `Failed to decode` 失敗。真因:Remotion 輸出 **full-range `yuvj420p` + 色彩空間 `bt470bg`**,IG 解碼器只吃 **`yuv420p` / tv range / `bt709`**(跟圖片 PNG 問題同性質=格式不對)。**已修**:4 支 mp4 用 ffmpeg 重編碼成 IG 標準色彩(+faststart)、重部署、線上驗過 `yuv420p/bt709`;**已根治**:`render-instagram.mjs` 加 render→ffmpeg 轉碼步驟(commit `d186687`),重跑不再壞。⚠️ timeout 40s 隱憂仍在(見上一版說明)但短片通常 OK。**下次驗證=週三 8/19 跑完 probe。**
+- 📌 **目前 IG 發文戰績:0 成功 / 2 失敗**(8/10 圖 PNG、8/12 Reels 色彩,兩者皆已修)。**第一則成功預計 = 週五 8/14 的圖**(JPEG 修復,尚未實跑驗證)。看 `/dashboard/instagram` 或 probe `instagramPublicationJobs` 追蹤。
 
 ### 素材位置
 - `marketing/assets/`:`profile-avatar-1080.png`(大頭貼)、`channel-cover-master-v1.png`(封面)、`social-key-visual-v1.png`(貼文主視覺)。
