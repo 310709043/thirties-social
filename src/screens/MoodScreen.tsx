@@ -20,7 +20,7 @@ import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, freeConnectionsRemaining, MATCH_WICK_COST } from '../hooks/useAppStore';
 import { useIsForeground } from '../lib/appState';
-import { subscribeToActiveRooms, DbRoom, fetchReadableRooms, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchWaitingQueueCount, fetchTonightRekindles, openRekindle, DbRekindle, sendNightLetter, hasSentTonightLetter, claimTonightLetter, replyToLetter, fetchMyLetterReplies, DbLetter, fetchArrivedEchoes, markEchoRead, DbEcho, createConversation, fetchMyLiveConversations, DbLiveConversation } from '../lib/db';
+import { subscribeToMyInvites, DbInvite, subscribeToActiveRooms, DbRoom, fetchReadableRooms, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchWaitingQueueCount, fetchTonightRekindles, openRekindle, DbRekindle, sendNightLetter, hasSentTonightLetter, claimTonightLetter, replyToLetter, fetchMyLetterReplies, DbLetter, fetchArrivedEchoes, markEchoRead, DbEcho, createConversation, fetchMyLiveConversations, DbLiveConversation } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
 import { analytics } from '../lib/analytics';
 import { looksLikeCrisis } from '../lib/crisis';
@@ -200,6 +200,10 @@ export default function MoodScreen({ navigation }: Props) {
   // Real count of others waiting to be paired — drives the honest-waiting screen
   // (W1-2). Never padded (see HonestWaiting / product promise).
   const [queueCount, setQueueCount] = useState(0);
+  // Invite tray (W2-6): people who want to talk to you alone. The core of the
+  // woman's home; anyone can receive one.
+  const [invites, setInvites] = useState<DbInvite[]>([]);
+  useEffect(() => subscribeToMyInvites(setInvites), []);
   const [rekindles, setRekindles] = useState<DbRekindle[]>([]);
   // Conversations of mine still burning — the road back in after leaving the
   // app (a message push routes to this screen; without this banner it was a
@@ -545,6 +549,38 @@ export default function MoodScreen({ navigation }: Props) {
               </Text>
             </TouchableOpacity>
           ))}
+
+          {/* Invite tray (W2-6) — someone wants to talk to you alone. The
+              woman's primary action; shown above everything else. */}
+          {invites.length > 0 && (() => {
+            const inv = invites[0];
+            return (
+              <TouchableOpacity activeOpacity={0.9}
+                onPress={() => navigation.push('Invite', {
+                  inviteId: inv.id, fromSeed: inv.fromSeed, quote: inv.quote,
+                  quoteContext: inv.quoteContext, note: inv.note,
+                  fromGender: inv.fromGender, fromAge: inv.fromAge,
+                })}
+                style={{ padding: 18, borderRadius: 22, borderWidth: 1, borderColor: p.accent + '55', backgroundColor: p.accentSoft, gap: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9.5, letterSpacing: 1.7, textTransform: 'uppercase', color: p.accent, fontWeight: '600' }}>
+                    {lang === 'en' ? 'someone wants to talk to you' : '有人想跟你說話'}
+                  </Text>
+                  <View style={{ minWidth: 22, height: 22, borderRadius: 11, backgroundColor: p.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
+                    <Text style={{ fontFamily: 'Inter-Regular', fontSize: 12, fontWeight: '700', color: p.dark ? '#1f1014' : '#fff' }}>{invites.length}</Text>
+                  </View>
+                </View>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 17, lineHeight: 27, color: p.ink }} numberOfLines={2}>
+                  {lang === 'en'
+                    ? `Someone in ${inv.quoteContext || 'a firepit'} heard you and wants to talk alone.`
+                    : `${inv.quoteContext ? `「${inv.quoteContext}」裡` : '火盆裡'}有人聽到你說的話，想單獨跟你聊。`}
+                </Text>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.accent }}>
+                  {lang === 'en' ? 'See who →' : '看看是誰 →'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })()}
 
           {/* Reunion banner — someone from last night is waiting. */}
           {rekindles.map(rek => {

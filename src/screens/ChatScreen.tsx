@@ -12,7 +12,7 @@ import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, Fa
 import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch, savePerson, canSavePerson, SAVED_PEOPLE_MAX } from '../hooks/useAppStore';
+import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch, savePerson, canSavePerson, SAVED_PEOPLE_MAX, INVITE_WICK_COST } from '../hooks/useAppStore';
 import { getColorAdj } from '../lib/identity';
 import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationDoc, voteExtendConversation, voteRekindle, voteBond, stampConversationSeed } from '../lib/db';
 import { scheduleRekindleReminder, registerForPushNotifications, scheduleNightlyReminder } from '../lib/notifications';
@@ -76,7 +76,11 @@ function ContinueOption({
 }
 
 export default function ChatScreen({ navigation, route }: Props) {
-  const { seed, direction, lang, identityKind, wicks, autoFilter, slowMode, vigil } = useAppStore();
+  const { seed, direction, lang, identityKind, wicks, autoFilter, slowMode, vigil, gender } = useAppStore();
+  // Invite conversations charge the INVITER (never her) INVITE_WICK_COST on his
+  // first message — "not accepted = not charged" without any refund (W2-6).
+  const [inviteChargeUserId, setInviteChargeUserId] = useState<string | null>(null);
+  const inviteChargedRef = useRef(false);
   const p = DIRECTIONS[direction];
   const otherSeed = route.params?.otherSeed;
   const conversationId = (route.params as any)?.conversationId as string | undefined;
@@ -178,6 +182,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       if (expMs) closeAtRef.current = expMs;
       const me = getCurrentUid();
       if (me) otherUidRef.current = conv.userAId === me ? conv.userBId : conv.userAId;
+      setInviteChargeUserId((conv as any).inviteChargeUserId ?? null);
       setExtendVotes(conv.extendVotes ?? {});
       setExtended(!!conv.extended);
       const rv = (conv as any).rekindleVotes ?? {};
@@ -475,6 +480,16 @@ export default function ChatScreen({ navigation, route }: Props) {
           // silently let the match go free); only mark charged once it succeeds.
           const charged = await recordMatch();
           if (!charged) chargedRef.current = false;
+        }
+        // Invite (W2-6): the inviter pays INVITE_WICK_COST on his first message.
+        // Women and Vigil never pay; "not accepted = not charged" is already
+        // guaranteed because the conversation only exists after she accepted.
+        const myUid0 = getCurrentUid();
+        if (inviteChargeUserId && myUid0 === inviteChargeUserId && !inviteChargedRef.current
+            && gender === 'male' && !vigil) {
+          inviteChargedRef.current = true;
+          const r = await spendWicks(INVITE_WICK_COST, 'invite', conversationId);
+          if (!r.ok) inviteChargedRef.current = false;
         }
         setInputText('');
         setTyping(conversationId, false);

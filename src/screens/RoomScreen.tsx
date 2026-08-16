@@ -12,7 +12,7 @@ import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkele
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, canCreateRoom, getTier, ROOM_CREATE_COST, canMatch, MATCH_WICK_COST, matchCostsWick, freeConnectionsRemaining, roomCreateCostsWick, recordRoomCreated, setInviteContext } from '../hooks/useAppStore';
-import { getOrCreatePresetRoom, getRoomById, subscribeToRoomMessages, sendRoomMessage, createRoom, deleteOwnEmptyRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence, spendWicks, reactToRoomMessage } from '../lib/db';
+import { getOrCreatePresetRoom, getRoomById, subscribeToRoomMessages, sendRoomMessage, createRoom, deleteOwnEmptyRoom, createConversation, createInvite, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence, spendWicks, reactToRoomMessage } from '../lib/db';
 import { RESONANCE_SYMBOLS, resonanceLabel } from '../lib/resonance';
 import { t as getT } from '../lib/copy';
 import { hapticLight } from '../lib/haptics';
@@ -24,10 +24,11 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Room'>;
 
 export default function RoomScreen({ navigation, route }: Props) {
   const { roomKey, roomId: paramRoomId } = route.params;
-  const { seed, direction, lang, identityKind, deviceId, wicks, gender, vigil } = useAppStore();
+  const { seed, direction, lang, identityKind, deviceId, wicks, gender, vigil, ageBracket } = useAppStore();
   const p = DIRECTIONS[direction];
   const [inviting, setInviting] = useState<{senderId: string; seed: string; zh: string; en: string; age: number} | null>(null);
   const [inviteSent, setInviteSent] = useState(false);
+  const [inviteNote, setInviteNote] = useState('');
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [roomTopic, setRoomTopic] = useState('');
   const [roomCreated, setRoomCreated] = useState(false);
@@ -196,30 +197,33 @@ export default function RoomScreen({ navigation, route }: Props) {
     return () => clearInterval(id);
   }, [roomId]);
 
-  // Opening a window: create the conversation and step in right away. There is
-  // no accept step on the other side (they're notified when you speak), so the
-  // old fake 2.4s "waiting for them to accept…" theater promised a consent
-  // mechanic that didn't exist.
+  // Send an invite (W2-6): quote the line, carry an optional note. It's free to
+  // send and free to decline — the invite sits pending until she accepts, and
+  // only then does a conversation open (she creates it; he pays on his first
+  // message). No fake "waiting for accept" theatre: the sheet just confirms sent.
+  const roomTitle = room?.customTopicZh || room?.customTopicEn
+    || (roomKey && !['new', 'custom'].includes(roomKey) ? getT(roomKey as any, lang) : (lang === 'en' ? 'a firepit' : '一個火盆'));
   useEffect(() => {
-    if (inviteSent) {
+    if (inviteSent && inviting) {
       let alive = true;
       (async () => {
-        const conv = await createConversation({ userBId: inviting!.senderId, roomId: roomId ?? undefined });
+        const inv = await createInvite({
+          toUserId: inviting.senderId, toSeed: inviting.seed,
+          roomId: roomId ?? '', roomTitle,
+          quote: inviting.zh, quoteContext: roomTitle,
+          fromSeed: seed, note: inviteNote.trim() || undefined,
+          fromGender: gender, fromAge: ageBracket,
+        });
         if (!alive) return;
-        if (!conv?.id) {
-          // Without an id ChatScreen has nothing to open — a silent nav.push
-          // landed the tester in a broken empty chat.
+        if (!inv) {
           Alert.alert(
-            lang === 'en' ? 'Could not start' : '沒能開始對話',
+            lang === 'en' ? 'Could not send' : '沒能送出邀請',
             lang === 'en' ? 'Please try again in a moment.' : '請稍後再試一次。',
           );
           setInviteSent(false);
-          setInviting(null);
           return;
         }
-        // Room invites draw from the same daily free-connection quota as random
-        // matches; charge on first message sent (matchCharge).
-        navigation.push('Chat', { otherSeed: inviting!.seed, conversationId: conv.id, matchCharge: true });
+        // Left on the "invitation sent" confirmation; she'll see it in her tray.
       })();
       return () => { alive = false; };
     }
@@ -686,41 +690,27 @@ export default function RoomScreen({ navigation, route }: Props) {
                   </View>
                   <Text style={[styles.inviteHint, { color: p.muted }]}>
                     {lang === 'en'
-                      ? 'A 30-minute window opens. They see your sigil — nothing else — and get a knock when you speak.'
-                      : '會開啟一段 30 分鐘的窗口。對方只看到你的識別，你開口時他們會收到輕輕的一聲敲門。'}
+                      ? 'She sees which line of hers you heard. Say one thing first, if you like.'
+                      : '她會看到你想單獨聊的是哪一句。想的話，先跟她說一句。'}
                   </Text>
-                  <Text style={[styles.inviteHint, { color: p.accent, marginTop: -4 }]}>
-                    {vigil
-                      ? (lang === 'en' ? 'Vigil connection · no limit, no connection charge.' : '守夜連結 · 不限次、不扣燭芯。')
-                      : gender === 'female'
-                        ? (lang === 'en' ? 'Women connect without a daily limit or connection charge.' : '女用戶一對一連結不限次，不扣燭芯。')
-                        : matchCostsWick()
-                          ? (lang === 'en' ? `Speaking in this connection costs ${MATCH_WICK_COST} wick.` : `在這段連結開口後會扣 ${MATCH_WICK_COST} 燭芯。`)
-                          : (lang === 'en'
-                            ? `${freeConnectionsRemaining()} free connections left today.`
-                            : `今天還有 ${freeConnectionsRemaining()} 次免費連結。`)}
+                  <TextInput
+                    value={inviteNote}
+                    onChangeText={setInviteNote}
+                    placeholder={lang === 'en' ? 'a line before you invite (optional)…' : '想跟她說一句話再邀請（選填）⋯⋯'}
+                    placeholderTextColor={p.muted}
+                    maxLength={120}
+                    style={{ marginTop: 4, padding: 12, borderRadius: 14, borderWidth: 0.5, borderColor: p.line, backgroundColor: p.glass, color: p.ink, fontFamily: 'NotoSerifTC-Regular', fontSize: 13 }}
+                  />
+                  <Text style={[styles.inviteHint, { color: p.accent, marginTop: 2 }]}>
+                    {gender === 'female' || vigil
+                      ? (lang === 'en' ? 'Free to send. She has to accept before anything opens.' : '送出免費。她接受了才會開始，你不扣燭芯。')
+                      : (lang === 'en' ? 'Free to send. If she accepts, speaking costs 2 wicks — no accept, no charge.' : '送出免費。她接受後、你開口才扣 2 燭芯；她沒接受不扣。')}
                   </Text>
                   <TouchableOpacity
-                    onPress={() => {
-                      // Same daily free-connection quota as random matching.
-                      if (!canMatch()) {
-                        Alert.alert(
-                          lang === 'en' ? 'Out of free 1-on-1s' : '今日免費一對一已用完',
-                          lang === 'en'
-                            ? `You've used today's free connections. Each now costs ${MATCH_WICK_COST} wick — top up, or go Vigil for unlimited.`
-                            : `今日免費一對一已用完，之後每次需 ${MATCH_WICK_COST} 燭芯。可購買燭芯，或升級守夜人享無限。`,
-                          [
-                            { text: lang === 'en' ? 'OK' : '知道了', style: 'cancel' },
-                            { text: lang === 'en' ? 'Upgrade' : '升級', onPress: () => navigation.push('Upgrade') },
-                          ],
-                        );
-                        return;
-                      }
-                      setInviteSent(true);
-                    }}
+                    onPress={() => setInviteSent(true)}
                     style={[styles.inviteBtn, { backgroundColor: p.ink }]}
                   >
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.dark ? '#1a1530' : '#fff', fontWeight: '500' }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.dark ? '#1f1014' : '#fff', fontWeight: '500' }}>
                       {lang === 'en' ? 'Send the invitation' : '送出邀請'}
                     </Text>
                   </TouchableOpacity>
@@ -733,11 +723,18 @@ export default function RoomScreen({ navigation, route }: Props) {
               ) : (
                 <View style={{ alignItems: 'center', paddingVertical: 12 }}>
                   <Text style={[styles.waitingText, { color: p.ink }]}>
-                    {lang === 'en' ? 'Opening the window…' : '正在開啟窗口⋯'}
+                    {lang === 'en' ? 'Invitation sent' : '邀請已送出'}
                   </Text>
                   <Text style={[styles.waitingHint, { color: p.muted }]}>
-                    {lang === 'en' ? 'say something first — they get a knock' : '先開口說點什麼，對方會收到敲門聲'}
+                    {lang === 'en' ? "if she accepts, you'll get a window to talk" : '她接受的話，你會收到一扇可以說話的窗'}
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => { setInviting(null); setInviteSent(false); setInviteNote(''); }}
+                    style={[styles.inviteBtn, { backgroundColor: p.ink, marginTop: 16, paddingHorizontal: 28 }]}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.dark ? '#1f1014' : '#fff', fontWeight: '500' }}>
+                      {lang === 'en' ? 'done' : '好'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
