@@ -14,12 +14,13 @@ import { t } from '../lib/copy';
 import {
   VaporBackground, SoftButton, BreathDot, WickGlyph, AnimatedNumber, FadeInUp, PressableScale, RekindleGlyph,
 } from '../components/ui';
+import { HonestWaiting } from '../components/ui/HonestWaiting';
 import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, freeConnectionsRemaining, MATCH_WICK_COST } from '../hooks/useAppStore';
 import { useIsForeground } from '../lib/appState';
-import { subscribeToActiveRooms, DbRoom, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchTonightRekindles, openRekindle, DbRekindle, sendNightLetter, hasSentTonightLetter, claimTonightLetter, replyToLetter, fetchMyLetterReplies, DbLetter, fetchArrivedEchoes, markEchoRead, DbEcho, createConversation, fetchMyLiveConversations, DbLiveConversation } from '../lib/db';
+import { subscribeToActiveRooms, DbRoom, fetchReadableRooms, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchWaitingQueueCount, fetchTonightRekindles, openRekindle, DbRekindle, sendNightLetter, hasSentTonightLetter, claimTonightLetter, replyToLetter, fetchMyLetterReplies, DbLetter, fetchArrivedEchoes, markEchoRead, DbEcho, createConversation, fetchMyLiveConversations, DbLiveConversation } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
 import { analytics } from '../lib/analytics';
 import { looksLikeCrisis } from '../lib/crisis';
@@ -108,47 +109,6 @@ function ResetCountdown({ color }: { color: string }) {
   return <Text style={[styles.countdown, { color }]}>{timeStr}</Text>;
 }
 
-/** Self-animating "…" so the 600ms dot cycle doesn't re-render the screen. */
-function WaitingDots({ style, prefix }: { style: any; prefix: string }) {
-  const [dots, setDots] = useState('');
-  const reduceMotion = useReduceMotion();
-  useEffect(() => {
-    if (reduceMotion) {
-      setDots('…');
-      return;
-    }
-    const id = setInterval(() => setDots(d => (d.length >= 3 ? '' : d + '.')), 600);
-    return () => clearInterval(id);
-  }, [reduceMotion]);
-  return <Text style={style}>{prefix}{dots}</Text>;
-}
-
-function WaitStatus({
-  awakeCount,
-  lang,
-  color,
-}: {
-  awakeCount: number | null;
-  lang: 'zh' | 'en';
-  color: string;
-}) {
-  const [seconds, setSeconds] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setSeconds(value => value + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
-  const ss = String(seconds % 60).padStart(2, '0');
-  const estimate = awakeCount !== null && awakeCount >= 3
-    ? (lang === 'en' ? 'usually within about a minute' : '通常約 1 分鐘內')
-    : (lang === 'en' ? 'a quiet hour — it may take a few minutes' : '目前人少，可能需要幾分鐘');
-  return (
-    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, color, marginTop: 2 }}>
-      {lang === 'en' ? `Searching ${mm}:${ss} · ${estimate}` : `已尋找 ${mm}:${ss} · ${estimate}`}
-    </Text>
-  );
-}
-
 export default function MoodScreen({ navigation }: Props) {
   const { seed, direction, lang, identityKind, wicks, gender, ageBracket, userId, vigil } = useAppStore();
   const p = DIRECTIONS[direction];
@@ -164,7 +124,6 @@ export default function MoodScreen({ navigation }: Props) {
   const supportShownRef = useRef(false);
   const [rooms, setRooms] = useState<DbRoom[]>([]);
   const [waiting, setWaiting] = useState(false);
-  const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tonightMode, setTonightMode] = useState<TonightMode | null>(null);
   // Full brazier list (only the top 3 fit on the home screen).
   const [showAllRooms, setShowAllRooms] = useState(false);
@@ -206,11 +165,24 @@ export default function MoodScreen({ navigation }: Props) {
   const activeRooms = rooms.filter(
     r => (r.messageCount ?? 0) > 0 || roomAgeMs(r) < ROOM_FRESH_MS,
   );
+  // Guests "listen first" (W1-3): they see firepits whose words are still
+  // readable — including ones that closed within the last 3 days (W1-1) — so a
+  // 0-online night still shows yesterday's lines instead of an empty room.
+  const [readableRooms, setReadableRooms] = useState<DbRoom[]>([]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!isGuestUser) return;
+      let alive = true;
+      const load = () => { fetchReadableRooms().then(r => { if (alive) setReadableRooms(r); }).catch(() => {}); };
+      load();
+      const id = setInterval(load, 20000);
+      return () => { alive = false; clearInterval(id); };
+    }, [isGuestUser]),
+  );
+  const displayRooms = isGuestUser ? readableRooms : activeRooms;
   // The waiting-timeout dialog fires minutes after its effect ran — read the
   // room list through a ref so "sit by a brazier" opens a room that still
   // exists, not a snapshot from when the search began.
-  const activeRoomsRef = useRef(activeRooms);
-  activeRoomsRef.current = activeRooms;
 
   // Poll the lobby only while this screen is focused. In a native stack the Mood
   // screen stays MOUNTED under pushed screens (chat / room / loft), so a plain
@@ -225,6 +197,9 @@ export default function MoodScreen({ navigation }: Props) {
   // Cold-start warmth: make sure tonight's official braziers exist, count who's
   // awake (honest number), and surface any reunion waiting for me tonight.
   const [awakeCount, setAwakeCount] = useState<number | null>(null);
+  // Real count of others waiting to be paired — drives the honest-waiting screen
+  // (W1-2). Never padded (see HonestWaiting / product promise).
+  const [queueCount, setQueueCount] = useState(0);
   const [rekindles, setRekindles] = useState<DbRekindle[]>([]);
   // Conversations of mine still burning — the road back in after leaving the
   // app (a message push routes to this screen; without this banner it was a
@@ -367,51 +342,24 @@ export default function MoodScreen({ navigation }: Props) {
     if (!waiting) return;
     let matched = false;
 
-    // Keep actively looking for a partner while waiting.
-    const retryId = setInterval(() => { if (!matched) tryFindMatch(); }, 5000);
-
-    // After 60s unmatched: soft-land instead of a dead end — keep matching in
-    // the background while they sit by a brazier, or wait another round.
-    const onTimeout = () => {
-      if (matched) return;
-      analytics.matchWaitTimeout(60);
-      Alert.alert(
-        lang === 'en' ? 'No one waiting right now' : '還沒有人配上',
-        lang === 'en'
-          ? 'No wick was used. Sit by a brazier while we keep looking, or wait a little longer.'
-          : '沒有扣任何燭芯。可以先去火盆待著，我會繼續幫你找——配到了馬上告訴你。',
-        [
-          {
-            text: lang === 'en' ? 'Sit by a brazier (keep looking)' : '去火盆待著（繼續幫我配）',
-            onPress: () => {
-              // Stay in the queue; another timeout round runs in the background.
-              matchTimeoutRef.current = setTimeout(onTimeout, 180000);
-              const hottest = activeRoomsRef.current[0];
-              if (hottest) navigation.push('Room', { roomKey: hottest.roomKey ?? 'custom', roomId: hottest.id });
-              else navigation.push('Room', { roomKey: 'new' });
-            },
-          },
-          {
-            text: lang === 'en' ? 'Wait a bit more' : '再等一下',
-            onPress: () => { matchTimeoutRef.current = setTimeout(onTimeout, 60000); },
-          },
-          {
-            text: lang === 'en' ? 'Stop' : '先不找了',
-            style: 'cancel',
-            onPress: () => { setWaiting(false); leaveMatchQueue(); },
-          },
-        ],
-      );
-    };
-    matchTimeoutRef.current = setTimeout(onTimeout, 60000);
+    // Keep actively looking for a partner while waiting, and refresh the honest
+    // queue count so the waiting screen shows a REAL number of people also waiting.
+    const refreshQueue = () => { fetchWaitingQueueCount().then(setQueueCount).catch(() => {}); };
+    refreshQueue();
+    const retryId = setInterval(() => {
+      if (!matched) { tryFindMatch(); refreshQueue(); }
+    }, 5000);
+    // No 60s "no one waiting" modal any more (W1-2): the HonestWaiting screen
+    // shown for the whole `waiting` state already gives the honest picture and
+    // immediate, persistent ways out (sit by a brazier — 3 days of words still
+    // readable — or write it down). Matching keeps running underneath.
 
     const unsub = subscribeToMyMatch(entry => {
       // onSnapshot fires immediately with the current (waiting) doc — only act
       // on an actual match, otherwise the timeout would be cleared right away.
       if (entry?.status === 'matched' && entry.matchedSeed && entry.conversationId) {
         matched = true;
-        if (matchTimeoutRef.current) clearTimeout(matchTimeoutRef.current);
-        clearInterval(retryId);
+          clearInterval(retryId);
         hapticMedium();
         analytics.matchFound();
         // Charge moved to the accept step (MatchScreen) — seeing who it is and
@@ -430,7 +378,6 @@ export default function MoodScreen({ navigation }: Props) {
       }
     });
     return () => {
-      if (matchTimeoutRef.current) clearTimeout(matchTimeoutRef.current);
       clearInterval(retryId);
       unsub();
       // Leaving the screen while still waiting must remove us from the queue,
@@ -566,8 +513,12 @@ export default function MoodScreen({ navigation }: Props) {
               {lang === 'en' ? 'NEW · 1.1 · ALPHA 21' : '全新 1.1 · ALPHA 21'}
             </Text>
           </View>
-          <Text style={[styles.heading, { color: p.ink }]}>{t('moodHeader', lang)}</Text>
-          <Text style={[styles.subheading, { color: p.muted }]}>{t('moodPrompt', lang)}</Text>
+          <Text style={[styles.heading, { color: p.ink }]}>
+            {isGuestUser ? t('guestListenTitle', lang) : t('moodHeader', lang)}
+          </Text>
+          <Text style={[styles.subheading, { color: p.muted }]}>
+            {isGuestUser ? t('guestListenSub', lang) : t('moodPrompt', lang)}
+          </Text>
           {/* Honest presence — a real count when the room is warm, honest quiet
               when it isn't (never a fake number). */}
           {awakeCount !== null && (
@@ -658,7 +609,10 @@ export default function MoodScreen({ navigation }: Props) {
 
           {/* The primary ritual lives in one visual container: one person,
               one optional line, one clear intent. This keeps secondary spaces
-              from competing with the action the screen is actually for. */}
+              from competing with the action the screen is actually for.
+              Hidden for guests (W1-3): they cannot speak or match, so the mood
+              box + mode picker were seven decisions that did nothing for them. */}
+          {!isGuestUser && (
           <FadeInUp delay={80} distance={10}>
             <View style={[styles.ritualCard, {
               backgroundColor: p.surface,
@@ -792,8 +746,9 @@ export default function MoodScreen({ navigation }: Props) {
               </View>
             </View>
           </FadeInUp>
+          )}
 
-          {showExplore ? (
+          {(isGuestUser || showExplore) ? (
             <>
           {/* Rooms */}
           <View style={styles.roomsSection}>
@@ -815,9 +770,9 @@ export default function MoodScreen({ navigation }: Props) {
               </TouchableOpacity>
             </View>
 
-            {activeRooms.length > 0 ? (
+            {displayRooms.length > 0 ? (
               <View style={styles.roomsList}>
-                {activeRooms.slice(0, 1).map((room) => (
+                {displayRooms.slice(0, isGuestUser ? 3 : 1).map((room) => (
                   <PressableScale
                     key={room.id}
                     onPress={() => navigation.push('Room', { roomKey: room.roomKey ?? 'custom', roomId: room.id })}
@@ -846,14 +801,14 @@ export default function MoodScreen({ navigation }: Props) {
                     </View>
                   </PressableScale>
                 ))}
-                {activeRooms.length > 1 && (
+                {displayRooms.length > (isGuestUser ? 3 : 1) && (
                   <TouchableOpacity onPress={() => setShowAllRooms(true)} accessibilityRole="button"
-                    accessibilityLabel={lang === 'en' ? `See all ${activeRooms.length} braziers` : `查看全部 ${activeRooms.length} 個火盆`}
+                    accessibilityLabel={lang === 'en' ? `See all ${displayRooms.length} braziers` : `查看全部 ${displayRooms.length} 個火盆`}
                     style={{ alignItems: 'center', paddingVertical: 8 }}>
                     <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
                       {lang === 'en'
-                        ? `See all ${activeRooms.length} braziers →`
-                        : `查看全部 ${activeRooms.length} 個火盆 →`}
+                        ? `See all ${displayRooms.length} braziers →`
+                        : `查看全部 ${displayRooms.length} 個火盆 →`}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -872,6 +827,23 @@ export default function MoodScreen({ navigation }: Props) {
               </PressableScale>
             )}
           </View>
+
+          {/* Guest: explain the 3-day firepit window and how to speak up (W1-3). */}
+          {isGuestUser && (
+            <View style={{ gap: 10 }}>
+              <View style={{ padding: 14, borderRadius: 16, borderWidth: 0.6, borderColor: '#8fbf8f47', backgroundColor: 'rgba(143,191,143,0.07)' }}>
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9.5, letterSpacing: 1.7, textTransform: 'uppercase', color: '#8fbf8f', fontWeight: '600', marginBottom: 5 }}>
+                  {lang === 'en' ? 'why yesterday is still here' : '為什麼看得到昨晚的話'}
+                </Text>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, lineHeight: 20, color: p.inkSoft }}>
+                  {t('guestFirepitNote', lang)}
+                </Text>
+              </View>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 18, color: p.muted, textAlign: 'center' }}>
+                {t('guestTapToReply', lang)}
+              </Text>
+            </View>
+          )}
 
           <View style={styles.secondaryRow}>
             <PressableScale onPress={() => navigation.push('Loft')} scaleTo={0.975} style={styles.secondaryCardWrap}
@@ -943,74 +915,48 @@ export default function MoodScreen({ navigation }: Props) {
           backgroundColor: p.dark ? 'rgba(13,18,36,0.88)' : 'rgba(255,250,242,0.82)',
           borderTopColor: p.line,
         }]}>
-          {waiting ? (
-            // Waiting is never a dead spinner. While we look, the night stays
-            // warm: a reassurance that we'll tell them the moment someone comes,
-            // and two doors into things that DON'T need another person online
-            // right now — a night letter, or a brazier to sit by. This is the
-            // async buffer that makes an empty 2am not feel empty.
-            <View style={[styles.waitingCard, { backgroundColor: p.surface, borderColor: p.line }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <BreathDot p={p} size={6} />
-                <View style={{ flex: 1 }}>
-                  <WaitingDots
-                    style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: p.ink }}
-                    prefix={lang === 'en' ? 'Finding someone' : '正在為你尋找'} />
-                  <WaitStatus awakeCount={awakeCount} lang={lang} color={p.muted} />
-                </View>
-                <TouchableOpacity onPress={handleCancelWait}
-                  style={[styles.cancelBtn, { backgroundColor: p.danger + '12', borderColor: p.danger + '25' }]}>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.danger }}>
-                    {lang === 'en' ? 'cancel' : '取消'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, color: p.muted, marginTop: 12, marginBottom: 8 }}>
-                {lang === 'en' ? 'while you wait —' : '趁現在，先做點什麼 —'}
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={openLetters}
-                  style={[styles.waitAction, { backgroundColor: p.glass, borderColor: p.line }]}>
-                  <Text style={{ fontSize: 13 }}>✉</Text>
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, color: p.ink }}>
-                    {lang === 'en' ? 'A night letter' : '寫封夜信'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    const hottest = activeRooms[0];
-                    if (hottest) navigation.push('Room', { roomKey: hottest.roomKey ?? 'custom', roomId: hottest.id });
-                    else openNewRoom();
-                  }}
-                  style={[styles.waitAction, { backgroundColor: p.glass, borderColor: p.line }]}>
-                  <BreathDot p={p} size={4} />
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, color: p.ink }}>
-                    {lang === 'en' ? 'Sit by a brazier' : '去火盆坐坐'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <SoftButton
-              p={p}
-              variant="primary"
-              size="lg"
-              full
-              onPress={handleEnter}
-              disabled={!tonightMode && !isGuestUser}
-            >
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1a1530' : '#fff' }}>
-                {isGuestUser
-                  ? (lang === 'en' ? 'Create an account to talk' : '建立帳號，找人說說話')
-                  : tonightMode
-                    ? t('moodEnter', lang)
-                    : (lang === 'en' ? 'Choose how you feel tonight' : '先選擇今晚的狀態')}
-              </Text>
-            </SoftButton>
-          )}
+          {/* The match CTA stays put; while `waiting`, the full-screen
+              HonestWaiting overlay (below) covers it with the honest 0-online
+              state instead of a dead spinner (W1-2). */}
+          <SoftButton
+            p={p}
+            variant="primary"
+            size="lg"
+            full
+            onPress={handleEnter}
+            disabled={waiting || (!tonightMode && !isGuestUser)}
+          >
+            <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 16, color: p.dark ? '#1f1014' : '#fff' }}>
+              {isGuestUser
+                ? (lang === 'en' ? 'Create an account to talk' : '建立帳號，找人說說話')
+                : tonightMode
+                  ? t('moodEnter', lang)
+                  : (lang === 'en' ? 'Choose how you feel tonight' : '先選擇今晚的狀態')}
+            </Text>
+          </SoftButton>
         </View>
        </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* ── Honest waiting overlay (W1-2) — replaces the infinite spinner ── */}
+      {waiting && (
+        <HonestWaiting
+          p={p}
+          lang={lang}
+          awakeCount={awakeCount}
+          queueCount={queueCount}
+          onGoFirepit={() => {
+            // Keep the queue running underneath (a native-stack push does not
+            // unmount this screen, so subscribeToMyMatch keeps matching); just
+            // go sit somewhere with words in it.
+            const hottest = activeRooms[0];
+            if (hottest) navigation.push('Room', { roomKey: hottest.roomKey ?? 'custom', roomId: hottest.id });
+            else openNewRoom();
+          }}
+          onWrite={openLetters}
+          onCancel={handleCancelWait}
+        />
+      )}
 
       {/* 夜信 sheet — read tonight's letter, reply, see replies, write tomorrow's. */}
       {showLetters && (
@@ -1157,7 +1103,7 @@ export default function MoodScreen({ navigation }: Props) {
               {lang === 'en' ? 'each brazier burns for 24 hours' : '每個火盆點燃後只留 24 小時'}
             </Text>
             <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 8 }} showsVerticalScrollIndicator={false}>
-              {activeRooms.map(room => (
+              {displayRooms.map(room => (
                 <TouchableOpacity key={room.id} activeOpacity={0.85}
                   onPress={() => { setShowAllRooms(false); navigation.push('Room', { roomKey: room.roomKey ?? 'custom', roomId: room.id }); }}
                   style={[styles.roomItem, { backgroundColor: p.glass, borderColor: p.line }]}>
@@ -1513,10 +1459,6 @@ const styles = StyleSheet.create({
   loftSubtitle:  { fontFamily: 'NotoSerifTC-Regular', fontSize: 10.5, lineHeight: 15, color: 'rgba(245,226,196,0.58)', marginTop: 2 },
 
   bottom:        { paddingHorizontal: 20, paddingTop: 11, paddingBottom: 16, borderTopWidth: 0.5 },
-  waitingBox:    { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, borderWidth: 0.5 },
-  waitingCard:   { padding: 14, borderRadius: 16, borderWidth: 0.5 },
-  waitAction:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 12, borderWidth: 0.5 },
-  cancelBtn:     { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 0.5 },
 
   guideScrim:    { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.62)', alignItems: 'center', justifyContent: 'center', padding: 28 },
   guideCard:     { borderRadius: 26, paddingTop: 30, paddingBottom: 22, paddingHorizontal: 24, width: '100%', borderWidth: 0.5, overflow: 'hidden',

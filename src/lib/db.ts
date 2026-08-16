@@ -307,8 +307,23 @@ export interface DbRoom {
 export const ROOM_CAPACITY = 20;
 /** A presence entry counts as "online" if its heartbeat is within this window. */
 export const PRESENCE_STALE_MS = 45 * 1000;
-/** Every brazier lives exactly 24 hours from the moment it's lit. */
+/** Every brazier lives exactly 24 hours from the moment it's lit. This is how
+ *  long it ACCEPTS new messages (closesAt); it is not how long its words survive
+ *  — see ROOM_MESSAGE_TTL_MS. */
 export const ROOM_LIFETIME_MS = 24 * 60 * 60 * 1000;
+/**
+ * Firepit messages stay READABLE this long after they're written — the W1-1
+ * pivot (design handoff): a first arrival at 0-online should still find words to
+ * read instead of an empty room. This decouples "readable" from the room's 24h
+ * "accepting new messages" life. 1:1 chats are unaffected (still wiped on end).
+ *
+ * ⚠️ Companion backend change required for this to fully take effect: the
+ * thirties-admin `cleanup-rooms` cron must stop DELETING a room (and its
+ * messages) at closesAt, and instead keep it read-only until
+ * closesAt + ROOM_MESSAGE_TTL_MS. Until that ships, this only stamps intent and
+ * filters stale reads client-side. See HANDOFF.md.
+ */
+export const ROOM_MESSAGE_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
 /** A room is expired once its closesAt has passed (isActive alone isn't enough —
  *  nothing flips the flag server-side, so the client must honor closesAt). */
@@ -329,6 +344,29 @@ export async function fetchActiveRooms(): Promise<DbRoom[]> {
     .map(d => ({ id: d.id, ...d.data() }) as DbRoom)
     .filter(r => !roomExpired(r))
     .sort((a, b) => (b.messageCount ?? 0) - (a.messageCount ?? 0))
+    .slice(0, 20);
+}
+
+/**
+ * Rooms whose words are still READABLE — currently-open braziers AND ones that
+ * closed within ROOM_MESSAGE_TTL_MS (W1-1). Powers the guest "listen first" home
+ * and any first-arrival surface, so a 0-online night still shows yesterday's
+ * lines instead of an empty room. Only rooms that actually have words to read
+ * are returned, most-recently-active first. (The live lobby still uses
+ * fetchActiveRooms, which shows only open rooms regardless of message count.)
+ */
+export async function fetchReadableRooms(): Promise<DbRoom[]> {
+  const cutoff = Timestamp.fromMillis(Date.now() - ROOM_MESSAGE_TTL_MS);
+  const q = query(
+    collection(db, 'rooms'),
+    where('closesAt', '>', cutoff),
+    orderBy('closesAt', 'desc'),
+    limit(30),
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }) as DbRoom)
+    .filter(r => (r.messageCount ?? 0) > 0)
     .slice(0, 20);
 }
 
@@ -378,6 +416,17 @@ export interface DbRoomMessage {
   content: string;
   createdAt: any;
   reactions?: Record<string, number>;
+  /** When this message stops being readable (createdAt + ROOM_MESSAGE_TTL_MS).
+   *  Absent on legacy messages, which are treated as still-live. */
+  expiresAt?: any;
+}
+
+/** A room message is still readable if it has no TTL (legacy) or hasn't hit it.
+ *  Client-side guard so expired words never render even if a cleanup job lags. */
+function roomMessageLive(m: DbRoomMessage): boolean {
+  const e: any = m.expiresAt;
+  const ms = e?.toMillis ? e.toMillis() : (typeof e?.seconds === 'number' ? e.seconds * 1000 : null);
+  return ms == null || ms > Date.now();
 }
 
 /**
@@ -424,6 +473,7 @@ export async function fetchRoomMessages(roomId: string): Promise<DbRoomMessage[]
   const snap = await getDocs(q);
   return snap.docs
     .map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage)
+    .filter(roomMessageLive)
     .reverse();
 }
 
@@ -443,6 +493,7 @@ export async function fetchOlderRoomMessages(
   const snap = await getDocs(q);
   return snap.docs
     .map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage)
+    .filter(roomMessageLive)
     .reverse();
 }
 
@@ -459,7 +510,9 @@ export function subscribeToRoomMessages(
     limitToLast(100),
   );
   return onSnapshot(q, snap => {
-    onMessage(snap.docs.map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage));
+    onMessage(snap.docs
+      .map(d => ({ id: d.id, roomId, ...d.data() }) as DbRoomMessage)
+      .filter(roomMessageLive));
   });
 }
 
@@ -476,6 +529,9 @@ export async function sendRoomMessage(params: {
       senderSeed: params.senderSeed,
       content: params.content,
       createdAt: serverTimestamp(),
+      // 3-day readable window (W1-1). Stamped per-message so a TTL cleanup can
+      // expire individual words even after the room stops taking new ones.
+      expiresAt: Timestamp.fromDate(new Date(Date.now() + ROOM_MESSAGE_TTL_MS)),
     });
     // Keep the brazier alive: every message resets its life to a full 24h. (The
     // old +12h reset could SHORTEN a fresh room's 24h — the first message cut
@@ -1647,6 +1703,27 @@ export async function leaveMatchQueue(): Promise<void> {
   try { await deleteDoc(doc(db, 'matchQueue', uid)); } catch {}
 }
 
+/**
+ * How many OTHER people are waiting to be paired right now (status 'waiting',
+ * not expired, excluding me). A REAL number for the honest-waiting screen
+ * (W1-2) — the product promise is "沒有人就是沒有人", so this must never be
+ * padded. Single equality filter, no composite index.
+ */
+export async function fetchWaitingQueueCount(): Promise<number> {
+  const myUid = getCurrentUid();
+  try {
+    const q = query(collection(db, 'matchQueue'), where('status', '==', 'waiting'), limit(100));
+    const snap = await getDocs(q);
+    const now = Date.now();
+    return snap.docs.filter(d => {
+      if (d.id === myUid) return false;
+      const e: any = d.data().expiresAt;
+      const ms = e?.toMillis ? e.toMillis() : null;
+      return ms == null || ms > now;
+    }).length;
+  } catch { return 0; }
+}
+
 /** Subscribe to current user's match queue entry for real-time status changes */
 export function subscribeToMyMatch(
   onChange: (entry: MatchQueueEntry | null) => void,
@@ -1836,6 +1913,120 @@ export async function createConversation(params: { userBId: string; roomId?: str
     const ref = await addDoc(collection(db, 'conversations'), data);
     return { id: ref.id, ...data } as DbConversation;
   } catch { return null; }
+}
+
+// ── Invites (W2-6) ────────────────────────────────────────
+// A man invites a specific person from a firepit, quoting the line he heard.
+// Free to send and free to decline: the inviter only pays (INVITE_WICK_COST) on
+// his FIRST message in the resulting conversation, so "not accepted = not
+// charged" holds with no refund path (a refund would need a server grant, which
+// the spend-only economy forbids). Women are never charged.
+export interface DbInvite {
+  id: string;
+  fromUserId: string;
+  fromSeed: string;
+  toUserId: string;
+  toSeed: string;
+  roomId: string;
+  roomTitle: string;
+  quote: string;          // her line he is answering
+  quoteContext: string;   // where/when she said it
+  note: string | null;    // optional line he wrote with the invite
+  fromGender: string | null;
+  fromAge: string | null;
+  status: 'pending' | 'accepted' | 'declined';
+  conversationId: string | null;
+  createdAt: any;
+  expiresAt: any;
+}
+
+export async function createInvite(params: {
+  toUserId: string; toSeed: string; roomId: string; roomTitle: string;
+  quote: string; quoteContext: string; fromSeed: string; note?: string;
+  fromGender?: string | null; fromAge?: string | null;
+}): Promise<DbInvite | null> {
+  const uid = getCurrentUid();
+  if (!uid) return null;
+  try {
+    // Same person, same night: only one pending invite (the drawer also guards).
+    const dup = await getDocs(query(
+      collection(db, 'invites'),
+      where('fromUserId', '==', uid),
+      where('toUserId', '==', params.toUserId),
+      where('status', '==', 'pending'),
+      limit(1),
+    ));
+    if (!dup.empty) return { id: dup.docs[0].id, ...dup.docs[0].data() } as DbInvite;
+    const data = {
+      fromUserId: uid, fromSeed: params.fromSeed,
+      toUserId: params.toUserId, toSeed: params.toSeed,
+      roomId: params.roomId, roomTitle: params.roomTitle,
+      quote: params.quote, quoteContext: params.quoteContext,
+      note: params.note ?? null,
+      fromGender: params.fromGender ?? null, fromAge: params.fromAge ?? null,
+      status: 'pending' as const, conversationId: null,
+      createdAt: serverTimestamp(),
+      // A night's invite: stays actionable for 12 hours.
+      expiresAt: Timestamp.fromDate(new Date(Date.now() + 12 * 60 * 60 * 1000)),
+    };
+    const ref = await addDoc(collection(db, 'invites'), data);
+    return { id: ref.id, ...data } as DbInvite;
+  } catch { return null; }
+}
+
+/** The current user's pending invite tray (A1/A4). Live, drops expired ones. */
+export function subscribeToMyInvites(onChange: (invites: DbInvite[]) => void): () => void {
+  const uid = getCurrentUid();
+  if (!uid) { onChange([]); return () => {}; }
+  const q = query(
+    collection(db, 'invites'),
+    where('toUserId', '==', uid),
+    where('status', '==', 'pending'),
+    limit(20),
+  );
+  return onSnapshot(q, snap => {
+    const now = Date.now();
+    onChange(
+      snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as DbInvite)
+        .filter(i => (i.expiresAt?.toMillis?.() ?? 0) > now)
+        .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)),
+    );
+  });
+}
+
+/**
+ * Accept an invite (A4). The accepter creates the conversation (userAId must be
+ * the caller per the conversations rule), with the inviter as userB and marked
+ * so ChatScreen charges HIM INVITE_WICK_COST on his first message — never her.
+ */
+export async function acceptInvite(inviteId: string): Promise<{ ok: boolean; conversationId?: string; fromSeed?: string }> {
+  const uid = getCurrentUid();
+  if (!uid) return { ok: false };
+  try {
+    const inviteRef = doc(db, 'invites', inviteId);
+    const snap = await getDoc(inviteRef);
+    if (!snap.exists()) return { ok: false };
+    const inv = snap.data() as any;
+    if (inv.toUserId !== uid || inv.status !== 'pending') return { ok: false };
+    const conv = await addDoc(collection(db, 'conversations'), {
+      userAId: uid, userBId: inv.fromUserId, roomId: inv.roomId ?? null,
+      messageCount: 0, createdAt: serverTimestamp(),
+      expiresAt: Timestamp.fromDate(new Date(Date.now() + 30 * 60 * 1000)),
+      endedAt: null, endedReason: null,
+      // The inviter (userB) owes INVITE_WICK_COST on his first message.
+      inviteChargeUserId: inv.fromUserId,
+    });
+    await updateDoc(inviteRef, { status: 'accepted', conversationId: conv.id });
+    return { ok: true, conversationId: conv.id, fromSeed: inv.fromSeed };
+  } catch { return { ok: false }; }
+}
+
+/** Decline an invite (A4 "看下一個 / 不想被打擾"). Zero cost to anyone. */
+export async function declineInvite(inviteId: string): Promise<void> {
+  const uid = getCurrentUid();
+  if (!uid) return;
+  try { await updateDoc(doc(db, 'invites', inviteId), { status: 'declined' }); } catch {}
 }
 
 /** Load a conversation (for its authoritative expiresAt — both sides must run

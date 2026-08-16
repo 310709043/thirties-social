@@ -15,7 +15,7 @@ import { useIsForeground } from '../lib/appState';
 import { enterLoft, subscribeTonightLoftSessions, DbLoftSession, createLoftConversation, isLoftOpen, postRitualResponse, subscribeToTonightRitual, DbRitualResponse, fetchMyTonightLoftWhispers, subscribeMyTonightLoftWhispers, DbLoftWhisper, localNightDate } from '../lib/db';
 import { getTonightRitual } from '../lib/rituals';
 import { TextInput } from 'react-native';
-import { getLoftName } from '../lib/identity';
+import { getColorAdj } from '../lib/identity';
 import { hapticMedium, hapticWarning } from '../lib/haptics';
 import { filterMessage } from '../lib/filter';
 import { hasLoftPin, verifyLoftPin, setLoftPin, clearLoftPin } from '../lib/loftLock';
@@ -67,7 +67,7 @@ export default function LoftScreen({ navigation }: Props) {
       });
       if (!go) { entryRequestRef.current = false; return; }
     }
-    const nightName = getLoftName(seed, lang);
+    const nightName = getColorAdj(seed, lang).label;
     let result: Awaited<ReturnType<typeof enterLoft>>;
     try {
       result = await enterLoft(nightName, loftPhoto);
@@ -171,8 +171,8 @@ export default function LoftScreen({ navigation }: Props) {
       Alert.alert(
         lang === 'en' ? 'The Loft is closed' : '夜閣還沒開',
         lang === 'en'
-          ? 'The Loft opens nightly, 21:00–05:00. Come back after dark.'
-          : '夜閣每晚 21:00 開到清晨 05:00。天黑之後再來。',
+          ? 'The Loft opens for the small hours, 02:00–05:00. Come back then.'
+          : '夜閣只開給睡不著的那三個小時：02:00–05:00。那時再來。',
         [{ text: 'OK', style: 'cancel' }],
       );
       return;
@@ -308,30 +308,8 @@ export default function LoftScreen({ navigation }: Props) {
             </Text>
           </View>
 
-          {/* Optional photo for the night — others only see a blurred hint. */}
-          <TouchableOpacity onPress={pickLoftPhoto} activeOpacity={0.8} disabled={uploadingPhoto}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, paddingHorizontal: 4 }}>
-            <View style={{ width: 48, height: 48, borderRadius: 10, overflow: 'hidden', borderWidth: 0.5, borderColor: 'rgba(232,165,87,0.35)', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(232,165,87,0.06)' }}>
-              {loftPhotoUri ? (
-                <>
-                  <Image source={{ uri: loftPhotoUri }} blurRadius={18} style={StyleSheet.absoluteFill} />
-                  {uploadingPhoto ? <ActivityIndicator color={L.candle} /> : null}
-                </>
-              ) : (
-                <Text style={{ fontSize: 22, color: L.candle }}>＋</Text>
-              )}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, color: L.ink, letterSpacing: 0.5 }}>
-                {loftPhoto
-                  ? (lang === 'en' ? 'Photo added · tap to change' : '已加入照片 · 點擊更換')
-                  : (lang === 'en' ? 'Bring a photo tonight (optional)' : '帶一張照片進來（選填）')}
-              </Text>
-              <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11.5, color: L.muted, marginTop: 3, lineHeight: 17 }}>
-                {lang === 'en' ? 'Others only see a blurred hint · gone by dawn' : '別人只會看到模糊的你 · 天亮後刪除'}
-              </Text>
-            </View>
-          </TouchableOpacity>
+          {/* Photo upload removed (W3-9): the redefined Loft has no photos, so a
+              "bring a photo" row would contradict the space and the mandate. */}
 
           {/* Enter button */}
           <TouchableOpacity onPress={handleEnter} activeOpacity={0.85}
@@ -504,7 +482,7 @@ function ritualAgo(ms: number, lang: string): string {
 function LoftInside({ lang, wicks, onBack, onEnter }: any) {
   const { seed, identityKind } = useAppStore();
   const foreground = useIsForeground();
-  const myName = getLoftName(seed, lang);
+  const myName = getColorAdj(seed, lang).label;
   const [sessions, setSessions] = React.useState<DbLoftSession[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [connecting, setConnecting] = React.useState<string | null>(null);
@@ -897,10 +875,10 @@ function LoftGuide({ lang, onDismiss }: { lang: string; onDismiss: () => void })
         : '點一個人開始說話。天亮前，這段對話會自己熄滅。',
     },
     {
-      title: lang === 'en' ? 'Coming closer' : '想更靠近',
+      title: lang === 'en' ? 'It doesn’t stay' : '留不住',
       desc: lang === 'en'
-        ? 'Veiled photos and lifting a veil cost wicks — and only by mutual consent.'
-        : '帶紗照片、掀面紗需要燭芯，而且雙方同意才會發生。',
+        ? 'What you say fades ten minutes later. No photos, no invites, no adding anyone — just a room of people who are awake.'
+        : '說出口的話 10 分鐘後就消失。沒有照片、沒有邀請、不能加人——就是一屋子還醒著的人。',
     },
   ];
   return (

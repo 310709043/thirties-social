@@ -11,7 +11,7 @@ import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
 import { IdentityStylePicker } from '../components/identity/IdentityStylePicker';
 import { useAppStore, setIdentityKind, getAvailableIdentityKinds, setLoftVisible, getTier } from '../hooks/useAppStore';
-import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN, getLoftName } from '../lib/identity';
+import { COLOR_NAMES_ZH, COLOR_NAMES_EN, ADJ_ZH, ADJ_EN } from '../lib/identity';
 import { pickImage, uploadAlbumPhoto } from '../lib/photos';
 import { getAlbum, addAlbumPhoto, removeAlbumPhoto, AlbumPhoto, fetchMyBonds, removeBond, DbBond, createConversation, getCurrentUid } from '../lib/db';
 import { getDiaryEntries, removeDiaryEntry, DiaryEntry } from '../lib/diary';
@@ -194,9 +194,9 @@ export default function ProfileScreen({ navigation }: Props) {
     FREETIME_MAP[f] ? (lang === 'en' ? FREETIME_MAP[f].en : FREETIME_MAP[f].zh) : f
   );
 
-  // The Loft now shows an auto-generated poetic name (seed-based, changes nightly);
-  // this is the real name others see, so the profile shows it read-only.
-  const loftName = getLoftName(seed, lang);
+  // Unified identity (W3-11 / §identity): the Loft no longer has its own second
+  // name — everywhere you appear, you're the same tonight-name.
+  const loftName = getColorAdj(seed, lang).label;
   const currentStyle = styleMeta(identityKind);
 
   return (

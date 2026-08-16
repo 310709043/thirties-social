@@ -11,7 +11,7 @@ import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, Hairline, WickGlyph, FadeInUp, MessageSkeleton } from '../components/ui';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, canCreateRoom, getTier, ROOM_CREATE_COST, canMatch, MATCH_WICK_COST, matchCostsWick, freeConnectionsRemaining, roomCreateCostsWick, recordRoomCreated } from '../hooks/useAppStore';
+import { useAppStore, canCreateRoom, getTier, ROOM_CREATE_COST, canMatch, MATCH_WICK_COST, matchCostsWick, freeConnectionsRemaining, roomCreateCostsWick, recordRoomCreated, setInviteContext } from '../hooks/useAppStore';
 import { getOrCreatePresetRoom, getRoomById, subscribeToRoomMessages, sendRoomMessage, createRoom, deleteOwnEmptyRoom, createConversation, DbRoom, DbRoomMessage, fetchOlderRoomMessages, ROOM_CAPACITY, getCurrentUid, RoomPresence, countActivePresence, fetchActivePresenceCount, joinRoomPresence, heartbeatRoomPresence, leaveRoomPresence, subscribeToRoomPresence, spendWicks, reactToRoomMessage } from '../lib/db';
 import { RESONANCE_SYMBOLS, resonanceLabel } from '../lib/resonance';
 import { t as getT } from '../lib/copy';
@@ -62,20 +62,25 @@ export default function RoomScreen({ navigation, route }: Props) {
   // to create an account.
   const isGuestUser = getTier() === 'guest';
   const foreground = useIsForeground();
+  // A firepit stops taking new messages at closesAt, but its words linger 3 days
+  // (W1-1). So a room reached from the guest "listen first" home may be CLOSED
+  // yet still readable — show it read-only rather than letting a doomed send fail.
+  const roomClosed = (() => {
+    const c: any = room?.closesAt;
+    const ms = c?.toMillis ? c.toMillis() : (typeof c?.seconds === 'number' ? c.seconds * 1000 : null);
+    return ms != null && ms < Date.now();
+  })();
   // readOnly is set only when we entered an already-full room (never joined).
-  const canSend = !readOnly && !!uid && !isGuestUser;
+  const canSend = !readOnly && !roomClosed && !!uid && !isGuestUser;
 
-  const promptRegister = () => {
-    Alert.alert(
-      lang === 'en' ? 'Create an account to join in' : '建立帳號才能參與',
-      lang === 'en'
-        ? 'As a guest you can read the room. Create an account to speak, react, and connect.'
-        : '訪客可以閱讀火盆裡的對話。建立帳號後，就能發言、回應、和人搭上話。',
-      [
-        { text: lang === 'en' ? 'Not now' : '再看看', style: 'cancel' },
-        { text: lang === 'en' ? 'Create account' : '建立帳號', onPress: () => navigation.push('Auth', { mode: 'register' }) },
-      ],
-    );
+  // Guest "register moment" (W1-3): a bottom sheet that quotes the exact line
+  // they tapped, so signing up is tied to a concrete "I want to answer THIS",
+  // not an abstract wall. Passing a msgId also stashes inviteContext so the line
+  // can carry through registration into the invite flow (W2-6).
+  const [guestPrompt, setGuestPrompt] = useState<{ quote: string | null; msgId?: string } | null>(null);
+  const promptRegister = (quote: string | null = null, msgId?: string) => {
+    if (quote && msgId && roomId) setInviteContext({ messageId: msgId, quote, roomId });
+    setGuestPrompt({ quote, msgId });
   };
 
   const reshuffleIdentity = () => {
@@ -368,7 +373,7 @@ export default function RoomScreen({ navigation, route }: Props) {
               {messages.map((msg, i) => (
                 <FadeInUp key={msg.id} distance={10} delay={Math.min(i * 30, 180)}>
                   <TouchableOpacity onPress={() => {
-                    if (isGuestUser) return promptRegister();
+                    if (isGuestUser) return promptRegister(msg.content, msg.id);
                     // Tapping your own message must not open an invite to yourself.
                     if (msg.senderId === uid) return;
                     setInviting({ senderId: msg.senderId, seed: msg.senderSeed, zh: msg.content, en: msg.content, age: 0 });
@@ -458,13 +463,23 @@ export default function RoomScreen({ navigation, route }: Props) {
                   accessibilityRole="button" accessibilityLabel="送出"
                   disabled={!inputText.trim() || sending}
                 >
-                  <Text style={{ color: inputText.trim() ? (p.dark ? '#1a1530' : '#fff') : p.muted, fontSize: 16 }}>↑</Text>
+                  <Text style={{ color: inputText.trim() ? (p.dark ? '#1f1014' : '#fff') : p.muted, fontSize: 16 }}>↑</Text>
                 </TouchableOpacity>
               </View>
             </>
+          ) : roomClosed ? (
+            // Closed but still readable (W1-1): make the read-only state honest
+            // instead of letting a send silently fail against the closesAt rule.
+            <View style={[styles.identityComposerRow, { backgroundColor: p.surface, borderColor: p.line, justifyContent: 'center' }]}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, textAlign: 'center' }}>
+                {lang === 'en'
+                  ? 'This firepit has gone out — you can still read it for a few days.'
+                  : '這個火盆已經熄了 — 這幾天還能回來看，但不能再說話。'}
+              </Text>
+            </View>
           ) : isGuestUser ? (
             // Guests can watch the room, but speaking requires an account.
-            <TouchableOpacity onPress={promptRegister}
+            <TouchableOpacity onPress={() => promptRegister()}
               accessibilityRole="button"
               accessibilityLabel={lang === 'en' ? 'Create an account to speak in this brazier' : '建立帳號，在火盆發言'}
               style={[styles.identityComposerRow, { backgroundColor: p.surface, borderColor: p.line, justifyContent: 'center', gap: 8 }]}>
@@ -486,6 +501,49 @@ export default function RoomScreen({ navigation, route }: Props) {
           )}
         </View>
        </KeyboardAvoidingView>
+
+        {/* GUEST REGISTER SHEET (W1-3) — quotes the tapped line so signing up is
+            tied to a concrete "I want to answer this", not an abstract wall. */}
+        {guestPrompt && (
+          <View style={[styles.sheetOverlay, { backgroundColor: p.dark ? 'rgba(10,12,28,0.7)' : 'rgba(160,150,170,0.4)' }]}>
+            <TouchableOpacity style={{ flex: 1 }} onPress={() => setGuestPrompt(null)} />
+            <View style={[styles.sheet, { backgroundColor: p.bgSolid, borderColor: p.line, gap: 12 }]}>
+              <View style={[styles.sheetHandle, { backgroundColor: p.line }]} />
+              {guestPrompt.quote ? (
+                <View>
+                  <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9.5, letterSpacing: 1.7, textTransform: 'uppercase', color: p.accent, fontWeight: '600', marginBottom: 6 }}>
+                    {t('guestRegQuoteLabel', lang)}
+                  </Text>
+                  <View style={{ padding: 12, borderRadius: 14, backgroundColor: p.glass, borderLeftWidth: 2, borderLeftColor: p.accent }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 14, lineHeight: 22, color: p.ink }} numberOfLines={4}>
+                      「{guestPrompt.quote}」
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 18, lineHeight: 28, color: p.ink }}>
+                {t('guestRegTitle', lang)}
+              </Text>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, lineHeight: 20, color: p.muted }}>
+                {t('guestRegWhy', lang)}
+              </Text>
+              <TouchableOpacity
+                onPress={() => { setGuestPrompt(null); navigation.push('Auth', { mode: 'register' }); }}
+                accessibilityRole="button"
+                style={{ height: 52, borderRadius: 999, backgroundColor: p.ink, alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, fontWeight: '500', color: p.dark ? '#1f1014' : (p.surfaceSolid || '#fff') }}>
+                  {t('guestRegCta', lang)}
+                </Text>
+              </TouchableOpacity>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, lineHeight: 17, color: p.muted, textAlign: 'center' }}>
+                {t('guestRegFooter', lang)}
+              </Text>
+              <TouchableOpacity onPress={() => setGuestPrompt(null)} style={{ alignSelf: 'center', padding: 6 }}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted }}>{t('guestRegCancel', lang)}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* CREATE ROOM SHEET */}
         {showCreateRoom && (

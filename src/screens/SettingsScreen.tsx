@@ -302,9 +302,12 @@ export default function SettingsScreen({ navigation }: Props) {
                   {lang === 'en' ? 'Create an account to save your data' : '建立帳號以保存資料'}
                 </Text>
                 <Text style={{ fontFamily: 'Inter-Regular', fontSize: 11, color: p.muted, textAlign: 'center', marginTop: 4 }}>
+                  {/* P7: guests cannot buy wicks or subscribe, so the old line
+                      naming "wicks / subscription" described an impossible state.
+                      The honest loss is a device-bound guest identity. */}
                   {lang === 'en'
-                    ? 'As a guest, wicks, subscription and history are lost if you log out or reinstall.'
-                    : '訪客身分下，登出或重裝會失去燭芯、訂閱與歷史記錄。'}
+                    ? 'A guest is tied to this device — reinstalling loses your history.'
+                    : '訪客身分綁在這支手機，重裝就會失去歷史記錄。'}
                 </Text>
               </TouchableOpacity>
             </FadeInUp>

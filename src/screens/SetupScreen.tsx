@@ -12,11 +12,15 @@ import { useAppStore, setSetupDone, setProfileFields, Gender } from '../hooks/us
 import { analytics } from '../lib/analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Setup'>;
-type ProfileStep = 0 | 1 | 2;
+// Two steps (W3-10): the old middle step (感情狀態 + 它現在的樣子) is removed —
+// asking a first-time visitor to declare their marriage before they can even
+// look inside was too heavy, and the most affair-coded options ("開放關係 / 無性了")
+// sat awkwardly against the companion-not-dating mandate. Those fields become
+// optional later; onboarding now only needs who you want to be tonight + intent.
+type ProfileStep = 0 | 1;
 
 const STEPS = [
   { zh: '關於你', en: 'About you' },
-  { zh: '你的關係', en: 'Your relationship' },
   { zh: '今晚想要什麼', en: 'What you want tonight' },
 ] as const;
 
@@ -178,9 +182,7 @@ export default function SetupScreen({ navigation, route }: Props) {
 
   const stepReady = step === 0
     ? !!gender && !!age
-    : step === 1
-      ? !!marriage
-      : seeking.length > 0 && !!boundary;
+    : seeking.length > 0 && !!boundary;
 
   const goToStep = (next: ProfileStep) => {
     setStep(next);
@@ -196,7 +198,10 @@ export default function SetupScreen({ navigation, route }: Props) {
       await setProfileFields({
         gender: selectedGender,
         ageBracket: age!,
-        relationshipStatus: toSlug(MARRIAGE_ZH, MARRIAGE_EN, MARRIAGE_SLUGS, marriage) ?? marriage!,
+        // Relationship status/shape no longer asked during setup (W3-10). Any
+        // value already on the profile is preserved; a first-time user simply
+        // leaves them unset (a proper optional editor belongs on ProfileScreen).
+        relationshipStatus: toSlug(MARRIAGE_ZH, MARRIAGE_EN, MARRIAGE_SLUGS, marriage) ?? marriage ?? '',
         relationshipShape: toSlug(SHAPE_ZH, SHAPE_EN, SHAPE_SLUGS, shape),
         seeking: toSlugs(SEEKING_ZH, SEEKING_EN, SEEKING_SLUGS, seeking),
         boundary: toSlug(BOUNDARY_ZH, BOUNDARY_EN, BOUNDARY_SLUGS, boundary) ?? boundary!,
@@ -224,7 +229,7 @@ export default function SetupScreen({ navigation, route }: Props) {
 
   const handlePrimary = () => {
     if (!stepReady) return;
-    if (step < 2) goToStep((step + 1) as ProfileStep);
+    if (step < 1) goToStep((step + 1) as ProfileStep);
     else void handleDone();
   };
 
@@ -333,42 +338,7 @@ export default function SetupScreen({ navigation, route }: Props) {
                 <>
                   <SectionIntro
                     p={p}
-                    eyebrow={zh ? '第二步 · 關係現況' : 'Step two · relationship'}
-                    title={zh ? '說清楚，才不會彼此猜測' : 'Clarity creates safer connections'}
-                    body={zh
-                      ? '這些資訊會幫你找到比較談得來的人，也讓雙方在開始前理解彼此情境。'
-                      : 'These answers help connect you with a compatible conversation partner and give both people context before talking.'}
-                  />
-                  <ChipRow
-                    p={p}
-                    label={zh ? '目前的感情狀態' : 'Relationship status'}
-                    options={zh ? MARRIAGE_ZH : MARRIAGE_EN}
-                    value={marriage}
-                    onPick={setMarriage}
-                  />
-                  <ChipRow
-                    p={p}
-                    label={zh ? '它現在的樣子' : 'What it feels like now'}
-                    optional={zh ? '選填' : 'optional'}
-                    options={zh ? SHAPE_ZH : SHAPE_EN}
-                    value={shape}
-                    onPick={setShape}
-                  />
-                  <View style={[styles.trustNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '35' }]}>
-                    <Text style={[styles.trustText, { color: p.inkSoft }]}>
-                      {zh
-                        ? '誠實不等於公開。這些內容只用於安排一對一對話，以及你允許顯示的個人頁。'
-                        : 'Honest does not mean public. These answers are used to arrange 1-on-1 conversations and for profile details you choose to show.'}
-                    </Text>
-                  </View>
-                </>
-              )}
-
-              {step === 2 && (
-                <>
-                  <SectionIntro
-                    p={p}
-                    eyebrow={zh ? '第三步 · 意圖與邊界' : 'Step three · intent & boundaries'}
+                    eyebrow={zh ? '第二步 · 意圖與邊界' : 'Step two · intent & boundaries'}
                     title={zh ? '今晚，你想靠近到哪裡？' : 'How close feels right tonight?'}
                     body={zh
                       ? '先說出期待與邊界，會讓第一句話更自然，也更安全。'
@@ -480,7 +450,7 @@ export default function SetupScreen({ navigation, route }: Props) {
                     ? (editMode
                         ? (zh ? '正在儲存變更⋯' : 'Saving changes…')
                         : (zh ? '正在準備你的夜晚⋯' : 'Preparing your night…'))
-                    : step === 2
+                    : step === 1
                       ? (editMode
                           ? (zh ? '儲存變更' : 'Save changes')
                           : (zh ? '完成，開始今晚' : 'Finish and begin'))

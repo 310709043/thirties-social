@@ -71,3 +71,62 @@
    - 🔥 **火盆自動化已做(2026-08-09,Claude)**:根因是 app 端 `ensureOfficialRooms` 只在「有人開 app 進主畫面」時才建火盆(`MoodScreen.tsx:226`),而後台 `cleanup-rooms` cron 又會刪過期房 → 一天沒人開就變 0 個火盆、陌生人打開見空城。**修法**:在 `thirties-admin` 新增 `src/lib/ensureOfficialRooms.ts`(server 版,逐字複製 app 的題庫/FNV-1a hash/roomKey/房間文件結構,並把夜間日期做 UTC→台灣時區校正),接進 `cleanup-rooms` cron(Hobby 只有 2 cron 槽、已滿,故搭在刪除後補種;idempotent、與 client 同 key 不重複)。**tsc/eslint 過、時區與題庫已用腳本對拍一致**。⏳ **待部署**(`cd ~/thirties-admin && npx vercel --prod`)——部署後每天 04:00 UTC(台灣 12:00)自動補種當晚兩把火盆。⚠️ 只解「空城壞掉感」,**不生出真人**;真人氣仍靠第一晚揪人劇本。要立刻補種當晚:部署後手動打 cron 端點(帶 `CRON_SECRET`)或開一次 app 即可。
 3. 招募:FB 補封面、IG 發第一篇(caption 見 `marketing/` 或問 Claude)、發 Dcard/Threads/PTT 導 `thirties-landing.vercel.app` 報名。報名表已串 Google Sheet(端到端測過)。
    - 🕯️ **第一晚「揪人同時上線」執行單**:`marketing/FIRST_NIGHT_RECRUITING.md`(分波名單模板 + 三段邀請訊息 + 值班時間表 + Go/No-Go 成功線)。專攻冷啟動「同一時段湊 5–10 人」;逐步傍晚時程/話術仍見 OneDrive `第一晚上線執行卡.md` / `陪聊值班話術手冊.md`(本單不重複那些)。
+
+---
+
+## 🎨 設計交接包重構(進行中,2026-08-16,Claude)
+
+> 來源:`~/Downloads/design_handoff_candle_whisper`(README + `design/*.dc.html` 設計參考)。老闆拍板:**整包全做**(三波 11 項)、**火盆訊息保留 3 天**、**方案 A 火盆優先**。
+
+### ✅ 已完成(typecheck + `npm run check` 全綠;**尚未 build,尚未 push**)
+- **前置 token/對比**(`theme.ts`/`ui/index.tsx`):nocturne `muted` .5→.62(修 P8 對比 3.4:1)、深色文字 `#1a1530`/`#15172e`→`#1f1014`、新增 `LOFT_PALETTE_V2`(夜閣紫調 W3-9 用)、`LETTER_PALETTE`(回顧信亮色 W2-8 用)。
+- **前置 store 資料模型**(`useAppStore.ts`):新增 `guestBrowsing`/`pendingInvites`/`inviteContext`/`sigil`/`savedPeople`(上限3)/`streakNights` + 型別 `Invite`/`InviteContext`/`SavedPerson` + 常數 `INVITE/EXTEND/REUNION_WICK_COST`=2/2/3、`SAVED_PEOPLE_MAX`=3 + setters。
+- **W1-1 資料層**(`db.ts`):`ROOM_MESSAGE_TTL_MS`=3天、`sendRoomMessage` 每則蓋 `expiresAt`、三條讀取路徑加 `roomMessageLive` 過濾(過期字不渲染)、新增 `fetchReadableRooms`(給訪客/第一位到場看「昨晚的話」)。
+- **W1-2 誠實的等候**(`components/ui/HonestWaiting.tsx` 新元件 + `MoodScreen.tsx`):取代無限 spinner/60秒彈窗。全螢幕誠實 overlay——**真實** `awakeCount` + `fetchWaitingQueueCount`(新增,真數字,不灌水)、標明是「典型時段人潮」的長條圖(非假的「今晚」即時數)、兩個出口(去火盆坐著〔W1-1 讓 0 人也有話可讀〕/先把話寫下來)、誠實 footer「沒有人就是沒有人」。移除舊 `WaitingDots`/`WaitStatus`/相關 styles。
+  - 🧭 **PM 微調(偏離交接包但守鐵律)**:交接包原本主鈕是「有人上線就通知我」,但**通知上線的後端 infra 不存在**,做了會違反「誠實優先」鐵律(承諾做不到的事)。改成「先去火盆坐著」——W1-1 剛好讓空城也有昨晚的話可讀,是誠實又對味的出口。要補真的「上線通知」需另做 presence→push 後端。
+
+### ✅ W1-1 後端 companion(已完成,2026-08-16)—— 兩端都通了
+1. **`thirties-admin` `cleanup-rooms` cron 已改兩階段**(`src/app/api/cron/cleanup-rooms/route.ts`,tsc/eslint 過):過 `closesAt` → **退役**(`isActive:false`,退出大廳但保留可讀);過 `closesAt + 3天` → 才 `recursiveDelete`。回傳多一個 `retired` 計數。⏳ **待部署**(`cd ~/thirties-admin && npx vercel --prod`)。
+2. **Firestore rules 本就相容**——`rooms` 與 `messages` 都 `allow read: if request.auth != null`(已關閉的房仍可讀),寫入維持 `isActive==true && closesAt > request.time`(符合 security-regression `expired rooms reject new messages`)。**不需改 rules。**
+3. **app 讀取面已加 `fetchReadableRooms`**(`db.ts`):回「開著的 + 3 天內關閉的、且有訊息的」房,給訪客/第一位到場的人看「昨晚的訊息」。大廳仍用 `fetchActiveRooms`(只回開著的)。
+- ✅ RoomScreen 已熄房唯讀 banner 已於 W1-3(#5)補上。
+
+### ✅ W1-3 訪客先聽再註冊(#5,已完成)
+- `AuthScreen`:訪客入口改**登入/註冊兩 mode 都顯示**(原只 login),且訪客**不再進 Setup**,直接 `replace('Mood')` + `setGuestBrowsing(true)`。
+- `MoodScreen`:訪客隱藏 ritualCard(心情輸入+模式選擇,對訪客無效)、改「先聽聽這裡的人在說什麼」標題、火盆區永遠展開、用 `fetchReadableRooms` 顯示**含昨晚可讀的**火盆(最多3)、加「為什麼看得到昨晚的話」+「點一句就好」提示。
+- `RoomScreen`:訪客點某則訊息 → 升起**帶引言的註冊 sheet**(quote + 「要開口，需要一個只有今晚的名字」),並存 `inviteContext` 供註冊後 W2-6 沿用;**已熄但可讀的房**→ 唯讀 banner(不讓送訊息 silent fail)。
+- `SettingsScreen`:刪掉「訪客會失去燭芯、訂閱」的**不可能狀態**文案(訪客本就不能買),改成誠實的「訪客綁這支手機、重裝失去歷史」。
+
+### ✅ W1-4 燭芯規則收成一頁(#6,已完成)—— 修 P5
+- `UpgradeScreen`:把埋在「+ 什麼時候用燭芯」摺疊裡的規則,改成**常駐可見的單一真實來源**卡片:三種核心用法(邀請/續30分2/重逢3)+「永遠免費」綠框 + 「燭芯買不到」紅框。
+- `copy.ts`:`wicksBlurb` 從模糊的「聊天不用花燭芯」改成「訊息不用燭芯,燭芯只讓對話走得更久——規則就在下面」,消 P5 矛盾。
+- 🧭 **PM 判斷(尊重交接包自己的波次)**:交接包把「邀請=2芯」放在**它的 Wave 2**(#10),把移除照片/夜閣扣費放 **Wave 3**。所以「只有三種用法」的絕對宣稱、以及 invite 從 1→2 的**改價**都留到 #10/#13——那時只需更新這一頁(單一來源的意義)。現在若硬說「只有三種/買不到照片」會與尚存的帶紗照片/夜閣心跳扣費打架,不誠實。故 Wave 1 只做「單一來源頁 + 消矛盾」,改價是 Wave 2。persona-regression 鎖著配額經濟模型,改價要連它一起改。
+
+### ✅ W1-1 後端已部署(2026-08-16)
+`cd ~/thirties-admin && npx vercel --prod` 已跑,`readyState: READY / target: production`。火盆 3 天保留的 cron 兩階段邏輯已上線,下個排程(每天 04:00 UTC)生效。
+
+### ✅ W3-10 Setup 三步→兩步(#14,已完成)
+`SetupScreen`:移除中間「關係現況」步(感情狀態 9 選 + 它現在的樣子 3 選)——最 affair-coded 的選項(開放關係/無性了)也一併消失,更貼陪伴非約會鐵律。剩性別+年齡、意圖+邊界兩步。既有值保留、不強制;完整的「個人頁選填編輯器」留待 ProfileScreen(follow-up)。tsc/`npm run check` 綠。
+
+### 🟡 W3-9 夜閣重定義(#13,核心完成/polish 待續)
+- ✅ **已修 P6 鐵律違反(最關鍵、最可見)**:進場畫面文案全改(`copy.ts` loft*)——移除「被想念一次/帶紗照片、交心/私下金錢往來永久封鎖」,改成「給睡不著的那三個小時」+「沒有照片、沒有名單、沒有邀請」+四條與火盆差別;**移除帶一張照片進來的上傳入口**(LoftScreen);LoftGuide 第三格從「帶紗照片、掀面紗」改「留不住·10 分鐘消失」;開放時間文案 21:00→02:00–05:00。
+- ⏳ **待續(polish,非 trust-blocker)**:LoftChatScreen 的 pulse(想你/躺下了/有你真好)+ 掀面紗 veil-lift UI 尚未移除——但**照片上傳已拔掉 → 無照片流入 → veil 實際上已 inert**;pulse 文案偏親密待重寫。紫調 reskin(LOFT_PALETTE→LOFT_PALETTE_V2)未做(視覺 polish,動到 954 行內大量 L. 參照,低 trust 價值故延後)。時間閘仍沿用刻意的 always-open 冷啟動繞過(EXPO_PUBLIC_LOFT_ALWAYS_OPEN),未改回真的 02:00–05:00 gate(放量前先保持好進入)。
+
+### ✅ 又完成(2026-08-16 同日第二批,皆 `npm run check` 綠)
+- **#11 對話延續抽屜(修 P1)**:ChatScreen 三個 12px 入口(續燭/重逢/留下彼此)收成**一個 <5 分自動升起的抽屜**(`ContinueOption`);點計時器或自動浮現。
+- **#15 留下彼此**:守夜會員閘(本就有)+ **上限 3 人**(`canSavePerson`/`SAVED_PEOPLE_MAX`)+ 雙方確認後 `savePerson`(暱稱=對方今晚名,可日後改)。⚠️ 存的 handle 是**每日 seed**(非永久)→ 跨夜認得同一人需 #8 永久星圖廣播(見下方隱私決策)。
+- **#7 logo**:整支換成門+燭+鑰匙孔(`Logo.tsx`,512 viewBox,尺寸階梯 96/56/32/24/16、深色版 #c99154、火焰=貨幣 glyph `WickCurrencyGlyph`)。舊的燭台九圖形已淘汰。
+- **#8 安全部分**:砍「全部 16 種身份」賣點(copy + UpgradeScreen ×2)、夜閣第二套名 `getLoftName` → 統一用 `getColorAdj().label`(LoftScreen/ProfileScreen)。
+  - 🔒 **#8 延後的部分(PM 決定,守 launch 信任)**:(1)**永久星圖廣播**給陌生人以「跨夜認得」——會反轉 identity.ts 每日雜湊種子的 H5 匿名設計,不在上線衝刺硬上,留你日後明確拍板;(2)名庫擴充——identity-regression 強制**五個池等長**(`.size===1`),要擴得連發明 48 個不重複 hex + 改回歸測試,高風險低價值(color+sigil 視覺本就能區分),延後;(3)星圖新 renderer 是視覺 polish,非阻擋。
+
+### ⏳ 仍未做(剩最大的後端/新畫面工程,誠實:是 follow-up)
+- **#10 邀請帶上下文+2芯 — 後端已完成(2026-08-16),前端待續(atomic)**:
+  - ✅ **後端(安全、加法式、security-regression 綠)**:`db.ts` 加 `invites` collection + `createInvite`/`subscribeToMyInvites`/`acceptInvite`/`declineInvite` + `DbInvite`;`firestore.rules` 加 `invites` 區塊(發起人 create、僅收件人 accept/decline、不可改內容)。**經濟設計守不變量**:邀請免費送、女生免費、**男生只在被接受後對話裡送出第一則訊息才扣 2 芯**(`acceptInvite` 建對話時蓋 `inviteChargeUserId`),沒接受＝沒對話＝不扣,不需退款(退款=server grant=違反 spend-only)。
+  - ⏳ **前端是 atomic 一塊(不能只做一半,否則弄壞現有即時開聊)**:目前 RoomScreen 邀請是「立刻建對話開聊」;要改成 createInvite,就**必須同時**做女生的邀請匣(subscribeToMyInvites)+ A4 接受畫面 + ChatScreen 首則訊息收 `inviteChargeUserId` 2 芯 + persona-regression 補 invite 成本案例。只做 send-rewire 會讓邀請進虛空(女生無 UI 接受)。故留整塊一起做。app 端已鋪路:`inviteContext` 已存、訪客/男生點訊息已接上。
+- **#9 首頁男女分流(A1女/A2男)**:女生端核心是「邀請匣」,靠 #10 的 invites 資料,故耦合 #10。
+- **#12 隔日回顧信**:LETTER_PALETTE 已備;需**晨間統計資料管線**(昨晚說幾句/被幾人記住)+ 08:00 推播排程,非純前端。
+- **#13 收尾**:LoftChat 的 pulse(想你/躺下了)+ veil-lift UI 移除、紫調 reskin。
+- **#8 收尾**:星圖 renderer、名庫、廣播決策(見上)。
+
+### ⚠️ 待老闆決策(擋 task #8 品牌三層識別)
+**永久星圖 vs 每日輪換雜湊種子的匿名設計正面衝突。** `identity.ts` 目前刻意每日換 seed 且 SHA-256 雜湊,就是要讓人**無法跨日連結同一使用者**(資安稽核 H5)。交接包的「不換星圖」要的正是**跨夜可辨識**。我已加 `sigil` 欄位但**僅本機、未廣播**;要不要廣播(=別人跨夜認得你)是隱私取捨,需老闆拍板再動。

@@ -68,7 +68,10 @@ export const DIRECTIONS: Record<Direction, Palette> = {
     glow: 'rgba(232,165,87,0.30)',
     ink: '#f5e2c4',
     inkSoft: 'rgba(245,226,196,0.82)',
-    muted: 'rgba(245,226,196,0.5)',
+    // Raised from .5 → .62: the old auxiliary text sat at ~3.4:1 over #170f13,
+    // below the accessibility floor (handoff P8). .62 clears it while keeping
+    // the quiet hierarchy. Screens still drop to .58 as the lowest tier only.
+    muted: 'rgba(245,226,196,0.62)',
     faint: 'rgba(245,226,196,0.28)',
     line: 'rgba(245,226,196,0.13)',
     surface: 'rgba(255,240,224,0.05)',
@@ -124,6 +127,43 @@ export const LOFT_PALETTE = {
   glassBlur: 18,
   danger: '#e8a557',
   statusDark: true,
+};
+
+// Loft (夜閣) v2 — the redefined Loft is a violet "small hours" room, not the old
+// ember/candle warmth (handoff W3-9). No photos, no invites; just a few people
+// awake in the same room. Used by LoftScreen / LoftChatScreen once redefined.
+export const LOFT_PALETTE_V2 = {
+  bg: ['#2a2138', '#1a1420', '#0d0a12'],
+  bgSolid: '#1a1420',
+  ink: '#e4dcf6',
+  inkSoft: 'rgba(240,234,251,0.72)',
+  muted: 'rgba(214,206,246,0.75)',
+  faint: 'rgba(214,206,246,0.4)',
+  line: 'rgba(200,190,240,0.16)',
+  glow: 'rgba(150,140,200,0.12)',
+  glass: 'rgba(214,206,246,0.06)',
+  dark: true,
+  accent: '#c8bef0',
+  accentSoft: 'rgba(200,190,240,0.12)',
+  glassBlur: 18,
+  danger: '#e0806e',
+  statusDark: true,
+};
+
+// Review letter (隔日回顧信) — the ONE light-background screen in the app. A warm
+// paper tone, read once in the morning (handoff W2-8). Kept as a flat token set,
+// not a Direction, because it is a single dedicated screen not the themeable UI.
+export const LETTER_PALETTE = {
+  bg: ['#faf4ea', '#f2e8da', '#e8dcc9'],
+  bgSolid: '#f2e8da',
+  paper: '#fffdf8',
+  ink: '#3a3128',
+  inkSoft: 'rgba(58,49,40,0.78)',
+  muted: 'rgba(74,63,54,0.62)',
+  line: 'rgba(74,63,54,0.14)',
+  gold: '#c99a5b',
+  goldLabel: '#b8873f',
+  dark: false,
 };
 
 export const DEFAULT_DIRECTION: Direction = 'nocturne';

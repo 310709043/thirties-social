@@ -8,11 +8,12 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t } from '../lib/copy';
-import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, FadeInUp, TypingIndicator, ExtendGlyph, RekindleGlyph, BondGlyph } from '../components/ui';
+import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, FadeInUp, TypingIndicator } from '../components/ui';
 import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch } from '../hooks/useAppStore';
+import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch, savePerson, canSavePerson, SAVED_PEOPLE_MAX } from '../hooks/useAppStore';
+import { getColorAdj } from '../lib/identity';
 import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationDoc, voteExtendConversation, voteRekindle, voteBond, stampConversationSeed } from '../lib/db';
 import { scheduleRekindleReminder, registerForPushNotifications, scheduleNightlyReminder } from '../lib/notifications';
 import { filterMessage } from '../lib/filter';
@@ -34,6 +35,46 @@ const EXTEND_WICK_COST = 2;
 /** 重逢 — each side pays this to vote for meeting again tomorrow night. */
 const REKINDLE_WICK_COST = 3;
 
+/** One option row inside the continuation drawer (W2-7). */
+function ContinueOption({
+  p, title, sub, price, tag, state, lang, onPress,
+}: {
+  p: any; title: string; sub: string; price?: number; tag?: string;
+  state: 'idle' | 'waiting' | 'done'; lang: 'zh' | 'en'; onPress: () => void;
+}) {
+  const done = state === 'done';
+  const waiting = state === 'waiting';
+  return (
+    <TouchableOpacity onPress={onPress} disabled={done || waiting} activeOpacity={0.85}
+      style={{
+        flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, borderRadius: 18,
+        borderWidth: done ? 1 : 0.7,
+        borderColor: done ? p.accent : (tag ? 'rgba(150,160,210,0.3)' : 'rgba(232,165,87,0.3)'),
+        backgroundColor: done ? p.accentSoft : (tag ? 'rgba(150,160,210,0.08)' : 'rgba(232,165,87,0.10)'),
+        opacity: waiting ? 0.7 : 1,
+      }}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, fontWeight: '500' }}>{title}</Text>
+        <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 18, color: p.muted, marginTop: 2 }}>
+          {waiting ? (lang === 'en' ? 'waiting for them…' : '等對方一起⋯') : done ? (lang === 'en' ? 'set ·' : '已約定 ·') + ' ' : ''}{sub}
+        </Text>
+      </View>
+      {done ? (
+        <Text style={{ color: p.accent, fontSize: 16 }}>✓</Text>
+      ) : tag ? (
+        <View style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(150,160,210,0.16)' }}>
+          <Text style={{ fontFamily: 'Inter-Regular', fontSize: 10.5, color: '#c3c9e8' }}>{tag}</Text>
+        </View>
+      ) : price != null ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(232,165,87,0.22)' }}>
+          <WickGlyph size={12} color={p.accent} />
+          <Text style={{ fontFamily: 'Inter-Regular', fontSize: 13, color: p.accent, fontWeight: '600' }}>{price}</Text>
+        </View>
+      ) : null}
+    </TouchableOpacity>
+  );
+}
+
 export default function ChatScreen({ navigation, route }: Props) {
   const { seed, direction, lang, identityKind, wicks, autoFilter, slowMode, vigil } = useAppStore();
   const p = DIRECTIONS[direction];
@@ -50,6 +91,10 @@ export default function ChatScreen({ navigation, route }: Props) {
   // died while the other thought they'd been ghosted.
   const closeAtRef = useRef(Date.now() + TOTAL_SECONDS * 1000);
   const [remaining, setRemaining] = useState(TOTAL_SECONDS);
+  // Continuation drawer (W2-7): one sheet for the three ways to carry on. Rises
+  // on its own once under 5 minutes (auto-open fires at most once per chat).
+  const [showContinue, setShowContinue] = useState(false);
+  const continueAutoRef = useRef(false);
   const [extendVotes, setExtendVotes] = useState<Record<string, boolean>>({});
   const [extended, setExtended] = useState(false);
   const [extendBusy, setExtendBusy] = useState(false);
@@ -277,11 +322,35 @@ export default function ChatScreen({ navigation, route }: Props) {
       );
       return;
     }
+    // Cap: a Vigil member may keep at most SAVED_PEOPLE_MAX people (W3-11). Only
+    // blocks the PROPOSER; accepting someone who already kept you is still fine.
+    if (vigil && !otherVotedBond && !canSavePerson()) {
+      Alert.alert(
+        lang === 'en' ? 'Your circle is full' : '已經留滿了',
+        lang === 'en'
+          ? `You can keep up to ${SAVED_PEOPLE_MAX} people. Let one go first to keep someone new.`
+          : `最多只能留下 ${SAVED_PEOPLE_MAX} 個人。想留新的，先放掉一個。`,
+        [{ text: 'OK', style: 'cancel' }],
+      );
+      return;
+    }
     setBondBusy(true);
     const r = await voteBond({ conversationId, mySeed: seed, otherSeed });
     if (r === 'confirmed') hapticMedium();
     setBondBusy(false);
   };
+
+  // When a bond is mutually confirmed, keep the person (W3-11). The nickname —
+  // the private third identity layer — defaults to their tonight-name and can be
+  // renamed later. Handle is the current seed for now; a permanent star-chart
+  // handle (so they stay recognisable across nights) lands with the identity work.
+  const bondSavedRef = useRef(false);
+  useEffect(() => {
+    if (bondConfirmed && !bondSavedRef.current && otherSeed && canSavePerson()) {
+      bondSavedRef.current = true;
+      void savePerson(otherSeed, getColorAdj(otherSeed, lang).label);
+    }
+  }, [bondConfirmed, otherSeed, lang]);
 
   // Always points at this render's sendMessage (fresh inputText for the
   // slow-mode timer); assigned right after sendMessage is defined below.
@@ -427,6 +496,16 @@ export default function ChatScreen({ navigation, route }: Props) {
     photoId: msg.messageType === 'photo' ? msg.content : null,
   }));
 
+  // Auto-raise the continuation drawer once, under 5 minutes, on a real chat
+  // that hasn't already locked in all three outcomes (W2-7).
+  useEffect(() => {
+    if (continueAutoRef.current) return;
+    if (remaining <= 300 && remaining > 0 && realMessages.length >= 4 && !otherLeft && !extended) {
+      continueAutoRef.current = true;
+      setShowContinue(true);
+    }
+  }, [remaining, realMessages.length, otherLeft, extended]);
+
   return (
     <VaporBackground p={p} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -499,56 +578,24 @@ export default function ChatScreen({ navigation, route }: Props) {
                     ? 'when this reaches zero, the entire conversation dissolves.'
                     : '歸零之後，整段對話會全部消散。')}
               </Text>
-              {/* 續燭 — one mutual +30 min per conversation. Shown once the chat
-                  is real (a few messages in) and until it's used. */}
-              {!extended && !otherLeft && realMessages.length >= 4 && (
-                <TouchableOpacity onPress={handleExtend} disabled={extendBusy || iVotedExtend}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 6, opacity: iVotedExtend ? 0.7 : 1 }}>
-                  <ExtendGlyph size={15} ink={p.accent} />
-                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.accent }}>
-                    {iVotedExtend
-                      ? (lang === 'en' ? 'waiting for them to extend too…' : '等待對方一起續燭⋯')
-                      : otherVotedExtend
-                      ? (lang === 'en' ? `They want 30 more minutes — join in (${EXTEND_WICK_COST} wicks)` : `對方想多聊 30 分鐘 — 一起續燭（${EXTEND_WICK_COST} 芯）`)
-                      : (lang === 'en' ? `Extend +30 min · both agree · ${EXTEND_WICK_COST} wicks each` : `續燭 +30 分 · 雙方同意 · 各 ${EXTEND_WICK_COST} 芯`)}
-                  </Text>
-                </TouchableOpacity>
-              )}
               {extended && (
                 <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 11, color: p.accent, textAlign: 'center', paddingVertical: 4 }}>
                   {lang === 'en' ? '· the candle was relit · +30 min ·' : '· 燭火重新點亮 · +30 分 ·'}
                 </Text>
               )}
-              {/* 重逢 & 留下彼此 — earned after a real conversation (10+ messages). */}
-              {!otherLeft && displayMessages.length >= VEIL_MIN_MESSAGES && (
-                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 18, paddingTop: 2 }}>
-                  <TouchableOpacity onPress={handleRekindle} disabled={rekindleBusy || iVotedRekindle}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 5, opacity: iVotedRekindle && !rekindleConfirmed ? 0.7 : 1 }}>
-                    <RekindleGlyph size={15} ink={rekindleConfirmed ? p.accent : p.inkSoft} />
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: rekindleConfirmed ? p.accent : p.inkSoft }}>
-                      {rekindleConfirmed
-                        ? (lang === 'en' ? 'meeting again tomorrow' : '明晚重逢已約定')
-                        : iVotedRekindle
-                        ? (lang === 'en' ? 'waiting for them…' : '等待對方⋯')
-                        : otherVotedRekindle
-                        ? (lang === 'en' ? `they want to meet again (${REKINDLE_WICK_COST})` : `對方想明晚重逢（${REKINDLE_WICK_COST} 芯）`)
-                        : (lang === 'en' ? `meet again tomorrow · ${REKINDLE_WICK_COST}` : `明晚重逢 · ${REKINDLE_WICK_COST} 芯`)}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={handleBond} disabled={bondBusy || iVotedBond}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 5, opacity: iVotedBond && !bondConfirmed ? 0.7 : 1 }}>
-                    <BondGlyph size={15} ink={bondConfirmed ? p.accent : p.inkSoft} />
-                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: bondConfirmed ? p.accent : p.inkSoft }}>
-                      {bondConfirmed
-                        ? (lang === 'en' ? 'kept each other' : '已留下彼此')
-                        : iVotedBond
-                        ? (lang === 'en' ? 'waiting for them…' : '等待對方⋯')
-                        : otherVotedBond
-                        ? (lang === 'en' ? 'they want to keep you' : '對方想留下你')
-                        : (lang === 'en' ? 'keep each other · Vigil' : '留下彼此 · 守夜')}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+              {/* One tap opens the continuation drawer (W2-7 / fixes P1): the
+                  three ways to carry on now live in one sheet that also rises on
+                  its own under 5 minutes, instead of three 12px links crammed
+                  under the timer that no one read mid-conversation. */}
+              {!otherLeft && realMessages.length >= 4 && !(extended && rekindleConfirmed && bondConfirmed) && (
+                <TouchableOpacity onPress={() => setShowContinue(true)}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 6 }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, color: p.accent }}>
+                    {(iVotedExtend || iVotedRekindle || iVotedBond)
+                      ? (lang === 'en' ? 'waiting for them… · see options' : '等待對方⋯ · 看看選項')
+                      : (lang === 'en' ? 'How to carry this on →' : '想怎麼接下去？ →')}
+                  </Text>
+                </TouchableOpacity>
               )}
             </View>
           </View>
@@ -841,6 +888,53 @@ export default function ChatScreen({ navigation, route }: Props) {
           )}
           {showSupport && (
             <CrisisSupportCard p={p} lang={lang} onDismiss={() => setShowSupport(false)} />
+          )}
+
+          {/* CONTINUATION DRAWER (W2-7 / fixes P1) — the three ways to carry on,
+              in one sheet instead of 12px links under the timer. */}
+          {showContinue && !otherLeft && (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,8,14,0.62)', justifyContent: 'flex-end' }}>
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowContinue(false)} />
+              <View style={{ margin: 14, marginBottom: 22, padding: 20, borderRadius: 26, borderWidth: 1, borderColor: 'rgba(232,165,87,0.4)', backgroundColor: p.dark ? '#141626' : p.surfaceSolid, gap: 10, shadowColor: '#000', shadowOffset: { width: 0, height: -14 }, shadowOpacity: 0.5, shadowRadius: 40 }}>
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9.5, letterSpacing: 1.7, textTransform: 'uppercase', color: p.accent, fontWeight: '600' }}>
+                  {t('continueTitle', lang)}
+                </Text>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 18, lineHeight: 28, color: p.ink, marginBottom: 4 }}>
+                  {lang === 'en'
+                    ? `${Math.max(1, Math.ceil(remaining / 60))} min left. How do you want to carry on?`
+                    : `剩 ${Math.max(1, Math.ceil(remaining / 60))} 分鐘。想怎麼接下去？`}
+                </Text>
+
+                {/* 1 · Extend 30 min */}
+                <ContinueOption p={p} title={t('continueExtend', lang)} sub={t('continueExtendSub', lang)}
+                  price={EXTEND_WICK_COST}
+                  state={extended ? 'done' : iVotedExtend ? 'waiting' : 'idle'}
+                  lang={lang}
+                  onPress={() => { if (!extended && !iVotedExtend) handleExtend(); }} />
+
+                {/* 2 · Reunion tomorrow — needs a real conversation first */}
+                {displayMessages.length >= VEIL_MIN_MESSAGES ? (
+                  <ContinueOption p={p} title={t('continueReunion', lang)} sub={t('continueReunionSub', lang)}
+                    price={REKINDLE_WICK_COST}
+                    state={rekindleConfirmed ? 'done' : iVotedRekindle ? 'waiting' : 'idle'}
+                    lang={lang}
+                    onPress={() => { if (!iVotedRekindle) handleRekindle(); }} />
+                ) : null}
+
+                {/* 3 · Keep each other — Vigil only, capped at SAVED_PEOPLE_MAX (W3-11) */}
+                {displayMessages.length >= VEIL_MIN_MESSAGES ? (
+                  <ContinueOption p={p} title={t('continueKeep', lang)} sub={t('continueKeepSub', lang)}
+                    tag={t('continueKeepTag', lang)}
+                    state={bondConfirmed ? 'done' : iVotedBond ? 'waiting' : 'idle'}
+                    lang={lang}
+                    onPress={() => { if (!iVotedBond) handleBond(); }} />
+                ) : null}
+
+                <TouchableOpacity onPress={() => setShowContinue(false)} style={{ alignSelf: 'center', paddingVertical: 8, marginTop: 2 }}>
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5, color: p.muted }}>{t('continueEnd', lang)}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>

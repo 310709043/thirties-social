@@ -96,10 +96,10 @@ export const SoftButton = React.memo(function SoftButton({
   }[size];
 
   const variants: Record<BtnVariant, ViewStyle & { color: string }> = {
-    primary:   { backgroundColor: p.ink, borderWidth: 0, color: p.dark ? '#1a1530' : (p.surfaceSolid || '#fff') },
+    primary:   { backgroundColor: p.ink, borderWidth: 0, color: p.dark ? '#1f1014' : (p.surfaceSolid || '#fff') },
     secondary: { backgroundColor: p.surface, borderWidth: 0.5, borderColor: p.line, color: p.ink },
     ghost:     { backgroundColor: 'transparent', borderWidth: 0.5, borderColor: p.line, color: p.muted },
-    accent:    { backgroundColor: p.accent, borderWidth: 0, color: p.dark ? '#15172e' : '#fbf5e4' },
+    accent:    { backgroundColor: p.accent, borderWidth: 0, color: p.dark ? '#1f1014' : '#fbf5e4' },
     danger:    { backgroundColor: 'transparent', borderWidth: 0.5, borderColor: p.danger + '40', color: p.danger },
   };
 

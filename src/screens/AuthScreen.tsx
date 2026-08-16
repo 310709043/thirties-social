@@ -10,7 +10,7 @@ import { RootStackParamList } from '../navigation';
 import { DIRECTIONS } from '../lib/theme';
 import { t, tAlt } from '../lib/copy';
 import { VaporBackground, GlassCard, SoftButton, FadeInUp, Logo } from '../components/ui';
-import { setOnboardingDone, syncAfterAuth, useAppStore } from '../hooks/useAppStore';
+import { setOnboardingDone, setGuestBrowsing, syncAfterAuth, useAppStore } from '../hooks/useAppStore';
 import { register, login, resetPassword, getCurrentUser } from '../lib/auth';
 import { signInWithGoogle, isGoogleAvailable } from '../lib/googleAuth';
 import { analytics } from '../lib/analytics';
@@ -353,22 +353,26 @@ export default function AuthScreen({ navigation, route }: Props) {
               </View>
             </FadeInUp>
 
-            {/* Guest option */}
-            {mode === 'login' && (
+            {/* Guest option — shown in BOTH login and register (P7: a first-time
+                download lands on register and never used to see this at all).
+                Guests go straight to the firepit home to LISTEN first; they no
+                longer fill in Setup before discovering what they can do. */}
+            {(mode === 'login' || mode === 'register') && (
               <FadeInUp delay={400} distance={8}>
                 <TouchableOpacity
                   onPress={async () => {
                     try { await ensureAnonAuth(); } catch {}
                     await syncAfterAuth();
                     await setOnboardingDone();
+                    setGuestBrowsing(true);
                     analytics.authSuccess('guest');
                     hapticSuccess();
-                    navigation.replace('Setup');
+                    navigation.replace('Mood');
                   }}
                   style={styles.guestBtn}
                 >
                   <Text style={{ fontFamily: 'EBGaramond-Italic', fontSize: 13, color: p.muted }}>
-                    {lang === 'en' ? 'Browse first without an account' : '暫不建立帳號，先瀏覽體驗'}
+                    {lang === 'en' ? 'Just listen first, no account' : '先聽聽這裡的人在說什麼'}
                   </Text>
                 </TouchableOpacity>
               </FadeInUp>

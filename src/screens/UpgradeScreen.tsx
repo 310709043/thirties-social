@@ -32,7 +32,6 @@ export default function UpgradeScreen({ navigation }: Props) {
   // could stack two native purchase dialogs.
   const [buying, setBuying] = useState(false);
   const buyingRef = useRef(false);
-  const [showWickDetails, setShowWickDetails] = useState(false);
   const persona = guest ? 'guest' : (gender ?? 'unknown');
 
   useEffect(() => { analytics.paywallView(persona, vigil); }, [persona, vigil]);
@@ -236,11 +235,11 @@ export default function UpgradeScreen({ navigation }: Props) {
               <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13, color: p.muted, lineHeight: 22, marginTop: 12 }}>
                 {!guest && gender === 'female'
                   ? (lang === 'en'
-                    ? 'You already have unlimited 1-on-1 conversations. Vigil adds the Loft every night, 5 wicks/day, all 16 identities, free rooms, and the ability to propose keeping each other.'
-                    : '你本來就享有不限次一對一。守夜會員另外提供每晚夜閣、每日 5 芯、全部 16 種身份、免費開火盆，以及主動提出「留下彼此」。')
+                    ? 'You already have unlimited 1-on-1 conversations. Vigil adds the Loft every night, 5 wicks/day, free rooms, and the ability to propose keeping each other.'
+                    : '你本來就享有不限次一對一。守夜會員另外提供每晚夜閣、每日 5 芯、免費開火盆，以及主動提出「留下彼此」。')
                   : (lang === 'en'
-                    ? 'Unlimited 1-on-1 conversations · Loft every night · 5 wicks/day · all 16 identities · free rooms · may propose keeping each other'
-                    : '不限次一對一 · 每晚夜閣 · 每日 5 芯 · 全部 16 種身份 · 免費開火盆 · 可提出「留下彼此」')}
+                    ? 'Unlimited 1-on-1 conversations · Loft every night · 5 wicks/day · free rooms · may propose keeping each other'
+                    : '不限次一對一 · 每晚夜閣 · 每日 5 芯 · 免費開火盆 · 可提出「留下彼此」')}
               </Text>
               {vigil ? (
                 <>
@@ -337,33 +336,56 @@ export default function UpgradeScreen({ navigation }: Props) {
             </View>
           </FadeInUp>
 
-          {/* Detailed costs stay available without dominating the decision. */}
+          {/* Wick rules — the SINGLE source of truth (W1-4, fixes P5). Always
+              visible, not buried in a toggle: every other screen must agree with
+              this and nothing else may state a different rule. */}
           <FadeInUp delay={700} distance={10}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showWickDetails }}
-              onPress={() => setShowWickDetails(value => !value)}
-              style={[styles.detailToggle, { backgroundColor: p.surface, borderColor: p.line }]}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.detailToggleTitle, { color: p.ink }]}>
-                  {lang === 'en' ? 'When exactly are wicks used?' : '什麼時候才會用到燭芯？'}
+            <View style={{ marginTop: 28 }}>
+              <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 18, lineHeight: 27, color: p.ink, fontWeight: '500' }}>
+                {t('wickRulesTitle', lang)}
+              </Text>
+              <Text style={[styles.blurb, { color: p.muted, marginTop: 4, marginBottom: 14 }]}>
+                {t('wickRulesLead', lang)}
+              </Text>
+
+              {([
+                { badge: (!guest && gender === 'female') ? (lang === 'en' ? 'free' : '免費') : null,
+                  title: 'wickRuleInvite', sub: (!guest && gender === 'female') ? 'wickRuleInviteSubF' : 'wickRuleInviteSubM' },
+                { badge: '2', title: 'wickRuleExtend', sub: 'wickRuleExtendSub' },
+                { badge: '3', title: 'wickRuleReunion', sub: 'wickRuleReunionSub' },
+              ] as const).map((r, i) => (
+                <View key={i} style={[styles.wickRuleRow, { backgroundColor: p.accentSoft, borderColor: p.accent + '48' }]}>
+                  <View style={styles.wickRuleBadge}>
+                    {r.badge === '免費' || r.badge === 'free'
+                      ? <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, fontWeight: '600', color: '#8fbf8f' }}>{r.badge}</Text>
+                      : <>
+                          <Text style={{ fontFamily: 'Inter-Regular', fontSize: 19, fontWeight: '600', color: p.accent }}>{r.badge}</Text>
+                          <WickGlyph size={12} color={p.accent} />
+                        </>}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 15, color: p.ink, fontWeight: '500' }}>{t(r.title, lang)}</Text>
+                    <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, lineHeight: 18, color: p.muted, marginTop: 2 }}>{t(r.sub, lang)}</Text>
+                  </View>
+                </View>
+              ))}
+
+              {/* Always free */}
+              <View style={[styles.wickListCard, { borderColor: '#8fbf8f4d', backgroundColor: 'rgba(143,191,143,0.07)' }]}>
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9.5, letterSpacing: 1.7, textTransform: 'uppercase', color: '#8fbf8f', fontWeight: '600', marginBottom: 5 }}>
+                  {t('wickFreeTitle', lang)}
                 </Text>
-                <Text style={[styles.detailToggleSub, { color: p.muted }]}>
-                  {lang === 'en' ? 'See the full, fixed cost list' : '查看完整且固定的扣除規則'}
-                </Text>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, lineHeight: 20, color: p.inkSoft }}>{t('wickFreeList', lang)}</Text>
               </View>
-              <Text style={{ color: p.accent, fontSize: 18 }}>{showWickDetails ? '−' : '+'}</Text>
-            </TouchableOpacity>
-            {showWickDetails ? (
-              <View style={[styles.wickNote, { backgroundColor: p.accentSoft, borderColor: p.accent + '30' }]}>
-                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12, color: p.inkSoft, lineHeight: 20 }}>
-                  {lang === 'en'
-                    ? `Veiled photo (2), lifting a veil layer (1), +30 minutes (2 each), meeting again tomorrow (3 each), Loft pulse (1), and a second room that day (2). ${!guest && gender === 'female' ? 'Women never pay a 1-on-1 connection charge.' : '1-on-1 connections past the daily free allowance cost 1.'} Ordinary messages cost 0.`
-                    : `帶紗照片（2）、揭一層面紗（1）、續聊 30 分鐘（各 2）、約明晚重逢（各 3）、夜閣心跳（1）、當天第二個火盆（2）。${!guest && gender === 'female' ? '女用戶的一對一連結不扣燭芯。' : '超過每日免費額度後，一對一連結每次 1 燭芯。'}一般訊息為 0。`}
+
+              {/* What wicks can't buy */}
+              <View style={[styles.wickListCard, { borderColor: p.danger + '44', backgroundColor: p.danger + '10' }]}>
+                <Text style={{ fontFamily: 'Inter-Regular', fontSize: 9.5, letterSpacing: 1.7, textTransform: 'uppercase', color: p.danger, fontWeight: '600', marginBottom: 5 }}>
+                  {t('wickCantTitle', lang)}
                 </Text>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 12.5, lineHeight: 20, color: p.inkSoft }}>{t('wickCantList', lang)}</Text>
               </View>
-            ) : null}
+            </View>
           </FadeInUp>
 
           {/* Restore purchases */}
@@ -390,8 +412,7 @@ const styles = StyleSheet.create({
   vigilBtn:     { height: 52, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
   vigilActive:  { height: 44, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 16, borderWidth: 0.5 },
   packRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 18, borderWidth: 0.5, marginBottom: 10 },
-  wickNote:     { marginTop: 20, padding: 14, borderRadius: 14, borderWidth: 0.5 },
-  detailToggle: { marginTop: 18, minHeight: 68, borderRadius: 16, borderWidth: 0.7, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 12 },
-  detailToggleTitle:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5 },
-  detailToggleSub:{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11.5, marginTop: 3 },
+  wickRuleRow:  { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 16, borderWidth: 0.7, marginBottom: 8 },
+  wickRuleBadge:{ width: 40, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 2 },
+  wickListCard: { marginTop: 8, padding: 14, borderRadius: 16, borderWidth: 0.7 },
 });

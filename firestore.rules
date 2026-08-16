@@ -240,6 +240,34 @@ service cloud.firestore {
       allow write:  if request.auth != null && request.auth.uid == presUid;
     }
 
+    // ── 邀請 Invites（火盆裡邀一個人單獨聊，W2-6）──────────
+    // The inviter creates a pending invite; only the recipient may act on it,
+    // and only to accept/decline (+ stamp the conversationId on accept). No one
+    // can rewrite an invite's content. Sending is free; the inviter pays only on
+    // his first message in the accepted conversation (see acceptInvite).
+    match /invites/{inviteId} {
+      allow read:   if request.auth != null
+                    && (resource.data.fromUserId == request.auth.uid
+                        || resource.data.toUserId == request.auth.uid);
+      allow create: if request.auth != null
+                    && request.resource.data.fromUserId == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.toUserId is string
+                    && request.resource.data.quote is string
+                    && request.resource.data.quote.size() <= 400
+                    && notBanned();
+      allow update: if request.auth != null
+                    && resource.data.toUserId == request.auth.uid
+                    && resource.data.status == 'pending'
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'conversationId'])
+                    && (request.resource.data.status == 'accepted'
+                        || request.resource.data.status == 'declined');
+      allow delete: if request.auth != null
+                    && (resource.data.fromUserId == request.auth.uid
+                        || resource.data.toUserId == request.auth.uid);
+    }
+
     // ── 重逢 Rekindles（明晚再見）────────────────────────
     match /rekindles/{rekId} {
       allow read:   if request.auth != null

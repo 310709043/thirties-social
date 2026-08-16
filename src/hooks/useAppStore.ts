@@ -5,7 +5,7 @@ import { getDailySeed } from '../lib/identity';
 import { Direction, autoDirection } from '../lib/theme';
 import { Lang } from '../lib/copy';
 import { IdentityKind } from '../lib/identity';
-import { ensureAnonAuth, upsertUser, updateUser, subscribeToUser, claimDailyRewardServer, spendWicks } from '../lib/db';
+import { ensureAnonAuth, upsertUser, updateUser, subscribeToUser, claimDailyRewardServer, spendWicks, ROOM_MESSAGE_TTL_MS } from '../lib/db';
 import { isGuest } from '../lib/auth';
 import { safeWicks } from '../lib/num';
 import { FREE_IDENTITY_KINDS, VIGIL_IDENTITY_KINDS } from '../lib/identityStyles';
@@ -25,11 +25,81 @@ async function getDeviceId(): Promise<string> {
   return id;
 }
 
+// Permanent star-chart seed (identity layer 2). Unlike the daily `seed`, this
+// never rotates — it is what lets "連續第 N 晚" / 認得昨天那個人 work. Derived
+// one-way from the deviceId with a distinct salt so it shares nothing with the
+// daily seed. LOCAL-ONLY for now: it is NOT broadcast to other users, because a
+// stable broadcast handle reverses the daily-hash anonymity fix in identity.ts.
+// Broadcasting it (cross-night recognition) is gated on an explicit privacy
+// decision — until then it only backs the user's own star-chart + streak.
+async function getSigilSeed(deviceId: string): Promise<string> {
+  const digest = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    `cw-sigil-v1|${deviceId}`,
+  );
+  return digest.slice(0, 20);
+}
+
+function safeParseSavedPeople(raw: string): SavedPerson[] {
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter(x => x && typeof x.sigil === 'string' && typeof x.nickname === 'string')
+      .slice(0, SAVED_PEOPLE_MAX);
+  } catch { return []; }
+}
+
 export type Gender = 'female' | 'male';
 
 /** Accept only values that still exist in the profile UI and product policy. */
 export function normalizeGender(value: unknown): Gender | null {
   return value === 'female' || value === 'male' ? value : null;
+}
+
+// ── Redesign data model (design handoff) ──────────────────────
+// Firepit message readable-window (W1-1). Canonical definition lives in db.ts
+// (next to the room lifecycle); re-exported here so screens can read it from the
+// store alongside the other economy constants.
+export { ROOM_MESSAGE_TTL_MS };
+/** "留下彼此" cap — a Vigil member may keep at most this many people. */
+export const SAVED_PEOPLE_MAX = 3;
+// The three (and only three) things wicks buy — single source of truth so no
+// screen can invent a different number (handoff W1-4 / P5). extend & reunion
+// mirror the existing ChatScreen costs; invite is the new room-invite price
+// (was folded into the generic MATCH_WICK_COST=1).
+export const INVITE_WICK_COST = 2;
+export const EXTEND_WICK_COST = 2;
+export const REUNION_WICK_COST = 3;
+
+/** A pending 1:1 invite in a woman's invite tray, carrying the line he heard
+ *  and enough context to decide (handoff A4). */
+export interface Invite {
+  id: string;
+  fromSeed: string;      // inviter's daily seed → tonight-name + star-chart
+  fromLabel: string;     // inviter's tonight name
+  roomId: string;
+  roomTitle: string;
+  quote: string;         // her line he is responding to
+  quoteContext: string;  // where/when she said it, e.g. 「今晚很孤單」22 分鐘前
+  note?: string;         // optional line he wrote with the invite
+  ageBracket?: string;
+  createdAt: number;
+}
+
+/** What an invite carries from a firepit message into the invite drawer (A3). */
+export interface InviteContext {
+  messageId: string;
+  quote: string;
+  roomId: string;
+}
+
+/** Someone kept via "留下彼此" (Vigil only). The third identity layer is a
+ *  private nickname only the keeper can see (handoff §匿名識別 layer 3). */
+export interface SavedPerson {
+  sigil: string;      // the other person's permanent star-chart seed
+  nickname: string;   // private, keeper-only (e.g. 「客廳那個人」)
+  keptAt: number;
 }
 
 interface AppState {
@@ -74,6 +144,25 @@ interface AppState {
   loftFreeWeek: string | null;
   /** @deprecated Legacy marker from the old guest taste-match flow. */
   guestMatchUsed: boolean;
+
+  // ── Redesign fields (design handoff) ──
+  /** Guest "listen first" mode: browsing firepits without having done Setup
+   *  (W1-3). Runtime only — guests are still gated at write time. */
+  guestBrowsing: boolean;
+  /** A woman's invite tray (A1/A4). Runtime — sourced from Firestore presence. */
+  pendingInvites: Invite[];
+  /** The firepit line a man/guest tapped to act on; drives the invite/register
+   *  drawer (A3 / guest register). Null when no drawer is pending. */
+  inviteContext: InviteContext | null;
+  /** Permanent star-chart seed — the ONE stable, recognisable handle (layer 2).
+   *  Deliberately SEPARATE from the daily-rotating `seed`. Local-only until the
+   *  cross-night-recognition privacy decision is settled (see task notes); not
+   *  broadcast yet. */
+  sigil: string;
+  /** People kept via "留下彼此" (Vigil), max SAVED_PEOPLE_MAX. */
+  savedPeople: SavedPerson[];
+  /** Consecutive nights the user has shown up — powers "連續來的第 N 晚". */
+  streakNights: number;
 }
 
 /**
@@ -104,6 +193,8 @@ let _state: AppState = {
   autoFilter: false, slowMode: false, conversationsToday: 0, peopleTodayCount: 0,
   connectionsToday: 0, roomsToday: 0, freeMatchesUsed: 0, loftFreeUsed: 0, loftFreeWeek: null,
   guestMatchUsed: false,
+  guestBrowsing: false, pendingInvites: [], inviteContext: null,
+  sigil: '', savedPeople: [], streakNights: 0,
 };
 
 const _listeners = new Set<() => void>();
@@ -177,6 +268,19 @@ export async function initStore() {
     loftFreeUsed: storedLoftFree ? parseInt(storedLoftFree, 10) : 0,
     loftFreeWeek: storedLoftFreeWeek ?? null,
     guestMatchUsed: storedGuestMatchUsed === '1',
+  };
+  // Durable redesign fields — loaded separately to keep the hydrate block above
+  // readable. sigil is derived (permanent), the rest are persisted counters/lists.
+  const [storedStreak, storedSaved] = await Promise.all([
+    AsyncStorage.getItem('streakNights'),
+    AsyncStorage.getItem('savedPeople'),
+  ]);
+  const sigil = await getSigilSeed(deviceId);
+  _state = {
+    ..._state,
+    sigil,
+    streakNights: storedStreak ? (parseInt(storedStreak, 10) || 0) : 0,
+    savedPeople: storedSaved ? safeParseSavedPeople(storedSaved) : [],
   };
   notify();
   _resetDailyCountersIfNeeded();
@@ -495,6 +599,70 @@ export async function setIdentityKind(kind: IdentityKind) {
   _state = { ..._state, identityKind: kind };
   await AsyncStorage.setItem('identityKind', kind);
   notify();
+}
+
+// ── Redesign setters (design handoff) ─────────────────────────
+
+/** Guest "listen first" mode (W1-3). Runtime only — not persisted across app
+ *  restarts; a returning guest passes through Auth again. */
+export function setGuestBrowsing(on: boolean) {
+  if (_state.guestBrowsing === on) return;
+  _state = { ..._state, guestBrowsing: on };
+  notify();
+}
+
+/** The firepit line the user tapped to act on, or null to dismiss the drawer. */
+export function setInviteContext(ctx: InviteContext | null) {
+  _state = { ..._state, inviteContext: ctx };
+  notify();
+}
+
+/** Replace the woman's invite tray (sourced from Firestore presence, A1/A4). */
+export function setPendingInvites(list: Invite[]) {
+  _state = { ..._state, pendingInvites: list };
+  notify();
+}
+
+/** Set the consecutive-nights streak (advance policy lives with the home screen,
+ *  which knows the product-day boundary). Persisted so it survives restarts. */
+export async function setStreakNights(n: number) {
+  const v = Math.max(0, Math.floor(n));
+  _state = { ..._state, streakNights: v };
+  await AsyncStorage.setItem('streakNights', String(v));
+  notify();
+}
+
+/** Keep a person via "留下彼此" (Vigil only, capped at SAVED_PEOPLE_MAX). The
+ *  nickname is the private third identity layer, visible only to the keeper.
+ *  Returns false if not allowed (non-Vigil, at cap, or already kept). */
+export async function savePerson(sigil: string, nickname: string): Promise<boolean> {
+  if (getTier() !== 'vigil') return false;
+  if (_state.savedPeople.some(p => p.sigil === sigil)) return false;
+  if (_state.savedPeople.length >= SAVED_PEOPLE_MAX) return false;
+  const next = [..._state.savedPeople, { sigil, nickname, keptAt: Date.now() }];
+  _state = { ..._state, savedPeople: next };
+  await AsyncStorage.setItem('savedPeople', JSON.stringify(next));
+  notify();
+  return true;
+}
+
+export async function renameSavedPerson(sigil: string, nickname: string) {
+  const next = _state.savedPeople.map(p => p.sigil === sigil ? { ...p, nickname } : p);
+  _state = { ..._state, savedPeople: next };
+  await AsyncStorage.setItem('savedPeople', JSON.stringify(next));
+  notify();
+}
+
+export async function removeSavedPerson(sigil: string) {
+  const next = _state.savedPeople.filter(p => p.sigil !== sigil);
+  _state = { ..._state, savedPeople: next };
+  await AsyncStorage.setItem('savedPeople', JSON.stringify(next));
+  notify();
+}
+
+/** True if a Vigil member still has room to keep another person. */
+export function canSavePerson(): boolean {
+  return getTier() === 'vigil' && _state.savedPeople.length < SAVED_PEOPLE_MAX;
 }
 
 let _countedConversations: Set<string> = new Set();
