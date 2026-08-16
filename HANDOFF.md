@@ -119,14 +119,16 @@
 - **#8 安全部分**:砍「全部 16 種身份」賣點(copy + UpgradeScreen ×2)、夜閣第二套名 `getLoftName` → 統一用 `getColorAdj().label`(LoftScreen/ProfileScreen)。
   - 🔒 **#8 延後的部分(PM 決定,守 launch 信任)**:(1)**永久星圖廣播**給陌生人以「跨夜認得」——會反轉 identity.ts 每日雜湊種子的 H5 匿名設計,不在上線衝刺硬上,留你日後明確拍板;(2)名庫擴充——identity-regression 強制**五個池等長**(`.size===1`),要擴得連發明 48 個不重複 hex + 改回歸測試,高風險低價值(color+sigil 視覺本就能區分),延後;(3)星圖新 renderer 是視覺 polish,非阻擋。
 
-### ⏳ 仍未做(剩最大的後端/新畫面工程,誠實:是 follow-up)
-- **#10 邀請帶上下文+2芯 — 後端已完成(2026-08-16),前端待續(atomic)**:
-  - ✅ **後端(安全、加法式、security-regression 綠)**:`db.ts` 加 `invites` collection + `createInvite`/`subscribeToMyInvites`/`acceptInvite`/`declineInvite` + `DbInvite`;`firestore.rules` 加 `invites` 區塊(發起人 create、僅收件人 accept/decline、不可改內容)。**經濟設計守不變量**:邀請免費送、女生免費、**男生只在被接受後對話裡送出第一則訊息才扣 2 芯**(`acceptInvite` 建對話時蓋 `inviteChargeUserId`),沒接受＝沒對話＝不扣,不需退款(退款=server grant=違反 spend-only)。
-  - ⏳ **前端是 atomic 一塊(不能只做一半,否則弄壞現有即時開聊)**:目前 RoomScreen 邀請是「立刻建對話開聊」;要改成 createInvite,就**必須同時**做女生的邀請匣(subscribeToMyInvites)+ A4 接受畫面 + ChatScreen 首則訊息收 `inviteChargeUserId` 2 芯 + persona-regression 補 invite 成本案例。只做 send-rewire 會讓邀請進虛空(女生無 UI 接受)。故留整塊一起做。app 端已鋪路:`inviteContext` 已存、訪客/男生點訊息已接上。
-- **#9 首頁男女分流(A1女/A2男)**:女生端核心是「邀請匣」,靠 #10 的 invites 資料,故耦合 #10。
-- **#12 隔日回顧信**:LETTER_PALETTE 已備;需**晨間統計資料管線**(昨晚說幾句/被幾人記住)+ 08:00 推播排程,非純前端。
-- **#13 收尾**:LoftChat 的 pulse(想你/躺下了)+ veil-lift UI 移除、紫調 reskin。
-- **#8 收尾**:星圖 renderer、名庫、廣播決策(見上)。
+### ✅ #10 前端也完成了(2026-08-16,端到端可用,已 commit)
+RoomScreen A3 抽屜(引言+選填留言+免費送出)、`InviteScreen` A4(接受/看下一個/不想被打擾,拒絕零成本)、MoodScreen 邀請匣 banner、ChatScreen 男方首則訊息扣 2 芯(女生/守夜免費)、`Invite` 路由已註冊。男方經「有人為你開了一扇窗」banner 進場(不雙扣)。**#9 核心(邀請匣)也隨之完成。**
+
+### ⏳ 真正剩下的(少而明確)
+- **#12 隔日回顧信**:LETTER_PALETTE 已備,但需**後端晨間統計管線**(昨晚說幾句/被幾人記住,得在訊息刪除前彙整)+ 08:00 推播。不能造假數字(誠實鐵律)→ 像 invite 一樣的後端 follow-up。
+- **#8 星圖 renderer / 名庫擴充 / 永久星圖廣播**:廣播=反轉 H5 匿名,**待老闆拍板**(見下);名庫=五池等長回歸鎖死、需發明 48 hex,高風險延後;renderer=視覺 polish。
+- **#9 A1/A2 細分**:「女生端拿掉底部發起 CTA」是**產品賭注**(低量時女生可能零邀請=沒事做),我保守保留女生發起權,留 post-launch A/B。
+- **#13 紫調 reskin**:純視覺,非阻擋。
+
+**分支**:`redesign-handoff`(3 commits over main),`main` 未動。app 純 JS 要跟下個 build(vc25)走;admin cron 已部署。
 
 ### ⚠️ 待老闆決策(擋 task #8 品牌三層識別)
 **永久星圖 vs 每日輪換雜湊種子的匿名設計正面衝突。** `identity.ts` 目前刻意每日換 seed 且 SHA-256 雜湊,就是要讓人**無法跨日連結同一使用者**(資安稽核 H5)。交接包的「不換星圖」要的正是**跨夜可辨識**。我已加 `sigil` 欄位但**僅本機、未廣播**;要不要廣播(=別人跨夜認得你)是隱私取捨,需老闆拍板再動。
