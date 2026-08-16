@@ -623,12 +623,33 @@ export function setPendingInvites(list: Invite[]) {
   notify();
 }
 
-/** Set the consecutive-nights streak (advance policy lives with the home screen,
- *  which knows the product-day boundary). Persisted so it survives restarts. */
+/** Set the consecutive-nights streak directly. Persisted so it survives restarts. */
 export async function setStreakNights(n: number) {
   const v = Math.max(0, Math.floor(n));
   _state = { ..._state, streakNights: v };
   await AsyncStorage.setItem('streakNights', String(v));
+  notify();
+}
+
+// Product-day key at the 03:00 boundary (mirrors getDailySeed's night logic).
+function productDayKeyFor(ms: number): string {
+  const d = new Date(ms);
+  if (d.getHours() < 3) d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** Call once when the user shows up for the night (home focus). Advances the
+ *  "連續第 N 晚" streak: +1 on a consecutive product-day, reset to 1 if a night
+ *  was skipped, no-op twice in one night. Powers the honest streak display. */
+export async function recordNightVisit() {
+  const now = Date.now();
+  const today = productDayKeyFor(now);
+  const last = await AsyncStorage.getItem('streakLastDay');
+  if (last === today) return;
+  const yesterday = productDayKeyFor(now - 24 * 60 * 60 * 1000);
+  const next = last === yesterday ? _state.streakNights + 1 : 1;
+  _state = { ..._state, streakNights: next };
+  await AsyncStorage.multiSet([['streakNights', String(next)], ['streakLastDay', today]]);
   notify();
 }
 

@@ -18,7 +18,7 @@ import { HonestWaiting } from '../components/ui/HonestWaiting';
 import { hapticSuccess, hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, freeConnectionsRemaining, MATCH_WICK_COST } from '../hooks/useAppStore';
+import { useAppStore, checkAndClaimDailyReward, setLang, canMatch, getTier, matchCostsWick, freeConnectionsRemaining, MATCH_WICK_COST, recordNightVisit } from '../hooks/useAppStore';
 import { useIsForeground } from '../lib/appState';
 import { subscribeToMyInvites, DbInvite, subscribeToActiveRooms, DbRoom, fetchReadableRooms, joinMatchQueue, leaveMatchQueue, subscribeToMyMatch, tryFindMatch, TonightMode, ensureOfficialRooms, heartbeatAwake, fetchAwakeCount, fetchWaitingQueueCount, fetchTonightRekindles, openRekindle, DbRekindle, sendNightLetter, hasSentTonightLetter, claimTonightLetter, replyToLetter, fetchMyLetterReplies, DbLetter, fetchArrivedEchoes, markEchoRead, DbEcho, createConversation, fetchMyLiveConversations, DbLiveConversation } from '../lib/db';
 import { getColorAdj } from '../lib/identity';
@@ -110,7 +110,9 @@ function ResetCountdown({ color }: { color: string }) {
 }
 
 export default function MoodScreen({ navigation }: Props) {
-  const { seed, direction, lang, identityKind, wicks, gender, ageBracket, userId, vigil } = useAppStore();
+  const { seed, direction, lang, identityKind, wicks, gender, ageBracket, userId, vigil, streakNights } = useAppStore();
+  // Count tonight's visit toward the "連續第 N 晚" streak (once per night).
+  useEffect(() => { void recordNightVisit(); }, []);
   const p = DIRECTIONS[direction];
   const isGuestUser = getTier() === 'guest';
   const openNewRoom = () => {
@@ -483,6 +485,14 @@ export default function MoodScreen({ navigation }: Props) {
                 {lang === 'en' ? 'You, tonight' : '你·今晚'}
               </Text>
               <ColorAdjLabel seed={seed} lang={lang} palette={p} />
+              {streakNights >= 2 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: p.accent }} />
+                  <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 10.5, color: p.muted }}>
+                    {lang === 'en' ? `${streakNights} nights in a row` : `連續來的第 ${streakNights} 晚`}
+                  </Text>
+                </View>
+              )}
             </View>
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
