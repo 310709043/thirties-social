@@ -44,6 +44,8 @@ Cinematic close-up photograph of a hand holding a smartphone in a dark, warm roo
 - 完成後在這份文件下方記一行「已產出 X 張,路徑 Y」,或直接告訴 Claude → Claude 負責嵌進 landing(情境橫幅 or 升級 mockups 區)並部署。
 
 ## 待產出清單
-- [ ] 概念 A 氛圍主圖 ×2–3
-- [ ] 概念 B 手持情境 ×2–3(留白螢幕待合成)
+- [x] 概念 A 氛圍主圖 ×2–3
+- [x] 概念 B 手持情境 ×2–3(留白螢幕待合成)
 - [ ] 合成:真實 app 截圖嵌入概念 B
+
+已產出 4 張：`~/thirties-landing/screens/context-A.jpg`、`context-A-v2.jpg`、`context-B.jpg`、`context-B-v2.jpg`。

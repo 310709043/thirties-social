@@ -740,21 +740,25 @@ export function localNightDate(): string {
   return getCurrentNightSession(0);
 }
 
-// ONE truth for the Loft's hours: open nightly 21:00–05:00, every day. This is
-// also a liquidity lever — concentrating the small early user base into the
-// same window each night instead of spreading it thin across 24 hours. All
-// user-facing copy must match these numbers (copy.ts loftClose, banners).
-export const LOFT_OPEN_HOUR = 21;
+// ONE truth for the Loft's hours: open nightly 02:00–05:00 — the redefined Loft
+// is "the small hours" (W3-9), a room for people who can't sleep, not an
+// all-evening space. Concentrating the small user base into three deep-night
+// hours is also a liquidity lever. All user-facing copy must match these numbers
+// (copy.ts loftClose, banners).
+export const LOFT_OPEN_HOUR = 2;
 export const LOFT_CLOSE_HOUR = 5;
 
 /**
  * Whether the Loft is currently open. EXPO_PUBLIC_LOFT_ALWAYS_OPEN=1 is a test
- * bypass so the Loft can be exercised outside its nightly window.
+ * bypass so the Loft can be exercised outside its nightly window. Handles both a
+ * same-day window (open < close, e.g. 02:00–05:00) and a midnight-wrapping one.
  */
 export function isLoftOpen(now: Date = new Date()): boolean {
   if (process.env.EXPO_PUBLIC_LOFT_ALWAYS_OPEN === '1') return true;
   const h = now.getHours();
-  return h >= LOFT_OPEN_HOUR || h < LOFT_CLOSE_HOUR;
+  return LOFT_OPEN_HOUR < LOFT_CLOSE_HOUR
+    ? (h >= LOFT_OPEN_HOUR && h < LOFT_CLOSE_HOUR)
+    : (h >= LOFT_OPEN_HOUR || h < LOFT_CLOSE_HOUR);
 }
 
 export async function enterLoft(
