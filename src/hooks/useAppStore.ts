@@ -163,6 +163,10 @@ interface AppState {
   savedPeople: SavedPerson[];
   /** Consecutive nights the user has shown up — powers "連續來的第 N 晚". */
   streakNights: number;
+  /** Messages the user has sent this product-night (local, honest). */
+  saidThisNight: number;
+  /** Snapshot of last night's count, for the morning review letter (W2-8). */
+  saidLastNight: number;
 }
 
 /**
@@ -195,6 +199,7 @@ let _state: AppState = {
   guestMatchUsed: false,
   guestBrowsing: false, pendingInvites: [], inviteContext: null,
   sigil: '', savedPeople: [], streakNights: 0,
+  saidThisNight: 0, saidLastNight: 0,
 };
 
 const _listeners = new Set<() => void>();
@@ -271,9 +276,11 @@ export async function initStore() {
   };
   // Durable redesign fields — loaded separately to keep the hydrate block above
   // readable. sigil is derived (permanent), the rest are persisted counters/lists.
-  const [storedStreak, storedSaved] = await Promise.all([
+  const [storedStreak, storedSaved, storedSaidNight, storedSaidLast] = await Promise.all([
     AsyncStorage.getItem('streakNights'),
     AsyncStorage.getItem('savedPeople'),
+    AsyncStorage.getItem('saidThisNight'),
+    AsyncStorage.getItem('saidLastNight'),
   ]);
   const sigil = await getSigilSeed(deviceId);
   _state = {
@@ -281,6 +288,8 @@ export async function initStore() {
     sigil,
     streakNights: storedStreak ? (parseInt(storedStreak, 10) || 0) : 0,
     savedPeople: storedSaved ? safeParseSavedPeople(storedSaved) : [],
+    saidThisNight: storedSaidNight ? (parseInt(storedSaidNight, 10) || 0) : 0,
+    saidLastNight: storedSaidLast ? (parseInt(storedSaidLast, 10) || 0) : 0,
   };
   notify();
   _resetDailyCountersIfNeeded();
@@ -874,14 +883,29 @@ async function _resetDailyCountersIfNeeded() {
   const stored = await AsyncStorage.getItem('countersDate');
   const today = localProductDayKey();
   if (stored !== today) {
-    _state = { ..._state, conversationsToday: 0, peopleTodayCount: 0, connectionsToday: 0, roomsToday: 0 };
-    await AsyncStorage.setItem('conversationsToday', '0');
-    await AsyncStorage.setItem('peopleTodayCount', '0');
-    await AsyncStorage.setItem('connectionsToday', '0');
-    await AsyncStorage.setItem('roomsToday', '0');
-    await AsyncStorage.setItem('countersDate', today);
+    // Snapshot what was said last night before zeroing — the morning letter (W2-8)
+    // reads saidLastNight. Only overwrite when there was actually a prior night.
+    const carriedSaid = _state.saidThisNight;
+    _state = {
+      ..._state, conversationsToday: 0, peopleTodayCount: 0, connectionsToday: 0, roomsToday: 0,
+      saidLastNight: stored ? carriedSaid : _state.saidLastNight, saidThisNight: 0,
+    };
+    await AsyncStorage.multiSet([
+      ['conversationsToday', '0'], ['peopleTodayCount', '0'], ['connectionsToday', '0'],
+      ['roomsToday', '0'], ['countersDate', today], ['saidThisNight', '0'],
+      ['saidLastNight', String(stored ? carriedSaid : _state.saidLastNight)],
+    ]);
     notify();
   }
+}
+
+/** Count one message the user sent tonight (local, honest) for the morning letter. */
+export async function trackSaid() {
+  await _resetDailyCountersIfNeeded();
+  const n = _state.saidThisNight + 1;
+  _state = { ..._state, saidThisNight: n };
+  await AsyncStorage.setItem('saidThisNight', String(n));
+  notify();
 }
 
 export function useAppStore(): AppState;

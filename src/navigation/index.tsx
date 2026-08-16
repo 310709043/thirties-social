@@ -18,6 +18,7 @@ import LoftScreen from '../screens/LoftScreen';
 import LoftChatScreen from '../screens/LoftChatScreen';
 import UpgradeScreen from '../screens/UpgradeScreen';
 import InviteScreen from '../screens/InviteScreen';
+import ReviewLetterScreen from '../screens/ReviewLetterScreen';
 
 export type RootStackParamList = {
   Auth: { mode?: 'login' | 'register' } | undefined;
@@ -35,6 +36,7 @@ export type RootStackParamList = {
   LoftChat: { otherSeed: string; loftConversationId: string; otherName: string; sessionEnteredAt?: number; expiresAt?: number; otherPhotoUrl?: string | null };
   Upgrade: undefined;
   Invite: { inviteId: string; fromSeed: string; quote: string; quoteContext: string; note: string | null; fromGender: string | null; fromAge: string | null };
+  ReviewLetter: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -65,6 +67,7 @@ export default function Navigation({ initialRoute = 'Onboarding' }: NavigationPr
         <Stack.Screen name="LoftChat" component={LoftChatScreen} />
         <Stack.Screen name="Upgrade" component={UpgradeScreen} />
         <Stack.Screen name="Invite" component={InviteScreen} />
+        <Stack.Screen name="ReviewLetter" component={ReviewLetterScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

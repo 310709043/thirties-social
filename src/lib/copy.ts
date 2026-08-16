@@ -179,6 +179,19 @@ const COPY: Record<string, { zh: string; en: string }> = {
   wickCantTitle:   { zh: '燭芯買不到的事',     en: "What wicks can't buy" },
   wickCantList:    { zh: '不能提高曝光、不能排到別人前面、不能讓對方非得回你，也不能買到對方的真名。', en: "It can't raise your visibility, jump you ahead of others, force anyone to reply, or buy someone's real name." },
 
+  // Morning review letter — W2-8. Honest: only what we truly know locally
+  // (you came, how many lines you said, your streak). No fabricated "N people
+  // remembered you" — that would need data we deliberately don't keep.
+  letterEyebrow:   { zh: '燭影私語 · 昨晚',   en: 'Candle Whisper · last night' },
+  letterOpen:      { zh: '昨晚，你來過',       en: 'You were here last night' },
+  letterSaidUnit:  { zh: '句話',             en: 'lines' },
+  letterSaidLabel: { zh: '你昨晚說出口的',     en: 'you said out loud last night' },
+  letterStreakLabel:{ zh: '個晚上，你連續來了', en: 'nights, you kept coming back' },
+  letterPrivacy:   { zh: '對話內容我們沒有留。這封信只記得你來過、說了幾句。', en: "We kept none of what was said. This letter only remembers that you came, and how many lines." },
+  letterCta:       { zh: '今晚也來坐一下',     en: 'Come sit again tonight' },
+  letterFooter:    { zh: '每天早上八點寄一次 · 可以在設定關掉', en: 'Sent at 8 each morning · you can turn it off in Settings' },
+  letterQuiet:     { zh: '昨晚你只是靜靜待著。有時候，那樣就夠了。', en: 'Last night you just stayed quietly. Sometimes that is enough.' },
+
   // Wicks / subscription
   wickName:         { zh: '燭芯',             en: 'Wicks' },
   wickBalance:      { zh: '剩餘',             en: 'balance' },

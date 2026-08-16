@@ -12,10 +12,10 @@ import { VaporBackground, GlassCard, CountdownBar, Cap, WickGlyph, PhotoVeil, Fa
 import { hapticMedium } from '../lib/haptics';
 import { Identity } from '../components/identity/Identity';
 import { ColorAdjLabel } from '../components/identity/Identity';
-import { useAppStore, setWicks as saveWicks, trackConversation, recordMatch, savePerson, canSavePerson, SAVED_PEOPLE_MAX, INVITE_WICK_COST } from '../hooks/useAppStore';
+import { useAppStore, setWicks as saveWicks, trackConversation, trackSaid, recordMatch, savePerson, canSavePerson, SAVED_PEOPLE_MAX, INVITE_WICK_COST } from '../hooks/useAppStore';
 import { getColorAdj } from '../lib/identity';
 import { subscribeToConversationMessages, sendConversationMessage, spendWicks, getCurrentUid, endConversation, DbConvMessage, setTyping, subscribeToTyping, subscribeToConversationDoc, voteExtendConversation, voteRekindle, voteBond, stampConversationSeed } from '../lib/db';
-import { scheduleRekindleReminder, registerForPushNotifications, scheduleNightlyReminder } from '../lib/notifications';
+import { scheduleRekindleReminder, registerForPushNotifications, scheduleNightlyReminder, scheduleMorningLetter } from '../lib/notifications';
 import { filterMessage } from '../lib/filter';
 import { looksLikeCrisis } from '../lib/crisis';
 import { CrisisSupportCard } from '../components/CrisisSupportCard';
@@ -469,7 +469,10 @@ export default function ChatScreen({ navigation, route }: Props) {
           if (asked) return;
           AsyncStorage.setItem('notifAsked', '1');
           registerForPushNotifications(true).then(token => {
-            if (token) scheduleNightlyReminder(lang === 'en' ? 'en' : 'zh');
+            if (token) {
+              scheduleNightlyReminder(lang === 'en' ? 'en' : 'zh');
+              scheduleMorningLetter(lang === 'en' ? 'en' : 'zh');
+            }
           });
         });
         // A match "counts" only once you actually speak — charge on the first
@@ -481,6 +484,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           const charged = await recordMatch();
           if (!charged) chargedRef.current = false;
         }
+        void trackSaid(); // count tonight's message for the morning letter (W2-8)
         // Invite (W2-6): the inviter pays INVITE_WICK_COST on his first message.
         // Women and Vigil never pay; "not accepted = not charged" is already
         // guaranteed because the conversation only exists after she accepted.

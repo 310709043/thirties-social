@@ -110,7 +110,7 @@ function ResetCountdown({ color }: { color: string }) {
 }
 
 export default function MoodScreen({ navigation }: Props) {
-  const { seed, direction, lang, identityKind, wicks, gender, ageBracket, userId, vigil, streakNights } = useAppStore();
+  const { seed, direction, lang, identityKind, wicks, gender, ageBracket, userId, vigil, streakNights, saidLastNight } = useAppStore();
   // Count tonight's visit toward the "連續第 N 晚" streak (once per night).
   useEffect(() => { void recordNightVisit(); }, []);
   const p = DIRECTIONS[direction];
@@ -591,6 +591,24 @@ export default function MoodScreen({ navigation }: Props) {
               </TouchableOpacity>
             );
           })()}
+
+          {/* Morning review letter entry (W2-8) — shown when last night has
+              something honest to say. Tapping opens the light-background letter. */}
+          {saidLastNight > 0 && (
+            <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.push('ReviewLetter')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13, borderRadius: 16, borderWidth: 0.6, borderColor: p.line, backgroundColor: p.surface }}>
+              <Text style={{ fontSize: 14 }}>✉</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 13.5, color: p.ink }}>
+                  {lang === 'en' ? 'A letter about last night' : '昨晚的回顧寄到了'}
+                </Text>
+                <Text style={{ fontFamily: 'NotoSerifTC-Regular', fontSize: 11, color: p.muted, marginTop: 1 }}>
+                  {lang === 'en' ? `you said ${saidLastNight} lines` : `你昨晚說了 ${saidLastNight} 句話`}
+                </Text>
+              </View>
+              <Text style={{ color: p.accent, fontSize: 13 }}>{lang === 'en' ? 'read →' : '打開 →'}</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Reunion banner — someone from last night is waiting. */}
           {rekindles.map(rek => {

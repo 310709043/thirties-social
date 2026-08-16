@@ -134,6 +134,42 @@ export async function scheduleNightlyReminder(lang: 'zh' | 'en' = 'zh'): Promise
   }
 }
 
+const MORNING_LETTER_ID = 'morning-review-letter';
+
+/** Daily 08:00 nudge to read last night's review letter (W2-8). Tapping routes
+ *  to the ReviewLetter screen (data.screen). The letter itself only shows honest
+ *  local numbers; the letter screen decides whether there's anything to say. */
+export async function scheduleMorningLetter(lang: 'zh' | 'en' = 'zh'): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return;
+    await Notifications.cancelScheduledNotificationAsync(MORNING_LETTER_ID).catch(() => {});
+    await Notifications.scheduleNotificationAsync({
+      identifier: MORNING_LETTER_ID,
+      content: {
+        title: lang === 'en' ? 'A letter about last night' : '昨晚的一封信',
+        body: lang === 'en'
+          ? 'A short note about your night is waiting.'
+          : '關於你昨晚的一封短信，寄到了。',
+        data: { screen: 'ReviewLetter' },
+        sound: false,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: 8,
+        minute: 0,
+      },
+    });
+  } catch (e) {
+    console.warn('[Notifications] morning letter failed:', e);
+  }
+}
+
+export async function cancelMorningLetter(): Promise<void> {
+  try { await Notifications.cancelScheduledNotificationAsync(MORNING_LETTER_ID); } catch {}
+}
+
 /**
  * One-shot reminder for a confirmed 重逢 (reunion): fires at 21:00 of the night
  * the reunion is FOR. Because a night session runs 21:00→05:00, a vote cast at
