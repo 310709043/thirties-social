@@ -108,6 +108,9 @@
 ### ✅ W3-10 Setup 三步→兩步(#14,已完成)
 `SetupScreen`:移除中間「關係現況」步(感情狀態 9 選 + 它現在的樣子 3 選)——最 affair-coded 的選項(開放關係/無性了)也一併消失,更貼陪伴非約會鐵律。剩性別+年齡、意圖+邊界兩步。既有值保留、不強制;完整的「個人頁選填編輯器」留待 ProfileScreen(follow-up)。tsc/`npm run check` 綠。
 
+### 🔓 夜閣時間閘 = 全天開放(老闆拍板,2026-08-19)——**不要改回 0**
+老闆決定夜閣**永久全天開放**(冷啟動流動性:少人時不該把人擠進 02:00–05:00 沒人的三小時)。`eas.json` production `EXPO_PUBLIC_LOFT_ALWAYS_OPEN=1` 是**正式行為,不是臨時測試開關**。文案已改誠實:`loftClose`「每晚都開著」、`loftTagline`「給每個睡不著的夜」(移除假的「02:00–05:00 / 三個小時」宣稱,守誠實鐵律)。db.ts 的 02:00–05:00 gate 常數留著當「萬一切回 0」的 fallback(全天開時 `isLoftOpen` 一律 true,不觸發)。**⚠️ 前一版 HANDOFF 寫「上線前改回 0」已作廢。**
+
 ### 🟡 W3-9 夜閣重定義(#13,核心完成/polish 待續)
 - ✅ **已修 P6 鐵律違反(最關鍵、最可見)**:進場畫面文案全改(`copy.ts` loft*)——移除「被想念一次/帶紗照片、交心/私下金錢往來永久封鎖」,改成「給睡不著的那三個小時」+「沒有照片、沒有名單、沒有邀請」+四條與火盆差別;**移除帶一張照片進來的上傳入口**(LoftScreen);LoftGuide 第三格從「帶紗照片、掀面紗」改「留不住·10 分鐘消失」;開放時間文案 21:00→02:00–05:00。
 - ⏳ **待續(polish,非 trust-blocker)**:LoftChatScreen 的 pulse(想你/躺下了/有你真好)+ 掀面紗 veil-lift UI 尚未移除——但**照片上傳已拔掉 → 無照片流入 → veil 實際上已 inert**;pulse 文案偏親密待重寫。紫調 reskin(LOFT_PALETTE→LOFT_PALETTE_V2)未做(視覺 polish,動到 954 行內大量 L. 參照,低 trust 價值故延後)。時間閘仍沿用刻意的 always-open 冷啟動繞過(EXPO_PUBLIC_LOFT_ALWAYS_OPEN),未改回真的 02:00–05:00 gate(放量前先保持好進入)。

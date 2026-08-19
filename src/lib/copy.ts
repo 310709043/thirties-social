@@ -116,7 +116,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   // sleep. NO photos, no lists, no invites. The old positioning (被想念/帶紗照片/
   // 交心/金錢警告) read like a hookup space and broke the companion mandate (P6).
   loftName:         { zh: '夜閣',             en: 'The Loft' },
-  loftTagline:      { zh: '給睡不著的那三個小時。', en: 'For the three hours you can’t sleep.' },
+  loftTagline:      { zh: '給每個睡不著的夜。',     en: 'For every sleepless night.' },
   loftSub:          { zh: '幾個同樣醒著的人，在同一個房間裡各自說話，誰想回應就回應。', en: 'A few people who are also awake, each speaking in one room — answer if you feel like it.' },
   loftEnter:        { zh: '進去坐著',         en: 'Go in and sit' },
   loftLocked:       { zh: '尚未開啟',         en: 'Not yet opened' },
@@ -128,7 +128,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   loftBack:         { zh: '改天',             en: 'Another night' },
   loftInside:       { zh: '在夜閣裡',         en: 'Inside the Loft' },
   loftPeople:       { zh: '今晚醒著的人',     en: 'awake tonight' },
-  loftClose:        { zh: '每晚 02:00–05:00 開放', en: 'Open nightly 02:00–05:00' },
+  loftClose:        { zh: '每晚都開著',           en: 'Open every night' },
   loftWhisper:      { zh: '輕輕說一句',       en: 'Say something quietly' },
   loftPulse1:       { zh: '還在',             en: 'still here' },
   loftPulse2:       { zh: '繼續說',           en: 'go on' },
