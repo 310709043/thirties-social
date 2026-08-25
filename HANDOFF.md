@@ -1,6 +1,6 @@
 # HANDOFF — 當前狀態(給 Claude / Codex / 接手的人)
 
-> 最後更新:2026-08-09。**動手前先讀這份 + `AGENTS.md`(產品鐵律)。**
+> 最後更新:2026-08-25。**動手前先讀這份 + `AGENTS.md`(產品鐵律)。**
 > ⚠️ 跨 AI 協作提醒:Claude 的私有記憶、Codex 的私有筆記**彼此讀不到** —— 所以「共享狀態」一律寫進這份 repo 文件,不要只寫在各自的記憶裡。
 
 ---
@@ -15,6 +15,7 @@
   - 🕯️ 危機求助卡(自傷字眼→浮現 1995)、弱網冷啟動自癒重試、匿名優先入場(18+ 後直接匿名進 Setup)、通知反模式修復(啟動不跳權限、送出首則訊息後才情境式問一次)、`SoftButton` 加 `loading` prop。
 
 - **⏳ 待下個 build(v24)的純 JS 改動(已 commit `main`,尚未建置;純 JS 但不能單獨 OTA,要跟 build 走):**
+  - 🕯️ **燭光歡迎頁 `HeroScreen`(新用戶首個畫面)** —— ⚠️ **還在 PR、尚未併入 `main`**:[PR #3](https://github.com/310709043/thirties-social/pull/3) 分支 `feat/hero-candlelight-welcome`(commit `70de7bd`),**要先 merge 才會進 build**。全螢幕燭光歡迎:`VaporBackground`+`NightAtmosphere`+一片 `Flame` 燭火、錯開淡入標題、燭焰 CTA;`App.tsx` `!onboardingDone → Hero`(CTA→Onboarding)、`navigation` 註冊 `Hero` 路由。純 JS、零新增原生依賴(**刻意不用影片/expo-video 以避開 OTA 地雷**),語氣過 voice-lint。曾試作「發光鑰匙孔 + 拖曳窺孔 reveal(SVG Mask)」但老闆覺得醜、已全移除,只留燭火版。
   - ⚡ **火盆大廳輪詢改 focus-gated**(`MoodScreen.tsx` `subscribeToActiveRooms` 從 `useEffect([])` 改 `useFocusEffect`)。原本大廳在 native stack 下整晚常駐輪詢(進聊天室也還在背景跑)= 規模下最大讀取來源;改成離開大廳就暫停、回來即刷新。100 人一晚讀取量估可砍 3–5 成。⚠️ 這是 Firestore 讀取優化,**真正的容量前提仍是 Firebase 要在 Blaze**(Spark 免費每日 5萬讀,100 人開場約 10 分鐘就爆停)——見下方「容量/成本」。
 
 ### Build 方式(重要)
