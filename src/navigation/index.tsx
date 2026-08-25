@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { navigationRef, flushPendingNavigation } from '../lib/navigationRef';
 
 import AuthScreen from '../screens/AuthScreen';
+import HeroScreen from '../screens/HeroScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SetupScreen from '../screens/SetupScreen';
 import MoodScreen from '../screens/MoodScreen';
@@ -21,6 +22,7 @@ import InviteScreen from '../screens/InviteScreen';
 import ReviewLetterScreen from '../screens/ReviewLetterScreen';
 
 export type RootStackParamList = {
+  Hero: undefined;
   Auth: { mode?: 'login' | 'register' } | undefined;
   Onboarding: undefined;
   Setup: { edit?: boolean } | undefined;
@@ -52,6 +54,7 @@ export default function Navigation({ initialRoute = 'Onboarding' }: NavigationPr
         initialRouteName={initialRoute as any}
         screenOptions={{ headerShown: false, animation: 'fade' }}
       >
+        <Stack.Screen name="Hero" component={HeroScreen} />
         <Stack.Screen name="Auth" component={AuthScreen} />
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Setup" component={SetupScreen} />
