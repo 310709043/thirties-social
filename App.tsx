@@ -191,7 +191,7 @@ function AppGate({ authUser, authChecked }: { authUser: any; authChecked: boolea
     );
   }
 
-  const initialRoute = !store.onboardingDone ? 'Onboarding' : !store.setupDone ? 'Setup' : 'Mood';
+  const initialRoute = !store.onboardingDone ? 'Hero' : !store.setupDone ? 'Setup' : 'Mood';
   return <Navigation initialRoute={initialRoute} />;
 }
 
